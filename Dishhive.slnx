@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Dishhive.Api.Tests/Dishhive.Api.Tests.csproj" />
+    <Project Path="src/Dishhive.Api/Dishhive.Api.csproj" />
+  </Folder>
+</Solution>

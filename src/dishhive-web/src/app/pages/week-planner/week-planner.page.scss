@@ -1,0 +1,113 @@
+.week-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+
+  .week-title {
+    text-align: center;
+    .week-label {
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+  }
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 12px;
+
+  @media (max-width: 900px) { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 600px) { grid-template-columns: repeat(2, 1fr); }
+}
+
+.day-card {
+  cursor: pointer;
+  min-height: 140px;
+  transition: box-shadow 0.15s ease;
+
+  &:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+  &.today { border: 2px solid var(--mat-sys-primary); }
+
+  mat-card-content { padding-top: 8px; }
+}
+
+.day-name {
+  font-size: 0.95rem !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.today-badge {
+  font-size: 10px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.day-date {
+  font-size: 0.8rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.meal-display {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meal-name {
+  font-weight: 500;
+  color: var(--mat-sys-on-surface);
+  font-size: 0.9rem;
+}
+
+.meal-vague {
+  font-style: italic;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.85rem;
+}
+
+.meal-notes {
+  font-size: 0.78rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.meal-icon {
+  font-size: 16px;
+  height: 16px;
+  width: 16px;
+
+  &.freezer-icon { color: var(--mat-sys-primary); }
+}
+
+.empty-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--mat-sys-on-surface-variant);
+  opacity: 0.6;
+  padding: 8px 0;
+
+  mat-icon { font-size: 28px; height: 28px; width: 28px; }
+  span { font-size: 0.8rem; }
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 80px;
+}
+
+.week-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  gap: 12px;
+}
+

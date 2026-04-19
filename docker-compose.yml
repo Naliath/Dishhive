@@ -1,0 +1,70 @@
+# =============================================================================
+# Dishhive — Docker Compose
+# =============================================================================
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose down           # Stop all services
+#   docker-compose down -v        # Stop and remove volumes (data)
+#   docker-compose logs -f        # View logs
+#   docker-compose up -d --build  # Rebuild and start
+#
+# Ports (different from Freezy to allow both apps to run simultaneously):
+#   App:  http://localhost:5100
+#   DB:   localhost:5433
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # PostgreSQL Database
+  # ===========================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: dishhive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dishhive
+      POSTGRES_USER: dishhive
+      POSTGRES_PASSWORD: dishhive_dev_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - dishhive_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dishhive -d dishhive"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # .NET 10 App (API + Angular Frontend)
+  # ===========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    container_name: dishhive-app
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5100
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=dishhive;Username=dishhive;Password=dishhive_dev_password"
+      FreezyIntegration__BaseUrl: "http://host.docker.internal:5000"
+      FreezyIntegration__Enabled: "true"
+    ports:
+      - "5100:5100"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  dishhive_postgres_data:
+    driver: local

@@ -1,0 +1,65 @@
+<div class="page-container medium">
+  <div class="page-header">
+    <h1 class="section-title" style="margin: 0;">Recipes</h1>
+    <div class="header-actions">
+      <mat-form-field appearance="outline" class="search-field">
+        <mat-icon matPrefix>search</mat-icon>
+        <input matInput [(ngModel)]="searchQuery" (ngModelChange)="onSearchChange($event)"
+               placeholder="Search recipes…" />
+      </mat-form-field>
+      <button mat-flat-button color="primary" (click)="openImportDialog()">
+        <mat-icon>download</mat-icon> Import
+      </button>
+      <button mat-stroked-button routerLink="/recipes/new">
+        <mat-icon>add</mat-icon> New recipe
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-container"><mat-spinner diameter="48" /></div>
+  } @else if (recipes().length === 0) {
+    <div class="empty-state">
+      <mat-icon>menu_book</mat-icon>
+      <h2>No recipes yet</h2>
+      <p>Import a recipe from Dagelijkse Kost or add one manually.</p>
+      <button mat-flat-button color="primary" (click)="openImportDialog()">
+        <mat-icon>download</mat-icon> Import first recipe
+      </button>
+      <button mat-stroked-button routerLink="/recipes/new">
+        <mat-icon>add</mat-icon> Create manually
+      </button>
+    </div>
+  } @else {
+    <div class="card-grid">
+      @for (recipe of recipes(); track recipe.id) {
+        <mat-card [routerLink]="['/recipes', recipe.id]" class="recipe-card">
+          @if (recipe.pictureUrl) {
+            <img mat-card-image [src]="recipe.pictureUrl" [alt]="recipe.title" />
+          } @else {
+            <div class="recipe-placeholder-img"><mat-icon>restaurant</mat-icon></div>
+          }
+          <mat-card-header>
+            <mat-card-title>{{ recipe.title }}</mat-card-title>
+            <mat-card-subtitle>{{ recipe.servings }} servings</mat-card-subtitle>
+          </mat-card-header>
+          @if (recipe.description) {
+            <mat-card-content>
+              <p>{{ recipe.description | slice:0:100 }}{{ recipe.description.length > 100 ? '…' : '' }}</p>
+            </mat-card-content>
+          }
+          <mat-card-actions align="end">
+            @if (recipe.tags.length > 0) {
+              <mat-chip-set style="flex:1; padding-left:8px;">
+                @for (tag of recipe.tags; track tag) { <mat-chip>{{ tag }}</mat-chip> }
+              </mat-chip-set>
+            }
+            <button mat-icon-button color="warn" (click)="deleteRecipe(recipe, $event)" aria-label="Delete">
+              <mat-icon>delete_outline</mat-icon>
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      }
+    </div>
+  }
+</div>

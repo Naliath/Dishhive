@@ -1,0 +1,73 @@
+<div class="page-container wide">
+  <div class="week-header">
+    <button mat-icon-button (click)="previousWeek()" aria-label="Previous week">
+      <mat-icon>chevron_left</mat-icon>
+    </button>
+    <div class="week-title">
+      <span class="week-label">{{ formatWeekRange() }}</span>
+    </div>
+    <button mat-icon-button (click)="nextWeek()" aria-label="Next week">
+      <mat-icon>chevron_right</mat-icon>
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-container">
+      <mat-spinner diameter="48" />
+    </div>
+  } @else {
+    <div class="week-grid">
+      @for (day of orderedDays(); track day) {
+        <mat-card
+          class="day-card"
+          [class.today]="isToday(day)"
+          (click)="openPlanMealDialog(day)"
+          matTooltip="Click to plan meal">
+          <mat-card-header>
+            <mat-card-title class="day-name">
+              {{ day }}
+              @if (isToday(day)) { <span class="today-badge">Today</span> }
+            </mat-card-title>
+            <mat-card-subtitle class="day-date">
+              {{ getDateForDay(day) | date:'d MMM' }}
+            </mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            @if (getMealForDay(day); as meal) {
+              <div class="meal-display">
+                @if (meal.isFromFreezer) {
+                  <mat-icon class="meal-icon freezer-icon" matTooltip="From freezer">kitchen</mat-icon>
+                }
+                @if (meal.recipeTitle) {
+                  <span class="meal-name">{{ meal.recipeTitle }}</span>
+                } @else if (meal.vagueInstruction) {
+                  <span class="meal-vague">{{ meal.vagueInstruction }}</span>
+                } @else if (meal.isFromFreezer) {
+                  <span class="meal-vague">From freezer</span>
+                }
+                @if (meal.notes) {
+                  <span class="meal-notes">{{ meal.notes }}</span>
+                }
+              </div>
+            } @else {
+              <div class="empty-day">
+                <mat-icon>add_circle_outline</mat-icon>
+                <span>Plan a meal</span>
+              </div>
+            }
+          </mat-card-content>
+        </mat-card>
+      }
+    </div>
+
+    @if (weekPlan()) {
+      <div class="week-actions">
+        <a mat-stroked-button [routerLink]="['/shopping-list']"
+           [queryParams]="{ week: currentWeekStart() }">
+          <mat-icon>shopping_cart</mat-icon>
+          Shopping list
+        </a>
+      </div>
+    }
+  }
+</div>

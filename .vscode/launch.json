@@ -1,0 +1,35 @@
+{
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "backend",
+      "type": "dotnet",
+      "request": "launch",
+      "projectPath": "${workspaceFolder}/src/Dishhive.Api/Dishhive.Api.csproj"
+    },
+    {
+      "name": "frontend",
+      "type": "editor-browser",
+      "request": "launch",
+      "preLaunchTask": "ng: serve",
+      "url": "http://localhost:4201/",
+      "webRoot": "${workspaceFolder}/src/dishhive-web"
+    },
+    {
+      "type": "editor-browser",
+      "request": "attach",
+      "name": "Attach to integrated browser"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack",
+      "configurations": [
+        "backend",
+        "frontend"
+      ],
+      "stopAll": true
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "dotnet ef": true,
+        "dotnet tool": true,
+        "npx @angular/cli@21": true,
+        "y": true,
+        "npm run build": true,
+        "Get-Culture": true,
+        "Set-Content": true,
+        "npx ng": true
+    },
+}

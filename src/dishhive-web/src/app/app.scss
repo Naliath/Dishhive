@@ -14,3 +14,12 @@
 .active-link {
   background-color: var(--mat-sys-surface-container);
 }
+
+.app-title {
+  margin-inline-start: 8px;
+  font-weight: 500;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+

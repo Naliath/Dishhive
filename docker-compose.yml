@@ -50,6 +50,7 @@ services:
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=dishhive;Username=dishhive;Password=dishhive_dev_password"
       FreezyIntegration__BaseUrl: "http://host.docker.internal:5000"
       FreezyIntegration__Enabled: "true"
+      Seeding__Enabled: "true"
     ports:
       - "5100:5100"
     depends_on:

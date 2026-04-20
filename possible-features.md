@@ -12,6 +12,10 @@ Items are not prioritized unless marked. Use this as a backlog for discussion.
 
 ---
 
+## Short term
+- Remove al alert style pop-ups and replace with dialogs
+
+
 ## 🍽️ Meal Planning Enhancements
 
 - **Multi-week planning** — Plan more than one week ahead; link recurring weeks.

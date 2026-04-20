@@ -142,6 +142,15 @@ if (!app.Environment.IsEnvironment("Testing"))
     db.Database.Migrate();
 }
 
+// Seed database with sample data (controlled by Seeding:Enabled config / SEEDING__ENABLED env var)
+var seedingEnabled = app.Configuration.GetValue<bool>("Seeding:Enabled", defaultValue: true);
+if (seedingEnabled)
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<DishhiveDbContext>();
+    await DatabaseSeeder.SeedAsync(db);
+}
+
 app.Run();
 
 // Make Program accessible for integration tests

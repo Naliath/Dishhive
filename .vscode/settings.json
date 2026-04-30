@@ -8,9 +8,5 @@
         "Get-Culture": true,
         "Set-Content": true,
         "npx ng": true,
-        "/^powershell -File fetch_recipe_images\\.ps1 2>&1 \\| head -40$/": {
-            "approve": true,
-            "matchCommandLine": true
-        }
     },
 }

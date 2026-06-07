@@ -1,0 +1,19 @@
+<mat-sidenav-container class="app-shell">
+  <mat-sidenav mode="side" opened class="app-shell__nav">
+    <mat-toolbar class="app-shell__brand">Dishhive</mat-toolbar>
+    <mat-nav-list>
+      @for (item of nav; track item.path) {
+        <a mat-list-item [routerLink]="item.path" routerLinkActive="active-link">
+          <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+          <span matListItemTitle>{{ item.label }}</span>
+        </a>
+      }
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <main class="page-container">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

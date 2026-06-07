@@ -1,0 +1,19 @@
+.app-shell {
+  height: 100vh;
+
+  &__nav {
+    width: 240px;
+    background: var(--mat-sys-surface-container);
+  }
+
+  &__brand {
+    background: transparent;
+    color: var(--mat-sys-primary);
+    font-weight: 500;
+  }
+
+  .active-link {
+    background: var(--mat-sys-secondary-container);
+    color: var(--mat-sys-on-secondary-container);
+  }
+}

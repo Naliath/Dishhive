@@ -1,0 +1,59 @@
+# =============================================================================
+# Dishhive - Docker Compose
+# =============================================================================
+# Default ports differ from Freezy so both apps can run side-by-side:
+#   Freezy:   app=5000  postgres=5432
+#   Dishhive: app=5100  postgres=5433
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: dishhive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dishhive
+      POSTGRES_USER: dishhive
+      POSTGRES_PASSWORD: dishhive_dev_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dishhive -d dishhive"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # .NET 10 App (API + Angular Frontend)
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    container_name: dishhive-app
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5100
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=dishhive;Username=dishhive;Password=dishhive_dev_password"
+      Dishhive__Freezy__BaseUrl: "http://host.docker.internal:5000"
+    ports:
+      - "5100:5100"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+    driver: local

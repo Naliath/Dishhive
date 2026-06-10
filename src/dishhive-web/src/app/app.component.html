@@ -1,0 +1,25 @@
+<mat-sidenav-container class="sidenav-container">
+  <mat-sidenav #sidebar mode="side" [opened]="isSidebarOpened" class="sidenav">
+    <mat-toolbar color="primary" class="sidenav-header">
+      <span class="app-title">🍯 Dishhive</span>
+    </mat-toolbar>
+    <mat-list class="nav-list">
+      <a mat-list-item *ngFor="let item of navItems" [routerLink]="[item.route]" routerLinkActive="active-link">
+        <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+        <span matListItemTitle>{{ item.label }}</span>
+      </a>
+    </mat-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <mat-toolbar color="primary" class="top-bar">
+      <button mat-icon-button (click)="toggleSidebar()">
+        <mat-icon>menu</mat-icon>
+      </button>
+      <span class="toolbar-spacer"></span>
+    </mat-toolbar>
+    <div class="content">
+      <router-outlet></router-outlet>
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>

@@ -1,0 +1,80 @@
+# =============================================================================
+# Dishhive Docker Compose Configuration
+# =============================================================================
+# Production-ready Docker Compose setup for Dishhive
+#
+# Services:
+#   - PostgreSQL 17 database
+#   - .NET 10 + Angular 21 application
+#
+# Ports:
+#   - 8281  -> Application (API + Angular PWA)
+#   - 5433  -> PostgreSQL (different from Freezy's 5432)
+#
+# Quick Start:
+#   docker compose up -d
+#
+# Stop:
+#   docker compose down
+#
+# Reset (destroy data):
+#   docker compose down -v
+# =============================================================================
+
+# =============================================================================
+# Services
+# =============================================================================
+services:
+
+  # ===========================================================================
+  # PostgreSQL 17 Database
+  # ===========================================================================
+  db:
+    image: postgres:17-alpine
+    container_name: dishhive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dishhive
+      POSTGRES_USER: dishhive
+      POSTGRES_PASSWORD: dishhive_dev_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dishhive -d dishhive"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # .NET 10 App (API + Angular Frontend)
+  # ===========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    container_name: dishhive-app
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8281
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=dishhive;Username=dishhive;Password=dishhive_dev_password"
+    ports:
+      - "8281:8281"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8281/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -17,11 +18,20 @@ namespace Dishhive.Api.Services.Import;
 /// flight payload (self.__next_f.push chunks) as an "instructions" map keyed by step index.
 /// This provider extracts that map and prefers it over the truncated JSON-LD steps,
 /// falling back to JSON-LD when the payload cannot be parsed.
+///
+/// Second quirk: the JSON-LD "name" duplicates the SEO description sentence
+/// ("Jeroen Meus maakt ..."), while the og:title meta tag carries the clean dish name
+/// ("Lasagne verde"). The og:title is therefore preferred as recipe title.
 /// </summary>
 public partial class DagelijkseKostProvider : IRecipeSourceProvider
 {
     [GeneratedRegex("""self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)""", RegexOptions.Singleline)]
     private static partial Regex NextFlightChunkRegex();
+
+    [GeneratedRegex(
+        """<meta[^>]*property\s*=\s*["']og:title["'][^>]*content\s*=\s*["']([^"']+)["']|<meta[^>]*content\s*=\s*["']([^"']+)["'][^>]*property\s*=\s*["']og:title["']""",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex OgTitleRegex();
 
     private const string InstructionsMarker = "\"instructions\":{\"0\":";
 
@@ -46,7 +56,27 @@ public partial class DagelijkseKostProvider : IRecipeSourceProvider
             recipe = recipe with { Steps = fullSteps };
         }
 
+        // JSON-LD "name" is the SEO sentence; og:title is the clean dish name
+        var ogTitle = ExtractOgTitle(html);
+        if (ogTitle != null)
+        {
+            recipe = recipe with { Title = ogTitle };
+        }
+
         return Task.FromResult(recipe);
+    }
+
+    private static string? ExtractOgTitle(string html)
+    {
+        var match = OgTitleRegex().Match(html);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var raw = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+        var title = WebUtility.HtmlDecode(raw).Trim();
+        return title.Length > 0 ? title : null;
     }
 
     /// <summary>

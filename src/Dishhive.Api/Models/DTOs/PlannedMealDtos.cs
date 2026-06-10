@@ -7,6 +7,7 @@ public class PlannedMealDto
     public Guid Id { get; set; }
     public DateOnly Date { get; set; }
     public MealType MealType { get; set; }
+    public Course Course { get; set; }
     public Guid? RecipeId { get; set; }
 
     /// <summary>Convenience for the UI; null when the linked recipe was deleted</summary>
@@ -25,6 +26,8 @@ public class CreatePlannedMealDto
     public DateOnly Date { get; set; }
 
     public MealType MealType { get; set; } = MealType.Dinner;
+
+    public Course Course { get; set; } = Course.Main;
 
     public Guid? RecipeId { get; set; }
 

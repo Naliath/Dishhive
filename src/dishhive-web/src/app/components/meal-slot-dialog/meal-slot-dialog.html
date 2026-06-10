@@ -8,6 +8,27 @@
       <mat-button-toggle value="idea">Idea</mat-button-toggle>
     </mat-button-toggle-group>
 
+    <!-- Defaults (Dinner / Main) cover the everyday case; only changed when
+         planning a lunch or an extra course like an appetizer or dessert -->
+    <div class="slot-selects">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Meal</mat-label>
+        <mat-select name="mealType" [(ngModel)]="mealType">
+          @for (option of mealTypeOptions; track option.value) {
+            <mat-option [value]="option.value">{{ option.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Course</mat-label>
+        <mat-select name="course" [(ngModel)]="course">
+          @for (option of courseOptions; track option.value) {
+            <mat-option [value]="option.value">{{ option.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+
     @switch (mode()) {
       @case ('recipe') {
         @if (selectedRecipe(); as recipe) {

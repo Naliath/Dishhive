@@ -16,6 +16,7 @@ implementation checklist that is updated as work progresses.
 | [freezy-integration.md](freezy-integration.md) | Frozen leftovers from Freezy in planning | week-planner |
 | [past-dishes-and-statistics.md](past-dishes-and-statistics.md) | History, favorites, frequency stats | week-planner |
 | [shopping-list-export.md](shopping-list-export.md) | Shopping list from the planned week | week-planner, recipe-store |
+| [demo-mode.md](demo-mode.md) | Seed demo recipes + household into an empty database | recipe-import, family-composition |
 
 Future ideas live in [`../../possible-features.md`](../../possible-features.md).
 The infrastructure foundation is planned in

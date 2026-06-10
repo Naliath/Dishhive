@@ -12,7 +12,15 @@ import { forkJoin } from 'rxjs';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { FreezerService } from '../../services/freezer.service';
-import { PlannedMeal, CreatePlannedMeal } from '../../models/planned-meal.model';
+import {
+  COURSE_LABELS,
+  COURSE_ORDER,
+  Course,
+  CreatePlannedMeal,
+  MEAL_TYPE_LABELS,
+  MealType,
+  PlannedMeal
+} from '../../models/planned-meal.model';
 import { FamilyMember } from '../../models/family-member.model';
 import { FreezerSuggestions } from '../../models/frozen-item.model';
 import { MealSlotDialog, MealSlotDialogData } from '../../components/meal-slot-dialog/meal-slot-dialog';
@@ -21,7 +29,8 @@ interface PlannerDay {
   date: Date;
   iso: string;
   isToday: boolean;
-  meal?: PlannedMeal;
+  /** All dishes planned for the day, in meal then serving order */
+  meals: PlannedMeal[];
 }
 
 /** ISO date (yyyy-MM-dd) from local date components, avoiding UTC shifts */
@@ -76,12 +85,19 @@ export class WeekPlannerPage implements OnInit {
 
   readonly days = computed<PlannerDay[]>(() => {
     const todayIso = toIso(new Date());
-    const mealsByDate = new Map(this.meals().map(m => [m.date, m]));
+    const mealsByDate = new Map<string, PlannedMeal[]>();
+    for (const meal of this.meals()) {
+      const list = mealsByDate.get(meal.date) ?? [];
+      list.push(meal);
+      mealsByDate.set(meal.date, list);
+    }
     return Array.from({ length: 7 }, (_, i) => {
       const date = new Date(this.weekStart());
       date.setDate(date.getDate() + i);
       const iso = toIso(date);
-      return { date, iso, isToday: iso === todayIso, meal: mealsByDate.get(iso) };
+      const meals = (mealsByDate.get(iso) ?? [])
+        .sort((a, b) => a.mealType - b.mealType || COURSE_ORDER[a.course] - COURSE_ORDER[b.course]);
+      return { date, iso, isToday: iso === todayIso, meals };
     });
   });
 
@@ -141,10 +157,10 @@ export class WeekPlannerPage implements OnInit {
     this.loadWeek();
   }
 
-  openSlot(day: PlannerDay): void {
+  openSlot(day: PlannerDay, meal?: PlannedMeal): void {
     const data: MealSlotDialogData = {
       date: day.iso,
-      meal: day.meal,
+      meal,
       members: this.members(),
       freezerEnabled: this.freezer().enabled,
       freezerItems: this.freezer().items
@@ -155,8 +171,8 @@ export class WeekPlannerPage implements OnInit {
         if (!result) {
           return;
         }
-        const request = day.meal
-          ? this.plannedMealsService.updateMeal(day.meal.id, result)
+        const request = meal
+          ? this.plannedMealsService.updateMeal(meal.id, result)
           : this.plannedMealsService.createMeal(result);
         request.subscribe({
           next: () => this.loadWeek(),
@@ -177,6 +193,21 @@ export class WeekPlannerPage implements OnInit {
 
   mealSummary(meal: PlannedMeal): string {
     return meal.dishName ?? meal.vagueInstruction ?? '';
+  }
+
+  /**
+   * Label shown only when a dish deviates from the everyday case
+   * (dinner main course), e.g. "Lunch", "Dessert" or "Lunch · Dessert"
+   */
+  mealLabel(meal: PlannedMeal): string | null {
+    const parts: string[] = [];
+    if (meal.mealType !== MealType.Dinner) {
+      parts.push(MEAL_TYPE_LABELS[meal.mealType]);
+    }
+    if (meal.course !== Course.Main) {
+      parts.push(COURSE_LABELS[meal.course]);
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
   }
 
   attendeeNames(meal: PlannedMeal): string {

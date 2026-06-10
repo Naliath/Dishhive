@@ -8,13 +8,21 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatListModule } from '@angular/material/list';
+import { MatSelectModule } from '@angular/material/select';
 import { RecipesService } from '../../services/recipes.service';
 import { StatisticsService } from '../../services/statistics.service';
 import { DishStatistic } from '../../models/statistics.model';
 import { RecipeListItem } from '../../models/recipe.model';
 import { FamilyMember } from '../../models/family-member.model';
 import { FrozenItem } from '../../models/frozen-item.model';
-import { CreatePlannedMeal, MealType, PlannedMeal } from '../../models/planned-meal.model';
+import {
+  COURSE_LABELS,
+  Course,
+  CreatePlannedMeal,
+  MEAL_TYPE_LABELS,
+  MealType,
+  PlannedMeal
+} from '../../models/planned-meal.model';
 
 export interface MealSlotDialogData {
   /** ISO date of the slot */
@@ -40,7 +48,8 @@ type PlanMode = 'recipe' | 'dish' | 'idea';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatListModule
+    MatListModule,
+    MatSelectModule
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './meal-slot-dialog.html',
@@ -55,6 +64,14 @@ export class MealSlotDialog {
   readonly dishStatistics = signal<DishStatistic[]>([]);
   readonly currentDishName = signal('');
 
+  /** Meal/course options for the compact "when & what course" selects */
+  readonly mealTypeOptions = Object.entries(MEAL_TYPE_LABELS)
+    .map(([value, label]) => ({ value: Number(value) as MealType, label }));
+  readonly courseOptions = Object.entries(COURSE_LABELS)
+    .map(([value, label]) => ({ value: Number(value) as Course, label }));
+
+  mealType: MealType = MealType.Dinner;
+  course: Course = Course.Main;
   dishName = '';
   vagueInstruction = '';
   notes = '';
@@ -96,6 +113,8 @@ export class MealSlotDialog {
     const meal = data.meal;
     if (meal) {
       this.mode.set(meal.recipeId ? 'recipe' : meal.dishName ? 'dish' : 'idea');
+      this.mealType = meal.mealType;
+      this.course = meal.course;
       this.dishName = meal.dishName ?? '';
       this.currentDishName.set(this.dishName);
       this.vagueInstruction = meal.vagueInstruction ?? '';
@@ -183,7 +202,8 @@ export class MealSlotDialog {
     const mode = this.mode();
     const result: CreatePlannedMeal = {
       date: this.data.date,
-      mealType: this.data.meal?.mealType ?? MealType.Dinner,
+      mealType: this.mealType,
+      course: this.course,
       recipeId: mode === 'recipe' ? this.selectedRecipe()?.id : undefined,
       dishName: mode === 'dish' ? this.dishName.trim() : undefined,
       vagueInstruction: mode === 'idea' ? this.vagueInstruction.trim() : undefined,

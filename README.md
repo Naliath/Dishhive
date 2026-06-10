@@ -9,11 +9,12 @@ and generate shopping lists.
 - 👨‍👩‍👧 **Family Composition** - Household members, guests, allergies, constraints and favorite dishes
 - 📖 **Recipe Store** - Recipes with ingredients, steps and planning metadata; manual entry and editing
 - ⬇️ **Recipe Import** - Import recipes from Dagelijkse Kost by URL (pluggable sources, locally stored images)
-- 📅 **Week Planner** - Plan recipes, dishes or vague intentions per day with per-meal attendance
+- 📅 **Week Planner** - Plan recipes, dishes or vague intentions per day with per-meal attendance; multiple dishes per day (e.g. lunch + dinner with appetizer and dessert)
 - 🧊 **Freezy Integration** - Reuse frozen leftovers/meals tracked in Freezy *(optional)*
 - 🛒 **Shopping Lists** - Generated from the planned week, scaled by attendance, copy-as-text
 - 📊 **History & Statistics** - Past dishes, frequency stats, favorites from history
 - 📏 **Measurement Preferences** - Metric (default) or imperial display
+- 🎬 **Demo Mode** - Seeds an empty database with 20 Dagelijkse Kost recipes and a demo household (on by default in Docker)
 - 🐳 **Self-Hosted** - Run everything in Docker containers
 
 ## Tech Stack
@@ -80,6 +81,12 @@ docker-compose up -d --build
 # - API Scalar UI: http://localhost:5100/scalar/v1
 # - OpenAPI document: http://localhost:5100/openapi/v1.json
 ```
+
+Demo mode is **on by default** in `docker-compose.yml` (`Demo__Enabled: "true"`): an empty
+database is seeded in the background with 20 recipes scraped from Dagelijkse Kost and a demo
+household (the Rocinante crew, including dietary constraints and favorite dishes). Set
+`Demo__Enabled: "false"` for real use; see
+[docs/features/demo-mode.md](docs/features/demo-mode.md).
 
 To stop all services:
 ```bash
@@ -177,6 +184,7 @@ When unset, the integration is disabled and Dishhive works standalone.
 | `ASPNETCORE_ENVIRONMENT` | Production | Environment (Development/Production) |
 | `Freezy__BaseUrl` | empty (disabled) | Base URL of a Freezy instance |
 | `RecipeImport__UserAgent` | `Dishhive/0.1` | User-Agent for outbound recipe fetches |
+| `Demo__Enabled` | `false` (`true` in docker-compose) | Seed an empty database with demo recipes and household |
 
 ## Documentation
 

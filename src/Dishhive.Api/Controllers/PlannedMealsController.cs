@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Dishhive.Api.Controllers;
 
 /// <summary>
-/// Controller for the week planner. One planned meal per date + meal type slot;
+/// Controller for the week planner. A day can hold any number of dishes
+/// (e.g. lunch plus a dinner with appetizer and dessert);
 /// at least one of recipe, dish name or vague instruction must be set.
 /// Past rows double as the dish history (see docs/features/past-dishes-and-statistics.md).
 /// </summary>
@@ -45,6 +46,7 @@ public class PlannedMealsController : ControllerBase
             .Where(m => m.Date >= from && m.Date <= to)
             .OrderBy(m => m.Date)
             .ThenBy(m => m.MealType)
+            .ThenBy(m => m.Course)
             .ToListAsync();
 
         return Ok(meals.Select(ToDto));
@@ -73,7 +75,7 @@ public class PlannedMealsController : ControllerBase
     }
 
     /// <summary>
-    /// Plan a meal in an empty slot
+    /// Plan a dish; a day can hold any number of dishes
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(PlannedMealDto), StatusCodes.Status201Created)]
@@ -86,18 +88,7 @@ public class PlannedMealsController : ControllerBase
             return BadRequest(validationError);
         }
 
-        var slotTaken = await _context.PlannedMeals
-            .AnyAsync(m => m.Date == dto.Date && m.MealType == dto.MealType);
-        if (slotTaken)
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Title = "Slot already planned",
-                Detail = $"There is already a meal planned for {dto.Date:yyyy-MM-dd} ({dto.MealType})."
-            });
-        }
-
-        var meal = new PlannedMeal { Date = dto.Date, MealType = dto.MealType };
+        var meal = new PlannedMeal { Date = dto.Date, MealType = dto.MealType, Course = dto.Course };
         await ApplyDtoAsync(meal, dto);
 
         _context.PlannedMeals.Add(meal);
@@ -133,19 +124,9 @@ public class PlannedMealsController : ControllerBase
             return BadRequest(validationError);
         }
 
-        var slotTaken = await _context.PlannedMeals
-            .AnyAsync(m => m.Id != id && m.Date == dto.Date && m.MealType == dto.MealType);
-        if (slotTaken)
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Title = "Slot already planned",
-                Detail = $"There is already a meal planned for {dto.Date:yyyy-MM-dd} ({dto.MealType})."
-            });
-        }
-
         meal.Date = dto.Date;
         meal.MealType = dto.MealType;
+        meal.Course = dto.Course;
         meal.Attendees.Clear();
         await ApplyDtoAsync(meal, dto);
 
@@ -247,6 +228,7 @@ public class PlannedMealsController : ControllerBase
         Id = meal.Id,
         Date = meal.Date,
         MealType = meal.MealType,
+        Course = meal.Course,
         RecipeId = meal.RecipeId,
         RecipeTitle = meal.Recipe?.Title,
         DishName = meal.DishName,

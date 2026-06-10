@@ -49,6 +49,9 @@ services:
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=dishhive;Username=dishhive;Password=dishhive_dev_password"
       # Optional Freezy integration; e.g. http://host.docker.internal:5000
       Freezy__BaseUrl: ""
+      # Demo mode: seeds an empty database with 20 Dagelijkse Kost recipes and a
+      # demo household (the Rocinante crew). Set to "false" for real use.
+      Demo__Enabled: "true"
     ports:
       - "5100:5100"
     depends_on:

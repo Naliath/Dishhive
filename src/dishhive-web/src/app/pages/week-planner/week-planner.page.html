@@ -30,23 +30,40 @@
           <mat-card-subtitle>{{ day.date | date:'d MMMM' }}</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          @if (day.meal; as meal) {
-            <div class="meal-summary">
-              <div class="meal-title">
-                @if (meal.freezyItemRef) {
-                  <mat-icon class="meal-icon" aria-label="From the freezer">ac_unit</mat-icon>
-                } @else if (meal.recipeId) {
-                  <mat-icon class="meal-icon" aria-label="Recipe">menu_book</mat-icon>
-                } @else if (!meal.dishName) {
-                  <mat-icon class="meal-icon" aria-label="Idea">lightbulb</mat-icon>
-                }
-                <span>{{ mealSummary(meal) }}</span>
-              </div>
-              @if (attendeeNames(meal); as names) {
-                <p class="attendees"><mat-icon>group</mat-icon> {{ names }}</p>
-              }
-              @if (meal.notes) {
-                <p class="notes">{{ meal.notes }}</p>
+          @if (day.meals.length > 0) {
+            <div class="meal-list">
+              @for (meal of day.meals; track meal.id) {
+                <div class="meal-summary">
+                  @if (mealLabel(meal); as label) {
+                    <span class="meal-label">{{ label }}</span>
+                  }
+                  <div class="meal-title">
+                    @if (meal.freezyItemRef) {
+                      <mat-icon class="meal-icon" aria-label="From the freezer">ac_unit</mat-icon>
+                    } @else if (meal.recipeId) {
+                      <mat-icon class="meal-icon" aria-label="Recipe">menu_book</mat-icon>
+                    } @else if (!meal.dishName) {
+                      <mat-icon class="meal-icon" aria-label="Idea">lightbulb</mat-icon>
+                    }
+                    <span class="meal-name">{{ mealSummary(meal) }}</span>
+                    <span class="meal-actions">
+                      <button mat-icon-button class="meal-action" (click)="openSlot(day, meal)"
+                              aria-label="Edit dish">
+                        <mat-icon>edit</mat-icon>
+                      </button>
+                      <button mat-icon-button class="meal-action" (click)="clearSlot(meal)"
+                              aria-label="Remove dish">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    </span>
+                  </div>
+                  @if (attendeeNames(meal); as names) {
+                    <p class="attendees"><mat-icon>group</mat-icon> {{ names }}</p>
+                  }
+                  @if (meal.notes) {
+                    <p class="notes">{{ meal.notes }}</p>
+                  }
+                </div>
               }
             </div>
           } @else {
@@ -54,9 +71,11 @@
           }
         </mat-card-content>
         <mat-card-actions align="end">
-          @if (day.meal; as meal) {
-            <button mat-button (click)="openSlot(day)">Edit</button>
-            <button mat-button (click)="clearSlot(meal)">Clear</button>
+          @if (day.meals.length > 0) {
+            <button mat-button class="add-dish" (click)="openSlot(day)">
+              <mat-icon>add</mat-icon>
+              Add dish
+            </button>
           } @else {
             <button mat-button (click)="openSlot(day)">
               <mat-icon>add</mat-icon>

@@ -1,5 +1,6 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Extensions;
+using Dishhive.Api.Services.Demo;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.ShoppingList;
@@ -7,6 +8,13 @@ using Dishhive.Api.Services.Suggestions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
+
+// one-time seed generation: dotnet run --project src/Dishhive.Api -- --generate-demo-seed
+if (args.Contains("--generate-demo-seed"))
+{
+    await Dishhive.Api.Services.Demo.DemoSeedGenerator.RunAsync();
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,6 +61,13 @@ builder.Services.AddHttpClient<IFreezyClient, FreezyHttpClient>(client =>
 
 // Extension point for future AI-assisted planning (no-op by design, see week-planner.md)
 builder.Services.AddSingleton<IMealSuggestionService, NoOpMealSuggestionService>();
+
+// Demo mode: seed Dagelijkse Kost recipes and a demo household into an empty
+// database when Demo:Enabled is set (see docs/features/demo-mode.md)
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddHostedService<DemoDataSeeder>();
+}
 
 // Shopping list generation (computed on demand, nothing persisted)
 builder.Services.AddScoped<IShoppingListService, ShoppingListService>();

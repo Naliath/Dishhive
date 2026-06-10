@@ -57,7 +57,7 @@ public class RecipeImportEndpointIntegrationTests : IDisposable
         var recipe = await response.Content.ReadFromJsonAsync<RecipeDto>();
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        recipe!.Title.Should().Contain("crémeux van citroen");
+        recipe!.Title.Should().StartWith("Crémeux van citroen");
         recipe.Ingredients.Should().HaveCount(15);
         recipe.Steps.Should().HaveCount(11);
         recipe.SourceProvider.Should().Be("dagelijkse-kost");

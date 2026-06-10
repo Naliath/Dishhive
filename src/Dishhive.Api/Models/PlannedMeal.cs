@@ -11,7 +11,20 @@ public enum MealType
 }
 
 /// <summary>
-/// A meal slot on the week plan. Exactly one slot per date + meal type.
+/// The course a dish belongs to within a meal. Main is the default and the value 0
+/// so pre-existing rows keep their meaning after migration.
+/// </summary>
+public enum Course
+{
+    Main = 0,
+    Appetizer = 1,
+    Side = 2,
+    Dessert = 3
+}
+
+/// <summary>
+/// A planned dish on the week plan. A day can hold any number of dishes, e.g. a lunch
+/// plus a dinner with appetizer and dessert; the typical day has a single dinner main.
 /// At least one of RecipeId, DishName or VagueInstruction must be set.
 /// Past rows double as the dish history (see docs/features/past-dishes-and-statistics.md).
 /// </summary>
@@ -22,6 +35,8 @@ public class PlannedMeal
     public DateOnly Date { get; set; }
 
     public MealType MealType { get; set; } = MealType.Dinner;
+
+    public Course Course { get; set; } = Course.Main;
 
     /// <summary>
     /// Linked recipe, when planning style is "recipe"

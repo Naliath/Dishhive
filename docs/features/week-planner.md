@@ -13,9 +13,11 @@ future AI-assisted planning.
 ## Scope
 
 **In scope**
-- Week view (Mon–Sun) with one planned meal per day/meal-type (dinner first; model supports
-  breakfast/lunch/snack)
-- Three planning styles per slot, mixable across the week:
+- Week view (Mon–Sun); a day holds any number of dishes (the everyday case is a single
+  dinner main, but a lunch plus a dinner with appetizer and dessert is possible)
+- Each dish carries a `MealType` (breakfast/lunch/dinner/snack) and a `Course`
+  (main/appetizer/side/dessert); both default so the simple case needs no extra input
+- Three planning styles per dish, mixable across the week:
   1. **Recipe**: link a known recipe from the recipe store
   2. **Named dish**: free-text dish name without a recipe ("spaghetti bolognese")
   3. **Vague instruction**: intention text ("something with fish", "something quick", "leftovers")
@@ -26,7 +28,6 @@ future AI-assisted planning.
 **Out of scope (seams only)**
 - AI-assisted plan generation — only the `IMealSuggestionService` seam is created
 - Recurring meal rules ("pizza every Friday")
-- Multiple parallel dishes per meal slot
 
 ## User Stories / Use Cases
 
@@ -45,6 +46,7 @@ PlannedMeal
 ├── Id (Guid)
 ├── Date (DateOnly, required)
 ├── MealType (enum: Breakfast=0, Lunch=1, Dinner=2, Snack=3; default Dinner)
+├── Course (enum: Main=0, Appetizer=1, Side=2, Dessert=3; default Main)
 ├── RecipeId (Guid?, FK set-null)        // planning style 1
 ├── DishName (string?, max 200)          // planning style 2 (also denormalized from recipe title for history)
 ├── VagueInstruction (string?, max 500)  // planning style 3
@@ -61,7 +63,8 @@ PlannedMealAttendee
 - At least one of `RecipeId`, `DishName`, `VagueInstruction` must be set (validated in API).
 - `DishName` is **always** filled when a recipe is linked (copy of the recipe title at planning
   time) so history/statistics survive recipe deletion or rename.
-- Unique index on `(Date, MealType)` — one plan per slot.
+- No uniqueness per slot: a day can hold any number of dishes. `Main=0` so rows from
+  before the `Course` column existed keep their meaning.
 - History is *the same table*: past `PlannedMeal` rows are the dish history
   (see past-dishes-and-statistics.md). No separate history table.
 
@@ -85,7 +88,7 @@ providers now.**
   - `GET /api/plannedmeals?from=YYYY-MM-DD&to=YYYY-MM-DD` (week fetch)
   - `POST /api/plannedmeals`, `PUT /api/plannedmeals/{id}`, `DELETE /api/plannedmeals/{id}`
 - Attendance set in Create/Update DTOs as `familyMemberIds: Guid[]`
-- Validation: slot uniqueness, at-least-one-content rule
+- Validation: at-least-one-content rule
 - `IMealSuggestionService` seam + no-op implementation registered in DI
 
 ## Frontend Requirements
@@ -105,7 +108,6 @@ providers now.**
 
 ## Risks / Unknowns
 
-- One-meal-per-slot may prove too rigid (e.g. separate kids' dinner) — revisit after real use.
 - Vague instructions are unstructured; AI planning will later need to interpret them.
   Acceptable: they're prompts for humans now, prompts for models later.
 
@@ -127,7 +129,7 @@ providers now.**
 
 - [x] `PlannedMeal` + `PlannedMealAttendee` entities + migration
 - [x] `PlannedMealsController` (week query, CRUD, validation)
-- [x] Integration tests for planning rules (slot uniqueness, content rule, denormalization)
+- [x] Integration tests for planning rules (content rule, denormalization, multi-dish days)
 - [x] `IMealSuggestionService` seam + no-op registration
 - [x] `planned-meals.service.ts` + models
 - [x] Week grid page with navigation (prev/next/today, today highlight)
@@ -136,3 +138,5 @@ providers now.**
 - [x] Slot editor: attendee selection (members preselected, guests opt-in)
 - [x] Freezy leftover picker in slot editor
 - [x] Allergy hints in slot editor
+- [x] Multiple dishes per day (meal + course selects in editor, "Add dish" on day cards,
+      labels only shown when deviating from dinner main)

@@ -34,16 +34,13 @@ Replace free-text allergies/constraints with reusable tags once real usage shows
 values; enables hard filtering in the planner and AI suggestions.
 
 ### Ingredient canonicalization
-Map spelling variants ("ui"/"uien") to one ingredient for cleaner shopping aggregation and stats.
-
-### Print-friendly week plan
-A printable/PDF week menu to stick on the fridge.
+Map spelling variants ("ui"/"uien") to one ingredient for cleaner shopping aggregation and stats. Manage these mappings in the settings so they can be manually tweaked
 
 ## Medium Scope Features
 
 ### Persisted shopping list with check-off
 Promote the computed shopping list to a persisted, checkable list with manually added extra
-items, shared across devices. (Mealie: shopping lists with label sorting.)
+items, shared across devices. 
 
 ### Recipe organization: tags, categories, cookbooks
 Filterable tags/categories and curated "cookbooks" (saved filters) as the library grows.
@@ -65,12 +62,13 @@ existing API (Dishhive→Freezy direction preserved).
 Per-recipe nutrition (imported when sources provide it; manual otherwise). (Mealie: nutrition
 fields per recipe.)
 
-## Large Scope Features
+### Recipes scraping generalization
+Perhaps use one of these instead of a pure own implementation https://github.com/hhursev/recipe-scrapers, https://github.com/simfoley/RecipeScraper
 
-### Multi-user support
-Accounts, household membership, per-member sessions — should follow Freezy's
-`docs/plans/USER_SYSTEM_PLAN.md` design (magic-link auth, household units) for ecosystem
-consistency. (Mealie: users/groups/households.)
+### Recipes import/export
+Figure out if there is an well used format and adopt that for an import/export function (perhaps from the settings page)
+
+## Large Scope Features
 
 ### Meal plan rules & automation
 Recurring rules ("Friday = pizza day", "max 2× meat per week") feeding the suggestion engine.

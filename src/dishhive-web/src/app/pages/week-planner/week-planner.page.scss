@@ -28,10 +28,34 @@
   border-width: 2px;
 }
 
+.meal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .meal-summary {
   display: flex;
   flex-direction: column;
   gap: 4px;
+
+  // Extra dishes on the same day separate with a subtle divider
+  & + & {
+    border-block-start: 1px solid var(--mat-sys-outline-variant);
+    padding-block-start: 12px;
+  }
+}
+
+.meal-label {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
 }
 
 .meal-title {
@@ -39,6 +63,31 @@
   align-items: center;
   gap: 8px;
   font-weight: 500;
+}
+
+.meal-name {
+  flex: 1;
+}
+
+// Compact per-dish actions; keep them visually quiet so a single-dish day
+// looks as calm as before
+.meal-actions {
+  display: flex;
+  flex-shrink: 0;
+
+  .meal-action {
+    --mdc-icon-button-state-layer-size: 28px;
+    width: 28px;
+    height: 28px;
+    padding: 2px;
+    color: var(--mat-sys-on-surface-variant);
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+  }
 }
 
 .meal-icon {

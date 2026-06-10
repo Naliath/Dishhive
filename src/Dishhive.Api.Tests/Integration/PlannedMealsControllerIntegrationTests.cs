@@ -73,15 +73,44 @@ public class PlannedMealsControllerIntegrationTests : TestBase
     }
 
     [Fact]
-    public async Task CreateMeal_InTakenSlot_ReturnsBadRequest()
+    public async Task CreateMeal_MultipleDishesInSameMeal_AreAllowed()
     {
-        DbContext.PlannedMeals.Add(new PlannedMeal { Date = Monday, MealType = MealType.Dinner, DishName = "Eerste" });
+        DbContext.PlannedMeals.Add(new PlannedMeal { Date = Monday, MealType = MealType.Dinner, DishName = "Hoofdgerecht" });
         await DbContext.SaveChangesAsync();
 
-        var dto = new CreatePlannedMealDto { Date = Monday, MealType = MealType.Dinner, DishName = "Tweede" };
-        var response = await Client.PostAsJsonAsync("/api/plannedmeals", dto);
+        var appetizer = new CreatePlannedMealDto
+        {
+            Date = Monday, MealType = MealType.Dinner, Course = Course.Appetizer, DishName = "Soepje"
+        };
+        var dessert = new CreatePlannedMealDto
+        {
+            Date = Monday, MealType = MealType.Dinner, Course = Course.Dessert, DishName = "Tiramisu"
+        };
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await Client.PostAsJsonAsync("/api/plannedmeals", appetizer)).StatusCode.Should().Be(HttpStatusCode.Created);
+        (await Client.PostAsJsonAsync("/api/plannedmeals", dessert)).StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var meals = await Client.GetFromJsonAsync<List<PlannedMealDto>>(
+            $"/api/plannedmeals?from={Monday:yyyy-MM-dd}&to={Monday:yyyy-MM-dd}");
+
+        meals.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task CreateMeal_DefaultsToMainCourse_AndPersistsCourse()
+    {
+        var dto = new CreatePlannedMealDto { Date = Monday, DishName = "Stoofvlees" };
+
+        var response = await Client.PostAsJsonAsync("/api/plannedmeals", dto);
+        var created = await response.Content.ReadFromJsonAsync<PlannedMealDto>();
+
+        created!.Course.Should().Be(Course.Main);
+
+        var dessertDto = new CreatePlannedMealDto { Date = Monday, Course = Course.Dessert, DishName = "Rijstpap" };
+        var dessertResponse = await Client.PostAsJsonAsync("/api/plannedmeals", dessertDto);
+        var dessert = await dessertResponse.Content.ReadFromJsonAsync<PlannedMealDto>();
+
+        dessert!.Course.Should().Be(Course.Dessert);
     }
 
     [Fact]

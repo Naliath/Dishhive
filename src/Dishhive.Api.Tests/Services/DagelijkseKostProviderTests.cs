@@ -42,9 +42,33 @@ public class DagelijkseKostProviderTests
     [Fact]
     public async Task Extract_FixturePage_ReturnsTitle()
     {
+        // The og:title carries the clean dish name; the JSON-LD "name" on this site
+        // duplicates the SEO description sentence ("Jeroen Meus maakt ...")
         var recipe = await ExtractFixtureAsync();
 
-        recipe.Title.Should().Contain("crémeux van citroen");
+        recipe.Title.Should().StartWith("Crémeux van citroen");
+        recipe.Title.Should().NotContain("Jeroen Meus");
+    }
+
+    [Fact]
+    public async Task Extract_PageWithoutOgTitle_FallsBackToJsonLdName()
+    {
+        const string html = """
+            <html><head><script type="application/ld+json">
+            {
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              "name": "Fallbackgerecht",
+              "recipeIngredient": ["1 ei"],
+              "recipeInstructions": [{"@type": "HowToStep", "text": "Kook het ei."}]
+            }
+            </script></head><body></body></html>
+            """;
+
+        var recipe = await _provider.ExtractAsync(
+            html, new Uri("https://dagelijksekost.vrt.be/gerechten/fallbackgerecht"));
+
+        recipe.Title.Should().Be("Fallbackgerecht");
     }
 
     [Fact]

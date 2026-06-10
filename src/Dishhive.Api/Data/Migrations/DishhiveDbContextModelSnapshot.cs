@@ -109,6 +109,9 @@ namespace Dishhive.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<int>("Course")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -151,9 +154,6 @@ namespace Dishhive.Api.Data.Migrations
                     b.HasIndex("DishName");
 
                     b.HasIndex("RecipeId");
-
-                    b.HasIndex("Date", "MealType")
-                        .IsUnique();
 
                     b.ToTable("PlannedMeals");
                 });

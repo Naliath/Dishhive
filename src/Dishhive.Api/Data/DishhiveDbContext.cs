@@ -136,10 +136,8 @@ public class DishhiveDbContext : DbContext
                   .HasForeignKey(e => e.RecipeId)
                   .OnDelete(DeleteBehavior.SetNull);
 
-            // One plan per date + meal type slot
-            entity.HasIndex(e => new { e.Date, e.MealType }).IsUnique();
-
-            // Indexes for history/statistics queries
+            // Indexes for history/statistics queries; a day can hold any number
+            // of dishes (e.g. lunch plus a dinner with appetizer and dessert)
             entity.HasIndex(e => e.Date);
             entity.HasIndex(e => e.DishName);
         });

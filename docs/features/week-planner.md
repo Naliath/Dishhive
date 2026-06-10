@@ -1,0 +1,138 @@
+# Feature: Week Planner
+
+**Status legend:** `[ ]` = new · `[~]` = in progress · `[x]` = done
+**Related:** [family-composition.md](family-composition.md), [recipe-store.md](recipe-store.md),
+[freezy-integration.md](freezy-integration.md), [shopping-list-export.md](shopping-list-export.md)
+
+## Feature Goal
+
+Plan the family's meals for a week: assign concrete dishes or vague intentions to days, pick
+known recipes quickly, select who is present per meal, and leave clean extension points for
+future AI-assisted planning.
+
+## Scope
+
+**In scope**
+- Week view (Mon–Sun) with one planned meal per day/meal-type (dinner first; model supports
+  breakfast/lunch/snack)
+- Three planning styles per slot, mixable across the week:
+  1. **Recipe**: link a known recipe from the recipe store
+  2. **Named dish**: free-text dish name without a recipe ("spaghetti bolognese")
+  3. **Vague instruction**: intention text ("something with fish", "something quick", "leftovers")
+- Attendance: select which family members and guests are present per meal
+- Marking a slot as sourced from a Freezy frozen item (see freezy-integration.md)
+- Navigation between weeks; copying is future work
+
+**Out of scope (seams only)**
+- AI-assisted plan generation — only the `IMealSuggestionService` seam is created
+- Recurring meal rules ("pizza every Friday")
+- Multiple parallel dishes per meal slot
+
+## User Stories / Use Cases
+
+1. As a planner, I open next week and assign "spaghetti" (recipe) to Tuesday dinner.
+2. As a planner, I write "something with fish" on Thursday and decide the details later.
+3. As a planner, I plan "leftovers" on Monday and link a frozen lasagna from Freezy.
+4. As a planner, I mark that only 2 of 4 members eat at home on Wednesday.
+5. As a planner, I add Grandma (guest) to Sunday dinner.
+6. As a planner, I quickly search and pick from my known recipes when filling a slot.
+7. (Future) As a planner, I ask the app to propose a week plan that respects constraints.
+
+## Domain Model Considerations
+
+```
+PlannedMeal
+├── Id (Guid)
+├── Date (DateOnly, required)
+├── MealType (enum: Breakfast=0, Lunch=1, Dinner=2, Snack=3; default Dinner)
+├── RecipeId (Guid?, FK set-null)        // planning style 1
+├── DishName (string?, max 200)          // planning style 2 (also denormalized from recipe title for history)
+├── VagueInstruction (string?, max 500)  // planning style 3
+├── FreezyItemRef (string?, max 100)     // Freezy item id when meal comes from the freezer
+├── Notes (string?, max 500)
+├── CreatedAt / UpdatedAt
+└── Attendees (ICollection<PlannedMealAttendee>)
+
+PlannedMealAttendee
+├── PlannedMealId (FK, cascade)
+├── FamilyMemberId (FK, cascade)         // composite PK
+```
+
+- At least one of `RecipeId`, `DishName`, `VagueInstruction` must be set (validated in API).
+- `DishName` is **always** filled when a recipe is linked (copy of the recipe title at planning
+  time) so history/statistics survive recipe deletion or rename.
+- Unique index on `(Date, MealType)` — one plan per slot.
+- History is *the same table*: past `PlannedMeal` rows are the dish history
+  (see past-dishes-and-statistics.md). No separate history table.
+
+### AI-assistance extension point (seam only)
+
+```csharp
+public interface IMealSuggestionService
+{
+    Task<IReadOnlyList<MealSuggestion>> SuggestAsync(MealSuggestionRequest request, CancellationToken ct);
+}
+```
+
+`MealSuggestionRequest` carries the week, attendees, constraints, recent history, and available
+Freezy items. The default registered implementation returns an empty list. A future AI provider
+(LLM, rules engine) replaces the registration without touching the planner. **Do not implement
+providers now.**
+
+## Backend Requirements
+
+- `PlannedMealsController`:
+  - `GET /api/plannedmeals?from=YYYY-MM-DD&to=YYYY-MM-DD` (week fetch)
+  - `POST /api/plannedmeals`, `PUT /api/plannedmeals/{id}`, `DELETE /api/plannedmeals/{id}`
+- Attendance set in Create/Update DTOs as `familyMemberIds: Guid[]`
+- Validation: slot uniqueness, at-least-one-content rule
+- `IMealSuggestionService` seam + no-op implementation registered in DI
+
+## Frontend Requirements
+
+- Page `pages/week-planner/` — 7-day grid, prev/next week navigation, today highlight
+- Slot editor dialog: tabbed or segmented choice (recipe search / dish name / vague text),
+  attendee chips (members preselected, guests opt-in), Freezy leftovers picker (later phase)
+- `planned-meals.service.ts`
+- Mobile-friendly: day cards stack vertically on small screens (Material, no media queries)
+
+## Integration Requirements
+
+- Recipe store: recipe autocomplete in slot editor
+- Family composition: attendee selection, allergy hints
+- Freezy: leftover suggestions in slot editor (phase 3, behind `IFreezyClient`)
+- Shopping list: consumes planned meals for a date range
+
+## Risks / Unknowns
+
+- One-meal-per-slot may prove too rigid (e.g. separate kids' dinner) — revisit after real use.
+- Vague instructions are unstructured; AI planning will later need to interpret them.
+  Acceptable: they're prompts for humans now, prompts for models later.
+
+## Phased Implementation Plan
+
+**Phase 1 — Backend planning core**
+- Entities + migration, CRUD API with validation, attendance
+
+**Phase 2 — Week view UI**
+- Week grid, slot editor with three planning styles, attendee selection
+
+**Phase 3 — Connected planning**
+- Recipe autocomplete, Freezy leftover picker, allergy hints
+
+**Phase 4 — Seam hardening**
+- `IMealSuggestionService` request/response models finalized once phases 1–3 expose real needs
+
+## Implementation Checklist
+
+- [x] `PlannedMeal` + `PlannedMealAttendee` entities + migration
+- [x] `PlannedMealsController` (week query, CRUD, validation)
+- [x] Integration tests for planning rules (slot uniqueness, content rule, denormalization)
+- [x] `IMealSuggestionService` seam + no-op registration
+- [x] `planned-meals.service.ts` + models
+- [x] Week grid page with navigation (prev/next/today, today highlight)
+- [x] Slot editor: dish name + vague instruction
+- [x] Slot editor: recipe selection (search + pick)
+- [x] Slot editor: attendee selection (members preselected, guests opt-in)
+- [x] Freezy leftover picker in slot editor
+- [x] Allergy hints in slot editor

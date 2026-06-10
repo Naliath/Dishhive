@@ -1,0 +1,40 @@
+<h1 class="mat-headline-medium">Past dishes</h1>
+
+@if (loading()) {
+  <div class="empty-state">
+    <mat-spinner diameter="48"></mat-spinner>
+  </div>
+} @else if (historyDays().length === 0) {
+  <div class="empty-state">
+    <mat-icon class="empty-icon">history</mat-icon>
+    <h2>No history yet</h2>
+    <p>Planned meals appear here once their day has passed.</p>
+  </div>
+} @else {
+  <div class="history-list">
+    @for (day of historyDays(); track day.date) {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>{{ day.date | date:'EEEE d MMMM' }}</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          @for (meal of day.meals; track meal.id) {
+            <div class="history-meal">
+              @if (meal.freezyItemRef) {
+                <mat-icon aria-label="From the freezer">ac_unit</mat-icon>
+              } @else if (meal.recipeId) {
+                <mat-icon aria-label="Recipe">menu_book</mat-icon>
+              } @else {
+                <mat-icon aria-label="Dish">restaurant</mat-icon>
+              }
+              <span>{{ mealSummary(meal) }}</span>
+            </div>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+  </div>
+  <div class="load-more">
+    <button mat-stroked-button (click)="loadMore()">Load older weeks</button>
+  </div>
+}

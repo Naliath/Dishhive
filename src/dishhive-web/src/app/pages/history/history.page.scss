@@ -1,0 +1,31 @@
+h1 {
+  margin-block-start: 0;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 700px;
+  margin-inline: auto;
+}
+
+.history-meal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 4px;
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    color: var(--mat-sys-primary);
+  }
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin-block: 16px;
+}

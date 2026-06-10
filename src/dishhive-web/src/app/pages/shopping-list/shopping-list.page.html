@@ -1,0 +1,55 @@
+@if (loading()) {
+  <div class="empty-state">
+    <mat-spinner diameter="48"></mat-spinner>
+  </div>
+} @else if (list(); as shoppingList) {
+  <div class="page-header">
+    <h1 class="mat-headline-medium">Shopping list</h1>
+    <button mat-flat-button (click)="copyAsText()" [disabled]="shoppingList.items.length === 0">
+      <mat-icon>content_copy</mat-icon>
+      Copy as text
+    </button>
+  </div>
+  <p class="range-line">{{ shoppingList.from | date:'d MMM' }} – {{ shoppingList.to | date:'d MMM y' }}</p>
+
+  @if (shoppingList.items.length === 0 && shoppingList.reminders.length === 0) {
+    <div class="empty-state">
+      <mat-icon class="empty-icon">shopping_cart</mat-icon>
+      <h2>Nothing to buy</h2>
+      <p>Plan meals with recipes for this week and their ingredients show up here.</p>
+    </div>
+  } @else {
+    @if (shoppingList.items.length > 0) {
+      <mat-card appearance="outlined">
+        <mat-card-content>
+          <ul class="shopping-items">
+            @for (item of shoppingList.items; track item.name) {
+              <li>
+                <span class="item-quantity">{{ measurementService.format(item.quantity, item.unit) }}</span>
+                <span class="item-name">{{ item.name }}</span>
+                <span class="item-sources">{{ item.sourceRecipes.join(', ') }}</span>
+              </li>
+            }
+          </ul>
+        </mat-card-content>
+      </mat-card>
+    }
+
+    @if (shoppingList.reminders.length > 0) {
+      <mat-card appearance="outlined" class="reminders-card">
+        <mat-card-header>
+          <mat-icon mat-card-avatar>lightbulb</mat-icon>
+          <mat-card-title>Still to decide</mat-card-title>
+          <mat-card-subtitle>Planned meals without a recipe — no ingredients yet</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <ul class="reminders">
+            @for (reminder of shoppingList.reminders; track reminder.date + reminder.text) {
+              <li>{{ reminder.date | date:'EEEE d MMM' }}: {{ reminder.text }}</li>
+            }
+          </ul>
+        </mat-card-content>
+      </mat-card>
+    }
+  }
+}

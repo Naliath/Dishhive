@@ -1,0 +1,38 @@
+# =============================================================================
+# Docker Ignore File
+# =============================================================================
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Angular
+.angular/
+dist/
+coverage/
+
+# .NET
+**/bin/
+**/obj/
+**/publish/
+
+# Docker
+docker-compose*.yml
+.docker/
+
+# Misc
+*.log
+*.bak

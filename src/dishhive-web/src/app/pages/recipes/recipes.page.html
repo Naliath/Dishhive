@@ -1,0 +1,75 @@
+<div class="page-header">
+  <h1 class="mat-headline-medium">Recipes</h1>
+  <div class="header-actions">
+    <a mat-stroked-button routerLink="/recipes/new">
+      <mat-icon>add</mat-icon>
+      New recipe
+    </a>
+    <button mat-flat-button (click)="toggleImport()">
+      <mat-icon>download</mat-icon>
+      Import from URL
+    </button>
+  </div>
+</div>
+
+@if (importVisible()) {
+  <mat-card class="import-card" appearance="outlined">
+    <mat-card-content>
+      <form class="import-form" (ngSubmit)="import()">
+        <mat-form-field appearance="outline" class="import-field">
+          <mat-label>Recipe URL</mat-label>
+          <input matInput name="importUrl" [(ngModel)]="importUrl"
+                 placeholder="https://dagelijksekost.vrt.be/gerechten/...">
+          <mat-hint>Supported source: Dagelijkse Kost</mat-hint>
+        </mat-form-field>
+        <button mat-flat-button type="submit" [disabled]="importing() || !importUrl.trim()">
+          @if (importing()) {
+            Importing…
+          } @else {
+            Import
+          }
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
+}
+
+<mat-form-field appearance="outline" class="search-field">
+  <mat-label>Search recipes</mat-label>
+  <input matInput name="search" [(ngModel)]="searchTerm" (input)="loadRecipes()">
+  <mat-icon matSuffix>search</mat-icon>
+</mat-form-field>
+
+@if (loading()) {
+  <div class="empty-state">
+    <mat-spinner diameter="48"></mat-spinner>
+  </div>
+} @else if (recipes().length === 0) {
+  <div class="empty-state">
+    <mat-icon class="empty-icon">menu_book</mat-icon>
+    <h2>No recipes yet</h2>
+    <p>Import a recipe from a URL to get started.</p>
+  </div>
+} @else {
+  <div class="recipe-grid">
+    @for (recipe of recipes(); track recipe.id) {
+      <mat-card appearance="outlined" [routerLink]="['/recipes', recipe.id]" class="recipe-card">
+        @if (recipe.imageUrl) {
+          <img mat-card-image [src]="recipe.imageUrl" [alt]="recipe.title" loading="lazy">
+        }
+        <mat-card-header>
+          <mat-card-title>{{ recipe.title }}</mat-card-title>
+          <mat-card-subtitle>
+            {{ recipe.servings }} servings
+            @if (recipe.totalTimeMinutes) {
+              · {{ recipe.totalTimeMinutes }} min
+            }
+            @if (recipe.category) {
+              · {{ recipe.category }}
+            }
+          </mat-card-subtitle>
+        </mat-card-header>
+      </mat-card>
+    }
+  </div>
+}

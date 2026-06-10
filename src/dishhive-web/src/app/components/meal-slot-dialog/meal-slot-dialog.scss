@@ -1,0 +1,84 @@
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: min(480px, 80vw);
+  padding-block-start: 8px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  h3 {
+    margin: 0;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.selected-recipe {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container);
+
+  span {
+    flex: 1;
+  }
+}
+
+.recipe-results {
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  padding: 0;
+}
+
+.freezer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.expiry-warning {
+  color: var(--mat-sys-tertiary);
+}
+
+.last-planned-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.allergy-hints {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+
+  mat-icon {
+    flex-shrink: 0;
+  }
+}
+
+.guest-suffix {
+  margin-inline-start: 4px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.hint-text {
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+}

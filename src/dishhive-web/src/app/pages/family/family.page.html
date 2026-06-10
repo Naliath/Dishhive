@@ -1,0 +1,133 @@
+<div class="page-header">
+  <h1 class="mat-headline-medium">Family</h1>
+  @if (!formVisible()) {
+    <button mat-flat-button (click)="startAdd()">
+      <mat-icon>person_add</mat-icon>
+      Add member
+    </button>
+  }
+</div>
+
+@if (formVisible()) {
+  <mat-card class="member-form-card" appearance="outlined">
+    <mat-card-header>
+      <mat-card-title>{{ editingId() ? 'Edit member' : 'New member' }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form class="member-form" (ngSubmit)="save()">
+        <mat-form-field appearance="outline">
+          <mat-label>Name</mat-label>
+          <input matInput name="name" [(ngModel)]="form.name" required maxlength="100">
+        </mat-form-field>
+
+        <mat-slide-toggle name="isGuest" [(ngModel)]="form.isGuest">
+          Guest (temporary attendee)
+        </mat-slide-toggle>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Allergies / intolerances</mat-label>
+          <input matInput name="allergies" [(ngModel)]="form.allergies" maxlength="500"
+                 placeholder="e.g. nuts, lactose">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Dietary constraints</mat-label>
+          <input matInput name="dietaryConstraints" [(ngModel)]="form.dietaryConstraints" maxlength="500"
+                 placeholder="e.g. vegetarian, no pork">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Preferences</mat-label>
+          <textarea matInput name="preferenceNotes" [(ngModel)]="form.preferenceNotes" maxlength="1000"
+                    rows="2" placeholder="Likes and dislikes"></textarea>
+        </mat-form-field>
+
+        @if (editingId(); as memberId) {
+          <div class="favorites-editor">
+            <span class="mat-title-small">Favorite dishes</span>
+            <mat-chip-set aria-label="Favorite dishes">
+              @for (favorite of favoritesOf(memberId); track favorite.id) {
+                <mat-chip (removed)="removeFavorite(favorite)">
+                  {{ favorite.dishName }}
+                  <button matChipRemove aria-label="Remove favorite">
+                    <mat-icon>cancel</mat-icon>
+                  </button>
+                </mat-chip>
+              }
+            </mat-chip-set>
+            <div class="favorite-add">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="favorite-field">
+                <mat-label>Add favorite dish</mat-label>
+                <input matInput name="newFavorite" [(ngModel)]="newFavorite"
+                       maxlength="200" (keydown.enter)="$event.preventDefault(); addFavorite()">
+              </mat-form-field>
+              <button mat-icon-button type="button" (click)="addFavorite()"
+                      [disabled]="!newFavorite.trim()" aria-label="Add favorite">
+                <mat-icon>add</mat-icon>
+              </button>
+            </div>
+          </div>
+        }
+
+        <div class="form-actions">
+          <button mat-button type="button" (click)="cancelForm()">Cancel</button>
+          <button mat-flat-button type="submit" [disabled]="saving() || !form.name.trim()">
+            {{ editingId() ? 'Save' : 'Add' }}
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+}
+
+@if (loading()) {
+  <div class="empty-state">
+    <mat-spinner diameter="48"></mat-spinner>
+  </div>
+} @else if (members().length === 0 && !formVisible()) {
+  <div class="empty-state">
+    <mat-icon class="empty-icon">group</mat-icon>
+    <h2>No family members yet</h2>
+    <p>Add the people in your household so meal planning knows who eats.</p>
+  </div>
+} @else {
+  <div class="member-grid">
+    @for (member of members(); track member.id) {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>
+            {{ member.name }}
+            @if (member.isGuest) {
+              <mat-icon class="guest-icon" aria-label="Guest">badge</mat-icon>
+            }
+          </mat-card-title>
+          @if (member.isGuest) {
+            <mat-card-subtitle>Guest</mat-card-subtitle>
+          }
+        </mat-card-header>
+        <mat-card-content>
+          @if (member.allergies) {
+            <p class="detail-line"><mat-icon>warning</mat-icon> {{ member.allergies }}</p>
+          }
+          @if (member.dietaryConstraints) {
+            <p class="detail-line"><mat-icon>restaurant</mat-icon> {{ member.dietaryConstraints }}</p>
+          }
+          @if (member.preferenceNotes) {
+            <p class="detail-line"><mat-icon>favorite</mat-icon> {{ member.preferenceNotes }}</p>
+          }
+          @if (favoritesOf(member.id).length > 0) {
+            <mat-chip-set class="favorite-chips" aria-label="Favorite dishes">
+              @for (favorite of favoritesOf(member.id); track favorite.id) {
+                <mat-chip>{{ favorite.dishName }}</mat-chip>
+              }
+            </mat-chip-set>
+          }
+        </mat-card-content>
+        <mat-card-actions align="end">
+          <button mat-button (click)="startEdit(member)">Edit</button>
+          <button mat-button (click)="remove(member)">Remove</button>
+        </mat-card-actions>
+      </mat-card>
+    }
+  </div>
+}

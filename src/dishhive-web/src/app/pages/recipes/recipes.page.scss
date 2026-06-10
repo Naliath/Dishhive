@@ -1,0 +1,52 @@
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.import-card {
+  margin-block: 16px;
+}
+
+.import-form {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.import-field {
+  flex: 1;
+  min-width: min(400px, 100%);
+}
+
+.search-field {
+  width: min(400px, 100%);
+  margin-block-start: 16px;
+}
+
+.recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 16px;
+}
+
+.recipe-card {
+  cursor: pointer;
+
+  img {
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+  }
+}

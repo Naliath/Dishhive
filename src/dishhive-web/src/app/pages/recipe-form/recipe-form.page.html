@@ -1,0 +1,129 @@
+<div class="page-header">
+  <a mat-icon-button routerLink="/recipes" aria-label="Back to recipes">
+    <mat-icon>arrow_back</mat-icon>
+  </a>
+  <h1 class="mat-headline-medium">{{ editingId() ? 'Edit recipe' : 'New recipe' }}</h1>
+</div>
+
+@if (loading()) {
+  <div class="empty-state">
+    <mat-spinner diameter="48"></mat-spinner>
+  </div>
+} @else {
+  <form class="recipe-form" (ngSubmit)="save()">
+    <mat-card appearance="outlined">
+      <mat-card-content class="form-section">
+        <mat-form-field appearance="outline">
+          <mat-label>Title</mat-label>
+          <input matInput name="title" [(ngModel)]="title" required maxlength="300">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Description</mat-label>
+          <textarea matInput name="description" [(ngModel)]="description" rows="2" maxlength="2000"></textarea>
+        </mat-form-field>
+
+        <div class="field-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Servings</mat-label>
+            <input matInput type="number" name="servings" [(ngModel)]="servings" required min="1" max="100">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Prep time (min)</mat-label>
+            <input matInput type="number" name="prepTimeMinutes" [(ngModel)]="prepTimeMinutes" min="0">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Cook time (min)</mat-label>
+            <input matInput type="number" name="cookTimeMinutes" [(ngModel)]="cookTimeMinutes" min="0">
+          </mat-form-field>
+        </div>
+
+        <div class="field-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Category</mat-label>
+            <input matInput name="category" [(ngModel)]="category" maxlength="100" placeholder="e.g. Dessert">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Keywords</mat-label>
+            <input matInput name="keywords" [(ngModel)]="keywords" maxlength="500" placeholder="comma-separated">
+          </mat-form-field>
+        </div>
+
+        <div class="field-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Image URL</mat-label>
+            <input matInput name="imageUrl" [(ngModel)]="imageUrl" maxlength="1000">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Video URL</mat-label>
+            <input matInput name="videoUrl" [(ngModel)]="videoUrl" maxlength="1000">
+          </mat-form-field>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined">
+      <mat-card-header>
+        <mat-card-title>Ingredients</mat-card-title>
+      </mat-card-header>
+      <mat-card-content class="form-section">
+        @for (ingredient of ingredients; track $index) {
+          <div class="ingredient-row">
+            <mat-form-field appearance="outline" class="quantity-field">
+              <mat-label>Qty</mat-label>
+              <input matInput type="number" [name]="'qty' + $index" [(ngModel)]="ingredient.quantity" min="0" step="any">
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="unit-field">
+              <mat-label>Unit</mat-label>
+              <input matInput [name]="'unit' + $index" [(ngModel)]="ingredient.unit" maxlength="50" placeholder="g, ml, el">
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="name-field">
+              <mat-label>Ingredient</mat-label>
+              <input matInput [name]="'ingredient' + $index" [(ngModel)]="ingredient.name" maxlength="200">
+            </mat-form-field>
+            <button mat-icon-button type="button" (click)="removeIngredient($index)"
+                    [disabled]="ingredients.length === 1" aria-label="Remove ingredient">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        }
+        <button mat-stroked-button type="button" (click)="addIngredient()">
+          <mat-icon>add</mat-icon>
+          Add ingredient
+        </button>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined">
+      <mat-card-header>
+        <mat-card-title>Preparation steps</mat-card-title>
+      </mat-card-header>
+      <mat-card-content class="form-section">
+        @for (step of steps; track $index) {
+          <div class="step-row">
+            <span class="step-number">{{ $index + 1 }}.</span>
+            <mat-form-field appearance="outline" class="step-field">
+              <mat-label>Step</mat-label>
+              <textarea matInput [name]="'step' + $index" [(ngModel)]="step.instruction" rows="2" maxlength="2000"></textarea>
+            </mat-form-field>
+            <button mat-icon-button type="button" (click)="removeStep($index)"
+                    [disabled]="steps.length === 1" aria-label="Remove step">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        }
+        <button mat-stroked-button type="button" (click)="addStep()">
+          <mat-icon>add</mat-icon>
+          Add step
+        </button>
+      </mat-card-content>
+    </mat-card>
+
+    <div class="form-actions">
+      <a mat-button [routerLink]="editingId() ? ['/recipes', editingId()] : ['/recipes']">Cancel</a>
+      <button mat-flat-button type="submit" [disabled]="saving() || !canSave()">
+        {{ editingId() ? 'Save changes' : 'Create recipe' }}
+      </button>
+    </div>
+  </form>
+}

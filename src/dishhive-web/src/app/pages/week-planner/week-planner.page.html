@@ -1,0 +1,70 @@
+<div class="page-header">
+  <h1 class="mat-headline-medium">Week Planner</h1>
+  <div class="week-nav">
+    <button mat-icon-button (click)="previousWeek()" aria-label="Previous week">
+      <mat-icon>chevron_left</mat-icon>
+    </button>
+    <button mat-button (click)="goToCurrentWeek()">
+      {{ weekStart() | date:'d MMM' }} – {{ weekEnd() | date:'d MMM' }}
+    </button>
+    <button mat-icon-button (click)="nextWeek()" aria-label="Next week">
+      <mat-icon>chevron_right</mat-icon>
+    </button>
+    <a mat-stroked-button routerLink="/shopping-list" [queryParams]="shoppingListParams()">
+      <mat-icon>shopping_cart</mat-icon>
+      Shopping list
+    </a>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="empty-state">
+    <mat-spinner diameter="48"></mat-spinner>
+  </div>
+} @else {
+  <div class="week-grid">
+    @for (day of days(); track day.iso) {
+      <mat-card appearance="outlined" [class.today]="day.isToday">
+        <mat-card-header>
+          <mat-card-title>{{ day.date | date:'EEEE' }}</mat-card-title>
+          <mat-card-subtitle>{{ day.date | date:'d MMMM' }}</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          @if (day.meal; as meal) {
+            <div class="meal-summary">
+              <div class="meal-title">
+                @if (meal.freezyItemRef) {
+                  <mat-icon class="meal-icon" aria-label="From the freezer">ac_unit</mat-icon>
+                } @else if (meal.recipeId) {
+                  <mat-icon class="meal-icon" aria-label="Recipe">menu_book</mat-icon>
+                } @else if (!meal.dishName) {
+                  <mat-icon class="meal-icon" aria-label="Idea">lightbulb</mat-icon>
+                }
+                <span>{{ mealSummary(meal) }}</span>
+              </div>
+              @if (attendeeNames(meal); as names) {
+                <p class="attendees"><mat-icon>group</mat-icon> {{ names }}</p>
+              }
+              @if (meal.notes) {
+                <p class="notes">{{ meal.notes }}</p>
+              }
+            </div>
+          } @else {
+            <p class="empty-slot">Nothing planned</p>
+          }
+        </mat-card-content>
+        <mat-card-actions align="end">
+          @if (day.meal; as meal) {
+            <button mat-button (click)="openSlot(day)">Edit</button>
+            <button mat-button (click)="clearSlot(meal)">Clear</button>
+          } @else {
+            <button mat-button (click)="openSlot(day)">
+              <mat-icon>add</mat-icon>
+              Plan
+            </button>
+          }
+        </mat-card-actions>
+      </mat-card>
+    }
+  </div>
+}

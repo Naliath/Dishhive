@@ -1,0 +1,192 @@
+# Dishhive
+
+A household meal planning application: plan your family week menu, track family preferences
+and constraints, manage recipes, reuse frozen leftovers from [Freezy](../FreezerInventory),
+and generate shopping lists.
+
+## Features
+
+- 👨‍👩‍👧 **Family Composition** - Household members, guests, allergies, constraints and favorite dishes
+- 📖 **Recipe Store** - Recipes with ingredients, steps and planning metadata; manual entry and editing
+- ⬇️ **Recipe Import** - Import recipes from Dagelijkse Kost by URL (pluggable sources, locally stored images)
+- 📅 **Week Planner** - Plan recipes, dishes or vague intentions per day with per-meal attendance
+- 🧊 **Freezy Integration** - Reuse frozen leftovers/meals tracked in Freezy *(optional)*
+- 🛒 **Shopping Lists** - Generated from the planned week, scaled by attendance, copy-as-text
+- 📊 **History & Statistics** - Past dishes, frequency stats, favorites from history
+- 📏 **Measurement Preferences** - Metric (default) or imperial display
+- 🐳 **Self-Hosted** - Run everything in Docker containers
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Frontend | Angular 21, Angular Material 21.1.x |
+| Backend | .NET 10 Web API |
+| Database | PostgreSQL 16 |
+| Container | Docker & Docker Compose |
+
+## Architecture
+
+The application runs as a **single container** with the .NET API serving both the REST
+endpoints and the Angular static files — the same platform approach as Freezy.
+
+```
+┌─────────────────────────────────────────┐
+│           Docker Environment            │
+│  ┌───────────────────────────────────┐  │
+│  │  dishhive-app (Port 5100)         │  │
+│  │  ┌─────────────────────────────┐  │  │
+│  │  │  .NET 10 API                │  │  │      ┌──────────────────┐
+│  │  │  - REST API (/api/*)        │──┼──┼─────►│ Freezy (optional)│
+│  │  │  - Static Files (Angular)   │  │  │ HTTP │ Port 5000        │
+│  │  └─────────────────────────────┘  │  │      └──────────────────┘
+│  └───────────────────────────────────┘  │
+│                    │                    │
+│  ┌───────────────────────────────────┐  │
+│  │  dishhive-db (PostgreSQL)         │  │
+│  │  Host port 5433                   │  │
+│  └───────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+```
+
+## Port Allocation
+
+Dishhive deliberately uses different default ports than Freezy so both apps run side by side:
+
+| Purpose | Freezy | Dishhive |
+|---------|--------|----------|
+| App container / API HTTP | 5000 | **5100** |
+| API HTTPS (local dev) | 5001 | **5101** |
+| PostgreSQL (host) | 5432 | **5433** |
+| Angular dev server | 4200 | **4300** |
+
+## Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes Docker Compose)
+- [Node.js 22+](https://nodejs.org/) (for local frontend development)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) (for local backend development)
+- [Git](https://git-scm.com/)
+
+## Quick Start (Docker)
+
+```bash
+cd Dishhive
+
+# Start all services
+docker-compose up -d --build
+
+# The app will be available at:
+# - App: http://localhost:5100
+# - API Scalar UI: http://localhost:5100/scalar/v1
+# - OpenAPI document: http://localhost:5100/openapi/v1.json
+```
+
+To stop all services:
+```bash
+docker-compose down       # Stop and keep data
+docker-compose down -v    # Stop and remove all data (including database)
+```
+
+## Local Development
+
+For a faster inner loop, run the database in Docker and the frontend/backend locally.
+
+**1. Start PostgreSQL:**
+```bash
+docker-compose up -d db
+```
+
+**2. Run the .NET API (Terminal 1):**
+```bash
+cd src/Dishhive.Api
+dotnet watch run
+```
+- Runs at `https://localhost:5101` and `http://localhost:5100`
+- Scalar UI: `https://localhost:5101/scalar/v1`
+
+**3. Run the Angular app (Terminal 2):**
+```bash
+cd src/dishhive-web
+npm install   # first time only
+npm start
+```
+- Runs at `http://localhost:4300`
+- API calls proxied to the .NET backend automatically
+
+### Generate Angular API Client (NSwag)
+
+```bash
+# Terminal 1 - run API (OpenAPI endpoint must be reachable)
+cd src/Dishhive.Api
+dotnet watch run
+
+# Terminal 2 - generate TypeScript clients
+cd src/dishhive-web
+npm run generate:api-client        # https
+npm run generate:api-client:http   # http only
+```
+
+### Database Management
+
+**Connect to PostgreSQL:**
+- Host: `localhost`, Port: `5433`
+- Database/Username: `dishhive`, Password: `dishhive_dev_password`
+
+**Migrations:**
+```bash
+cd src/Dishhive.Api
+dotnet ef migrations add MigrationName
+dotnet ef database update
+```
+Migrations are applied automatically at application startup (with retry).
+
+### Running Tests
+
+```bash
+# Backend (xUnit) - from repo root
+dotnet test
+
+# Frontend (Vitest)
+cd src/dishhive-web
+npm test -- --no-watch
+```
+
+The recipe import extraction is covered by offline fixture tests
+(`src/Dishhive.Api.Tests/Services/DagelijkseKostProviderTests.cs`).
+
+## Freezy Integration
+
+Dishhive can suggest frozen leftovers/meals from a running Freezy instance in the week
+planner. The integration is **optional and read-only**; see
+[docs/features/freezy-integration.md](docs/features/freezy-integration.md).
+
+Enable it by setting the Freezy base URL:
+
+| Context | Setting |
+|---------|---------|
+| Local dev | `Freezy:BaseUrl` in `appsettings.Development.json`, e.g. `http://localhost:5000` |
+| Docker | `Freezy__BaseUrl: "http://host.docker.internal:5000"` in `docker-compose.yml` |
+
+When unset, the integration is disabled and Dishhive works standalone.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ConnectionStrings__DefaultConnection` | See docker-compose | PostgreSQL connection string |
+| `ASPNETCORE_ENVIRONMENT` | Production | Environment (Development/Production) |
+| `Freezy__BaseUrl` | empty (disabled) | Base URL of a Freezy instance |
+| `RecipeImport__UserAgent` | `Dishhive/0.1` | User-Agent for outbound recipe fetches |
+
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [docs/plans/INFRASTRUCTURE_SETUP_PLAN.md](docs/plans/INFRASTRUCTURE_SETUP_PLAN.md) | Infrastructure decisions, ports, assumptions, risks |
+| [docs/features/](docs/features/README.md) | One living document per feature with implementation checklists |
+| [docs/PROJECT_GUIDELINES.md](docs/PROJECT_GUIDELINES.md) | Architecture and coding conventions |
+| [possible-features.md](possible-features.md) | Future feature ideas (Mealie-inspired) |
+
+## License
+
+MIT License - See [LICENSE](LICENSE) file

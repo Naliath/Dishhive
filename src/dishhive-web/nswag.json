@@ -1,0 +1,29 @@
+{
+  "runtime": "Net100",
+  "defaultVariables": "ApiSpecUrl=https://localhost:5101/openapi/v1.json",
+  "documentGenerator": {
+    "fromDocument": {
+      "url": "$(ApiSpecUrl)",
+      "newLineBehavior": "Auto"
+    }
+  },
+  "codeGenerators": {
+    "openApiToTypeScriptClient": {
+      "className": "{controller}Client",
+      "template": "Angular",
+      "useBaseUrl": false,
+      "baseUrl": "",
+      "httpClass": "HttpClient",
+      "injectionTokenType": "InjectionToken",
+      "rxJsVersion": 7.0,
+      "nullValue": "Undefined",
+      "dateTimeType": "string",
+      "operationGenerationMode": "MultipleClientsFromOperationId",
+      "generateClientInterfaces": true,
+      "generateOptionalParameters": true,
+      "exportTypes": true,
+      "output": "src/app/api/generated/dishhive-api.client.ts",
+      "newLineBehavior": "Auto"
+    }
+  }
+}

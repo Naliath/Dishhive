@@ -1,0 +1,81 @@
+/**
+ * Custom Angular Material Theme
+ * Green/Yellow palettes (Dishhive's culinary identity) with automatic light/dark mode
+ * Based on Material Design 3 guidelines, following the Freezy theming conventions
+ */
+
+@use '@angular/material' as mat;
+
+// ============================================================================
+// Theme Configuration
+// ============================================================================
+
+// Default theme: Uses system preference (light-dark)
+html {
+  // Enable automatic light/dark mode based on system preference
+  color-scheme: light dark;
+
+  // Apply Green primary palette with modern styling
+  @include mat.theme((
+    color: (
+      primary: mat.$green-palette,
+      tertiary: mat.$yellow-palette,
+      theme-type: color-scheme,
+    ),
+    typography: (
+      plain-family: 'Roboto, sans-serif',
+      brand-family: 'Roboto, sans-serif',
+      bold-weight: 700,
+      medium-weight: 500,
+      regular-weight: 400,
+    ),
+    density: 0,
+  ));
+
+  // Include utility classes for easy theme application
+  @include mat.system-classes();
+}
+
+// ============================================================================
+// Global Application Styles
+// ============================================================================
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Roboto', sans-serif;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+// ============================================================================
+// Component-specific Theme Customizations
+// ============================================================================
+
+// Modern card styling
+@include mat.card-overrides((
+  elevated-container-shape: 12px,
+  outlined-container-shape: 12px,
+));
+
+// Modern form field styling
+@include mat.form-field-overrides((
+  filled-container-shape: 8px,
+  outlined-container-shape: 8px,
+));
+
+// Snackbar styling
+@include mat.snack-bar-overrides((
+  container-shape: 8px,
+));
+
+// ============================================================================
+// Accessibility - Strong Focus Indicators
+// ============================================================================
+
+@include mat.strong-focus-indicators((
+  border-width: 3px,
+  border-style: solid,
+  border-radius: 4px,
+));

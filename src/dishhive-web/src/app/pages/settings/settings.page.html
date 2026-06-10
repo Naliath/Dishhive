@@ -1,0 +1,32 @@
+<h1 class="mat-headline-medium">Settings</h1>
+
+<mat-card appearance="outlined" class="settings-card">
+  <mat-card-header>
+    <mat-icon mat-card-avatar>straighten</mat-icon>
+    <mat-card-title>Measurement system</mat-card-title>
+    <mat-card-subtitle>
+      Used for displaying recipe quantities and shopping lists. Imported recipes keep
+      their original values so you can always verify them.
+    </mat-card-subtitle>
+  </mat-card-header>
+  <mat-card-content>
+    <mat-radio-group
+      class="measurement-group"
+      [value]="settingsService.measurementSystem()"
+      (change)="setMeasurementSystem($event.value)"
+      aria-label="Measurement system">
+      <mat-radio-button value="metric">Metric (g, ml) — default</mat-radio-button>
+      <mat-radio-button value="imperial">Imperial (oz, cups)</mat-radio-button>
+    </mat-radio-group>
+  </mat-card-content>
+</mat-card>
+
+<mat-card appearance="outlined" class="settings-card">
+  <mat-card-header>
+    <mat-icon mat-card-avatar>info</mat-icon>
+    <mat-card-title>About</mat-card-title>
+  </mat-card-header>
+  <mat-card-content>
+    <p>Dishhive version {{ version }}</p>
+  </mat-card-content>
+</mat-card>

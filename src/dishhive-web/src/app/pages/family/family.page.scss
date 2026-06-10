@@ -1,0 +1,82 @@
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.member-form-card {
+  margin-block: 16px;
+  max-width: 600px;
+}
+
+.member-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-block-start: 8px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.member-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 16px;
+  margin-block-start: 16px;
+}
+
+.guest-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  margin-inline-start: 4px;
+  color: var(--mat-sys-tertiary);
+}
+
+.favorites-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  span {
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.favorite-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .favorite-field {
+    flex: 1;
+  }
+}
+
+.favorite-chips {
+  margin-block-start: 8px;
+}
+
+.detail-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}

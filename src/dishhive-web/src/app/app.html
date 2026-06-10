@@ -1,0 +1,48 @@
+<mat-toolbar color="primary" class="app-toolbar">
+  <button mat-icon-button (click)="sidenav.toggle()" aria-label="Toggle menu">
+    <mat-icon>menu</mat-icon>
+  </button>
+  <a class="app-title" routerLink="/" aria-label="Week planner">{{ title }}</a>
+</mat-toolbar>
+
+<mat-sidenav-container class="app-container">
+  <mat-sidenav #sidenav mode="over" class="app-sidenav">
+    <mat-nav-list>
+      <a mat-list-item routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" (click)="sidenav.close()">
+        <mat-icon matListItemIcon>calendar_month</mat-icon>
+        <span matListItemTitle>Week Planner</span>
+      </a>
+      <a mat-list-item routerLink="/recipes" routerLinkActive="active" (click)="sidenav.close()">
+        <mat-icon matListItemIcon>menu_book</mat-icon>
+        <span matListItemTitle>Recipes</span>
+      </a>
+      <a mat-list-item routerLink="/family" routerLinkActive="active" (click)="sidenav.close()">
+        <mat-icon matListItemIcon>group</mat-icon>
+        <span matListItemTitle>Family</span>
+      </a>
+      <a mat-list-item routerLink="/shopping-list" routerLinkActive="active" (click)="sidenav.close()">
+        <mat-icon matListItemIcon>shopping_cart</mat-icon>
+        <span matListItemTitle>Shopping List</span>
+      </a>
+      <a mat-list-item routerLink="/history" routerLinkActive="active" (click)="sidenav.close()">
+        <mat-icon matListItemIcon>history</mat-icon>
+        <span matListItemTitle>Past Dishes</span>
+      </a>
+      <a mat-list-item routerLink="/statistics" routerLinkActive="active" (click)="sidenav.close()">
+        <mat-icon matListItemIcon>insights</mat-icon>
+        <span matListItemTitle>Statistics</span>
+      </a>
+      <mat-divider></mat-divider>
+      <a mat-list-item routerLink="/settings" routerLinkActive="active" (click)="sidenav.close()">
+        <mat-icon matListItemIcon>settings</mat-icon>
+        <span matListItemTitle>Settings</span>
+      </a>
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="app-content">
+    <div class="router-content">
+      <router-outlet />
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>

@@ -1,0 +1,125 @@
+<h2 mat-dialog-title>Plan meal — {{ data.date }}</h2>
+
+<mat-dialog-content>
+  <div class="dialog-body">
+    <mat-button-toggle-group [value]="mode()" (change)="mode.set($event.value)" aria-label="Planning style">
+      <mat-button-toggle value="recipe">Recipe</mat-button-toggle>
+      <mat-button-toggle value="dish">Dish</mat-button-toggle>
+      <mat-button-toggle value="idea">Idea</mat-button-toggle>
+    </mat-button-toggle-group>
+
+    @switch (mode()) {
+      @case ('recipe') {
+        @if (selectedRecipe(); as recipe) {
+          <div class="selected-recipe">
+            <mat-icon>menu_book</mat-icon>
+            <span>{{ recipe.title }}</span>
+            <button mat-icon-button (click)="clearRecipe()" aria-label="Clear recipe">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        } @else {
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Search recipes</mat-label>
+            <input matInput name="recipeSearch" [(ngModel)]="recipeSearch" (input)="searchRecipes()">
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
+          @if (recipeResults().length > 0) {
+            <mat-action-list class="recipe-results">
+              @for (recipe of recipeResults(); track recipe.id) {
+                <button mat-list-item (click)="selectRecipe(recipe)">
+                  <mat-icon matListItemIcon>menu_book</mat-icon>
+                  <span matListItemTitle>{{ recipe.title }}</span>
+                </button>
+              }
+            </mat-action-list>
+          }
+        }
+      }
+      @case ('dish') {
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Dish name</mat-label>
+          <input matInput name="dishName" [(ngModel)]="dishName" maxlength="200"
+                 (ngModelChange)="currentDishName.set($event)"
+                 placeholder="e.g. spaghetti bolognese">
+        </mat-form-field>
+      }
+      @case ('idea') {
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Vague instruction</mat-label>
+          <input matInput name="vagueInstruction" [(ngModel)]="vagueInstruction" maxlength="500"
+                 placeholder="e.g. something with fish, something quick, leftovers">
+        </mat-form-field>
+      }
+    }
+
+    @if (lastPlannedHint(); as hint) {
+      <p class="last-planned-hint">
+        <mat-icon>history</mat-icon>
+        Last planned {{ hint.lastPlanned }} ({{ hint.timesPlanned }}× total)
+      </p>
+    }
+
+    @if (data.freezerEnabled) {
+      <div class="section">
+        <h3 class="mat-title-small">From the freezer (Freezy)</h3>
+        @if (selectedFreezerItem(); as item) {
+          <div class="selected-recipe">
+            <mat-icon>ac_unit</mat-icon>
+            <span>{{ item.name }}</span>
+            <button mat-icon-button (click)="clearFreezerItem()" aria-label="Clear freezer item">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        } @else if (data.freezerItems.length === 0) {
+          <p class="hint-text">No frozen items available.</p>
+        } @else {
+          <div class="freezer-chips">
+            @for (item of data.freezerItems.slice(0, 8); track item.id) {
+              <button mat-stroked-button class="freezer-chip" (click)="selectFreezerItem(item)">
+                <mat-icon>ac_unit</mat-icon>
+                {{ item.name }}
+                @if (isExpiringSoon(item)) {
+                  <mat-icon class="expiry-warning">schedule</mat-icon>
+                }
+              </button>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <div class="section">
+      <h3 class="mat-title-small">Who is eating?</h3>
+      <mat-chip-listbox aria-label="Attendees" multiple>
+        @for (member of data.members; track member.id) {
+          <mat-chip-option
+            [selected]="attendeeIds().has(member.id)"
+            (click)="toggleAttendee(member.id)">
+            {{ member.name }}@if (member.isGuest) { <span class="guest-suffix">(guest)</span> }
+          </mat-chip-option>
+        }
+      </mat-chip-listbox>
+      @if (allergyHints().length > 0) {
+        <div class="allergy-hints">
+          <mat-icon>warning</mat-icon>
+          <div>
+            @for (hint of allergyHints(); track hint) {
+              <div>{{ hint }}</div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Notes</mat-label>
+      <input matInput name="notes" [(ngModel)]="notes" maxlength="500">
+    </mat-form-field>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-flat-button (click)="save()" [disabled]="!canSave()">Save</button>
+</mat-dialog-actions>

@@ -1,0 +1,43 @@
+// Import custom theme with Material 3 design system
+// Green/Yellow palettes with automatic light/dark mode support
+@use 'theme.scss';
+
+/* You can add global styles to this file, and also import other style files */
+
+// Global utility classes following Material Design patterns
+// These are reusable patterns used across multiple components
+
+// Centered empty state container - used in list views
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 300px;
+  text-align: center;
+  padding: 24px;
+  color: var(--mat-sys-on-surface-variant);
+
+  .empty-icon {
+    font-size: 72px;
+    width: 72px;
+    height: 72px;
+    opacity: 0.5;
+  }
+
+  h2 {
+    margin: 0;
+    color: var(--mat-sys-on-surface);
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+// Page container widths (see docs/PROJECT_GUIDELINES.md)
+.page-container {
+  margin-inline: auto;
+  padding: 16px;
+}

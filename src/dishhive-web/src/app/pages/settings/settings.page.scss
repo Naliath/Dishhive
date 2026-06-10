@@ -1,0 +1,18 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 600px;
+  margin-inline: auto;
+}
+
+h1 {
+  margin: 0;
+}
+
+.measurement-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block-start: 8px;
+}

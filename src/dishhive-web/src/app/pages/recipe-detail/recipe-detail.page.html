@@ -1,0 +1,94 @@
+@if (loading()) {
+  <div class="empty-state">
+    <mat-spinner diameter="48"></mat-spinner>
+  </div>
+} @else if (recipe(); as r) {
+  <div class="detail-header">
+    <a mat-icon-button routerLink="/recipes" aria-label="Back to recipes">
+      <mat-icon>arrow_back</mat-icon>
+    </a>
+    <h1 class="mat-headline-medium">{{ r.title }}</h1>
+  </div>
+
+  <div class="detail-layout">
+    <div class="detail-main">
+      @if (r.imageUrl) {
+        <img class="recipe-image" [src]="r.imageUrl" [alt]="r.title">
+      }
+
+      @if (r.description && r.description !== r.title) {
+        <p>{{ r.description }}</p>
+      }
+
+      <div class="meta-row">
+        <span><mat-icon>group</mat-icon> {{ r.servings }} servings</span>
+        @if (r.prepTimeMinutes) {
+          <span><mat-icon>schedule</mat-icon> prep {{ r.prepTimeMinutes }} min</span>
+        }
+        @if (r.cookTimeMinutes) {
+          <span><mat-icon>skillet</mat-icon> cook {{ r.cookTimeMinutes }} min</span>
+        }
+        @if (r.category) {
+          <span><mat-icon>category</mat-icon> {{ r.category }}</span>
+        }
+      </div>
+
+      <h2 class="mat-title-large">Preparation</h2>
+      <ol class="steps">
+        @for (step of r.steps; track step.id) {
+          <li>{{ step.instruction }}</li>
+        }
+      </ol>
+
+      <div class="source-row">
+        @if (r.videoUrl) {
+          <a mat-stroked-button [href]="r.videoUrl" target="_blank" rel="noopener">
+            <mat-icon>play_circle</mat-icon>
+            Watch video
+          </a>
+        }
+        @if (r.sourceUrl) {
+          <a mat-stroked-button [href]="r.sourceUrl" target="_blank" rel="noopener">
+            <mat-icon>open_in_new</mat-icon>
+            Source
+          </a>
+        }
+        <a mat-stroked-button [routerLink]="['/recipes', r.id, 'edit']">
+          <mat-icon>edit</mat-icon>
+          Edit
+        </a>
+        <button mat-stroked-button (click)="remove()">
+          <mat-icon>delete</mat-icon>
+          Delete
+        </button>
+      </div>
+    </div>
+
+    <mat-card class="ingredients-card" appearance="outlined">
+      <mat-card-header>
+        <mat-card-title>Ingredients</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @if (r.sourceUrl) {
+          <mat-slide-toggle [checked]="showOriginal()" (change)="showOriginal.set($event.checked)">
+            Show original values
+          </mat-slide-toggle>
+        }
+        <ul class="ingredients">
+          @for (ingredient of r.ingredients; track ingredient.id) {
+            <li>
+              @if (showOriginal()) {
+                {{ ingredient.originalText }}
+              } @else {
+                @if (formatQuantity(ingredient.quantity, ingredient.unit); as qty) {
+                  <strong>{{ qty }}</strong>
+                }
+                {{ ingredient.name }}
+              }
+            </li>
+          }
+        </ul>
+      </mat-card-content>
+    </mat-card>
+  </div>
+}

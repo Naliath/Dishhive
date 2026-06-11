@@ -20,6 +20,9 @@ public class ShoppingListItemDto
 /// <summary>A planned meal without a recipe — the dish still needs deciding/ingredients</summary>
 public class ShoppingListReminderDto
 {
+    /// <summary>The underlying planned meal, so the UI can attach a recipe to it</summary>
+    public Guid PlannedMealId { get; set; }
+
     public DateOnly Date { get; set; }
     public string Text { get; set; } = string.Empty;
 }

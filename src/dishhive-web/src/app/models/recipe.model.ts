@@ -9,6 +9,36 @@ export interface RecipeListItem {
   /** True when the image bytes are stored locally in Dishhive */
   hasLocalImage: boolean;
   sourceProvider?: string;
+  /** Organization tag names (user-curated) */
+  tags: string[];
+}
+
+export interface RecipeTag {
+  id: string;
+  name: string;
+}
+
+/** A cookbook: a named, saved recipe filter */
+export interface Cookbook {
+  id: string;
+  name: string;
+  searchTerm?: string;
+  category?: string;
+  tags: string[];
+}
+
+export interface CreateCookbook {
+  name: string;
+  searchTerm?: string;
+  category?: string;
+  tags: string[];
+}
+
+/** Recipe library filter; cookbooks store exactly this shape */
+export interface RecipeFilter {
+  search?: string;
+  category?: string;
+  tags: string[];
 }
 
 export interface RecipeIngredient {
@@ -48,6 +78,8 @@ export interface CreateRecipe {
   videoUrl?: string;
   ingredients: CreateRecipeIngredient[];
   steps: { instruction: string }[];
+  /** Organization tag names; tags are created when new, synced on update */
+  tags: string[];
 }
 
 export interface Recipe {
@@ -71,4 +103,6 @@ export interface Recipe {
   updatedAt: string;
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
+  /** Organization tag names (user-curated) */
+  tags: string[];
 }

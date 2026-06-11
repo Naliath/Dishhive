@@ -1,15 +1,22 @@
 import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { ShoppingListService } from '../../services/shopping-list.service';
 import { MeasurementService } from '../../services/measurement.service';
-import { ShoppingList } from '../../models/shopping-list.model';
+import { RecipesService } from '../../services/recipes.service';
+import { PlannedMealsService } from '../../services/planned-meals.service';
+import { ShoppingList, ShoppingListReminder } from '../../models/shopping-list.model';
+import { RecipeListItem } from '../../models/recipe.model';
 
 function toIso(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -29,12 +36,17 @@ function mondayOf(date: Date): Date {
   standalone: true,
   imports: [
     DatePipe,
+    FormsModule,
+    RouterLink,
     MatButtonModule,
     MatCardModule,
+    MatFormFieldModule,
     MatIconModule,
+    MatInputModule,
     MatListModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule
+    MatSnackBarModule,
+    MatTooltipModule
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shopping-list.page.html',
@@ -44,12 +56,19 @@ export class ShoppingListPage implements OnInit {
   readonly list = signal<ShoppingList | null>(null);
   readonly loading = signal(true);
 
+  /** The reminder whose inline recipe search is open (one at a time) */
+  readonly linkingMealId = signal<string | null>(null);
+  readonly linkRecipeResults = signal<RecipeListItem[]>([]);
+  linkSearch = '';
+
   private from = '';
   private to = '';
 
   constructor(
     private route: ActivatedRoute,
     private shoppingListService: ShoppingListService,
+    private recipesService: RecipesService,
+    private plannedMealsService: PlannedMealsService,
     public measurementService: MeasurementService,
     private snackBar: MatSnackBar
   ) {}
@@ -78,6 +97,46 @@ export class ShoppingListPage implements OnInit {
         this.snackBar.open('Could not generate the shopping list', 'Dismiss', { duration: 4000 });
       }
     });
+  }
+
+  /** Toggle the inline recipe search for a "still to decide" entry */
+  toggleLinking(reminder: ShoppingListReminder): void {
+    const opening = this.linkingMealId() !== reminder.plannedMealId;
+    this.linkingMealId.set(opening ? reminder.plannedMealId : null);
+    this.linkRecipeResults.set([]);
+    // The dish text is usually the best starting search
+    this.linkSearch = opening ? reminder.text : '';
+    if (opening) {
+      this.searchLinkRecipes();
+    }
+  }
+
+  searchLinkRecipes(): void {
+    const term = this.linkSearch.trim();
+    if (!term) {
+      this.linkRecipeResults.set([]);
+      return;
+    }
+    this.recipesService.getRecipes(term).subscribe({
+      next: recipes => this.linkRecipeResults.set(recipes.slice(0, 5)),
+      error: () => this.linkRecipeResults.set([])
+    });
+  }
+
+  linkRecipe(reminder: ShoppingListReminder, recipe: RecipeListItem): void {
+    this.plannedMealsService.setRecipe(reminder.plannedMealId, recipe.id).subscribe({
+      next: () => {
+        this.linkingMealId.set(null);
+        this.snackBar.open(`"${recipe.title}" linked — ingredients added`, 'Dismiss', { duration: 3000 });
+        this.load();
+      },
+      error: () => this.snackBar.open('Could not link the recipe', 'Dismiss', { duration: 4000 })
+    });
+  }
+
+  /** Query params for "create recipe" — the form links the meal after saving */
+  newRecipeParams(reminder: ShoppingListReminder): Record<string, string> {
+    return { title: reminder.text, linkMealId: reminder.plannedMealId };
   }
 
   async copyAsText(): Promise<void> {

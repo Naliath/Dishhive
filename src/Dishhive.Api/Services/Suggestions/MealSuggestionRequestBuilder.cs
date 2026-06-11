@@ -24,12 +24,16 @@ public class MealSuggestionRequestBuilder
     }
 
     public async Task<MealSuggestionRequest> BuildAsync(
-        DateOnly weekStart, IReadOnlyList<Guid> attendeeIds, CancellationToken cancellationToken = default)
+        DateOnly weekStart, IReadOnlyList<Guid> attendeeIds, string? instructions = null,
+        CancellationToken cancellationToken = default)
     {
         var weekEnd = weekStart.AddDays(6);
         var today = DateOnly.FromDateTime(DateTime.Today);
 
-        var membersQuery = _context.FamilyMembers.AsNoTracking().Where(m => m.IsActive);
+        var membersQuery = _context.FamilyMembers
+            .AsNoTracking()
+            .Include(m => m.DietaryTags).ThenInclude(t => t.DietaryTag)
+            .Where(m => m.IsActive);
         membersQuery = attendeeIds.Count > 0
             ? membersQuery.Where(m => attendeeIds.Contains(m.Id))
             : membersQuery.Where(m => !m.IsGuest);
@@ -111,8 +115,8 @@ public class MealSuggestionRequestBuilder
             Members = members.Select(m => new MemberProfile
             {
                 Name = m.Name,
-                Allergies = m.Allergies,
-                DietaryConstraints = m.DietaryConstraints,
+                Allergies = TagNames(m, DietaryTagKind.Allergy),
+                Diets = TagNames(m, DietaryTagKind.Diet),
                 PreferenceNotes = m.PreferenceNotes
             }).ToList(),
             Favorites = favorites,
@@ -120,7 +124,14 @@ public class MealSuggestionRequestBuilder
             KnownRecipes = knownRecipes,
             WeekPlan = weekPlan,
             DaysToFill = daysToFill,
-            AvailableFrozenItems = frozenItems
+            AvailableFrozenItems = frozenItems,
+            Instructions = string.IsNullOrWhiteSpace(instructions) ? null : instructions.Trim()
         };
     }
+
+    private static List<string> TagNames(FamilyMember member, DietaryTagKind kind) => member.DietaryTags
+        .Where(link => link.DietaryTag != null && link.DietaryTag.Kind == kind)
+        .Select(link => link.DietaryTag!.Name)
+        .OrderBy(n => n)
+        .ToList();
 }

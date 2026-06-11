@@ -44,8 +44,44 @@
         </mat-card-header>
         <mat-card-content>
           <ul class="reminders">
-            @for (reminder of shoppingList.reminders; track reminder.date + reminder.text) {
-              <li>{{ reminder.date | date:'EEEE d MMM' }}: {{ reminder.text }}</li>
+            @for (reminder of shoppingList.reminders; track reminder.plannedMealId) {
+              <li class="reminder-row">
+                <div class="reminder-line">
+                  <span>{{ reminder.date | date:'EEEE d MMM' }}: {{ reminder.text }}</span>
+                  <span class="reminder-actions">
+                    <button mat-icon-button (click)="toggleLinking(reminder)"
+                            matTooltip="Link an existing recipe" aria-label="Link recipe">
+                      <mat-icon>menu_book</mat-icon>
+                    </button>
+                    <a mat-icon-button routerLink="/recipes/new" [queryParams]="newRecipeParams(reminder)"
+                       matTooltip="Create a recipe for this dish" aria-label="Create recipe">
+                      <mat-icon>post_add</mat-icon>
+                    </a>
+                  </span>
+                </div>
+                @if (linkingMealId() === reminder.plannedMealId) {
+                  <div class="link-recipe-panel">
+                    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="link-search-field">
+                      <mat-label>Search recipes</mat-label>
+                      <input matInput name="linkSearch" [(ngModel)]="linkSearch" (input)="searchLinkRecipes()">
+                      <mat-icon matSuffix>search</mat-icon>
+                    </mat-form-field>
+                    @if (linkRecipeResults().length > 0) {
+                      <mat-action-list class="link-recipe-results">
+                        @for (recipe of linkRecipeResults(); track recipe.id) {
+                          <button mat-list-item (click)="linkRecipe(reminder, recipe)">
+                            <mat-icon matListItemIcon>menu_book</mat-icon>
+                            <span matListItemTitle>{{ recipe.title }}</span>
+                          </button>
+                        }
+                      </mat-action-list>
+                    } @else if (linkSearch.trim()) {
+                      <p class="link-no-results">No recipes match — create one with the
+                        <mat-icon class="inline-icon">post_add</mat-icon> button.</p>
+                    }
+                  </div>
+                }
+              </li>
             }
           </ul>
         </mat-card-content>

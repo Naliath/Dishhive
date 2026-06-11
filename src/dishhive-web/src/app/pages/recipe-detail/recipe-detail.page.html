@@ -33,6 +33,66 @@
         }
       </div>
 
+      @if (r.tags.length > 0) {
+        <div class="tag-chips" aria-label="Recipe tags">
+          @for (tag of r.tags; track tag) {
+            <span class="tag-chip"><mat-icon>sell</mat-icon>{{ tag }}</span>
+          }
+        </div>
+      }
+
+      @if (stats(); as s) {
+        <div class="meta-row history-row">
+          <span><mat-icon>history</mat-icon> last planned {{ s.lastPlanned | date:'d MMM y' }}</span>
+          <span>planned {{ s.timesPlanned }}×</span>
+          @if (s.timesEaten > 0) {
+            <span>eaten {{ s.timesEaten }}×</span>
+          }
+          <button class="rating-button" type="button" (click)="openRating()"
+                  matTooltip="Rate the last time this dish was on the menu">
+            <mat-icon>{{ s.averageRating !== null ? 'star' : 'star_border' }}</mat-icon>
+            @if (s.averageRating !== null) {
+              {{ s.averageRating | number:'1.1-1' }}
+            } @else {
+              Rate
+            }
+          </button>
+        </div>
+      }
+
+      @if (members().length > 0) {
+        <div class="favorites-row" aria-label="Favorite of">
+          @for (member of favoritedMembers(); track member.id) {
+            <button class="member-heart is-favorite" type="button"
+                    (click)="toggleFavorite(member)"
+                    [matTooltip]="'Remove favorite for ' + member.name">
+              <mat-icon>favorite</mat-icon>
+              {{ member.name }}
+            </button>
+          }
+          @if (otherMembers().length > 0) {
+            <button class="member-heart add-favorite" type="button"
+                    [matMenuTriggerFor]="favoriteMenu"
+                    matTooltip="Mark this recipe as someone's favorite">
+              <mat-icon>favorite_border</mat-icon>
+              @if (favoritedMembers().length === 0) {
+                Mark as favorite
+              } @else {
+                <mat-icon class="add-icon">add</mat-icon>
+              }
+            </button>
+            <mat-menu #favoriteMenu="matMenu">
+              @for (member of otherMembers(); track member.id) {
+                <button mat-menu-item (click)="toggleFavorite(member)">
+                  <mat-icon>favorite_border</mat-icon>
+                  {{ member.name }}
+                </button>
+              }
+            </mat-menu>
+          }
+        </div>
+      }
+
       <h2 class="mat-title-large">Preparation</h2>
       <ol class="steps">
         @for (step of r.steps; track step.id) {

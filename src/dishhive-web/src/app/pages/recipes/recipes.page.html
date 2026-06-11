@@ -34,11 +34,69 @@
   </mat-card>
 }
 
-<mat-form-field appearance="outline" class="search-field">
-  <mat-label>Search recipes</mat-label>
-  <input matInput name="search" [(ngModel)]="searchTerm" (input)="loadRecipes()">
-  <mat-icon matSuffix>search</mat-icon>
-</mat-form-field>
+<div class="filter-bar">
+  <mat-form-field appearance="outline" class="search-field" subscriptSizing="dynamic">
+    <mat-label>Search recipes</mat-label>
+    <input matInput name="search" [(ngModel)]="searchTerm" (input)="onSearchInput()">
+    <mat-icon matSuffix>search</mat-icon>
+  </mat-form-field>
+
+  @if (categories().length > 0) {
+    <mat-form-field appearance="outline" class="filter-field" subscriptSizing="dynamic">
+      <mat-label>Category</mat-label>
+      <mat-select [value]="selectedCategory()" (selectionChange)="onCategoryChange($event.value)">
+        <mat-option [value]="null">All categories</mat-option>
+        @for (category of categories(); track category) {
+          <mat-option [value]="category">{{ category }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+
+  @if (knownTags().length > 0) {
+    <mat-form-field appearance="outline" class="filter-field" subscriptSizing="dynamic">
+      <mat-label>Tags</mat-label>
+      <mat-select multiple [value]="selectedTags()" (selectionChange)="onTagsChange($event.value)">
+        @for (tag of knownTags(); track tag) {
+          <mat-option [value]="tag">{{ tag }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+
+  @if (hasFilter()) {
+    <button mat-icon-button (click)="clearFilter()" matTooltip="Clear filter" aria-label="Clear filter">
+      <mat-icon>filter_alt_off</mat-icon>
+    </button>
+  }
+</div>
+
+@if (cookbooks().length > 0 || hasFilter()) {
+  <div class="cookbook-row" aria-label="Cookbooks">
+    <mat-icon class="cookbook-row-icon" matTooltip="Cookbooks: saved filters">collections_bookmark</mat-icon>
+    @for (cookbook of cookbooks(); track cookbook.id) {
+      <button class="cookbook-chip" type="button"
+              [class.is-active]="activeCookbookId() === cookbook.id"
+              (click)="applyCookbook(cookbook)">
+        {{ cookbook.name }}
+        <mat-icon class="cookbook-delete" (click)="deleteCookbook(cookbook, $event)"
+                  [attr.aria-label]="'Delete cookbook ' + cookbook.name">close</mat-icon>
+      </button>
+    }
+    @if (hasFilter() && !activeCookbookId()) {
+      <div class="cookbook-save">
+        <input class="cookbook-name-input" name="cookbookName" [(ngModel)]="cookbookName"
+               placeholder="Save filter as cookbook…" maxlength="100"
+               (keydown.enter)="saveCookbook()">
+        <button mat-icon-button (click)="saveCookbook()"
+                [disabled]="savingCookbook() || !cookbookName.trim()"
+                matTooltip="Save the current filter as a cookbook" aria-label="Save cookbook">
+          <mat-icon>bookmark_add</mat-icon>
+        </button>
+      </div>
+    }
+  </div>
+}
 
 @if (loading()) {
   <div class="empty-state">
@@ -47,8 +105,13 @@
 } @else if (recipes().length === 0) {
   <div class="empty-state">
     <mat-icon class="empty-icon">menu_book</mat-icon>
-    <h2>No recipes yet</h2>
-    <p>Import a recipe from a URL to get started.</p>
+    @if (hasFilter()) {
+      <h2>No recipes match this filter</h2>
+      <p>Loosen the filter or clear it to see the whole library.</p>
+    } @else {
+      <h2>No recipes yet</h2>
+      <p>Import a recipe from a URL to get started.</p>
+    }
   </div>
 } @else {
   <div class="recipe-grid">
@@ -68,6 +131,23 @@
               · {{ recipe.category }}
             }
           </mat-card-subtitle>
+          @if (statsOf(recipe) || favoriteCountOf(recipe) > 0 || recipe.tags.length > 0) {
+            <div class="card-badges">
+              @if (statsOf(recipe)?.averageRating; as rating) {
+                <span class="card-badge card-badge--rating">
+                  <mat-icon>star</mat-icon>{{ rating | number:'1.1-1' }}
+                </span>
+              }
+              @if (favoriteCountOf(recipe) > 0) {
+                <span class="card-badge card-badge--favorite">
+                  <mat-icon>favorite</mat-icon>{{ favoriteCountOf(recipe) }}
+                </span>
+              }
+              @for (tag of recipe.tags.slice(0, 3); track tag) {
+                <span class="card-badge card-badge--tag">{{ tag }}</span>
+              }
+            </div>
+          }
         </mat-card-header>
       </mat-card>
     }

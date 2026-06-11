@@ -19,6 +19,8 @@ implementation checklist that is updated as work progresses.
 | [demo-mode.md](demo-mode.md) | Seed demo recipes + household into an empty database | recipe-import, family-composition |
 | [meal-feedback.md](meal-feedback.md) | Mark meals eaten/skipped, per-member ratings | past-dishes-and-statistics |
 | [ai-week-planning.md](ai-week-planning.md) | LLM week suggestions (5 providers) + rules fallback | week-planner, meal-feedback, freezy-integration |
+| [dietary-tags.md](dietary-tags.md) | Structured allergy/diet tags replacing free text | family-composition |
+| [recipe-organization.md](recipe-organization.md) | Recipe tags, category filter, cookbooks (saved filters) | recipe-store |
 
 Future ideas live in [`../../possible-features.md`](../../possible-features.md).
 The infrastructure foundation is planned in

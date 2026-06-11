@@ -56,6 +56,9 @@ MealRating                              // composite PK, like PlannedMealAttende
 - `components/meal-rating-dialog/`: one row of 5 tappable stars per member (attendees
   first); each tap saves immediately, tapping the current rating clears it
 - Week planner: past-day cards get only a small eaten checkmark toggle (planner stays clean)
+- Recipe detail page: the rating shown in the history widget is a button reusing the same
+  rating dialog — it targets the most recent past occurrence of the dish (matched by
+  recipe id or title over the last 90 days), since ratings belong to planned meals
 - Statistics page: "Eaten" and "Rating" columns
 
 ## Implementation Checklist

@@ -4,12 +4,6 @@ Future feature ideas for Dishhive. Functional inspiration drawn from the
 [Mealie](https://github.com/mealie-recipes/mealie) project — used for capability discovery,
 not copied blindly. Items graduate from this list into `docs/features/*.md` when they get planned.
 
-## Needed soon
-
-*(empty — AI-assisted week planning and meal eaten/rating feedback graduated to
-[docs/features/ai-week-planning.md](docs/features/ai-week-planning.md) and
-[docs/features/meal-feedback.md](docs/features/meal-feedback.md))*
-
 ## Small Scope Features
 
 ### Generic schema.org import fallback
@@ -23,22 +17,17 @@ One-click duplicate of a past week's plan into the current week as a starting po
 Servings stepper on the recipe detail page that rescales displayed ingredient quantities
 (model already supports it: quantities + servings).
 
-### Structured allergy/constraint tags
-Replace free-text allergies/constraints with reusable tags once real usage shows recurring
-values; enables hard filtering in the planner and AI suggestions.
-
 ### Ingredient canonicalization
 Map spelling variants ("ui"/"uien") to one ingredient for cleaner shopping aggregation and stats. Manage these mappings in the settings so they can be manually tweaked
 
 ## Medium Scope Features
 
+### Rework the recipies grouping solution
+Current cookbook implementation is lacking basing is only on a filter, this allows very little customization or requires long filter names to group different items. More ideas required
+
 ### Persisted shopping list with check-off
 Promote the computed shopping list to a persisted, checkable list with manually added extra
 items, shared across devices. 
-
-### Recipe organization: tags, categories, cookbooks
-Filterable tags/categories and curated "cookbooks" (saved filters) as the library grows.
-(Mealie: categories, tags, tools, cookbooks.)
 
 ### Cooking mode
 Full-screen step-by-step view with kept-awake screen and step timers, like Dagelijkse Kost's

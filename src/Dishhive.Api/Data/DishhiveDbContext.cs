@@ -11,9 +11,14 @@ public class DishhiveDbContext : DbContext
 
     public DbSet<FamilyMember> FamilyMembers => Set<FamilyMember>();
     public DbSet<FamilyMemberFavorite> FamilyMemberFavorites => Set<FamilyMemberFavorite>();
+    public DbSet<DietaryTag> DietaryTags => Set<DietaryTag>();
+    public DbSet<FamilyMemberDietaryTag> FamilyMemberDietaryTags => Set<FamilyMemberDietaryTag>();
     public DbSet<Recipe> Recipes => Set<Recipe>();
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
     public DbSet<RecipeStep> RecipeSteps => Set<RecipeStep>();
+    public DbSet<RecipeTag> RecipeTags => Set<RecipeTag>();
+    public DbSet<RecipeTagAssignment> RecipeTagAssignments => Set<RecipeTagAssignment>();
+    public DbSet<Cookbook> Cookbooks => Set<Cookbook>();
     public DbSet<PlannedMeal> PlannedMeals => Set<PlannedMeal>();
     public DbSet<PlannedMealAttendee> PlannedMealAttendees => Set<PlannedMealAttendee>();
     public DbSet<MealRating> MealRatings => Set<MealRating>();
@@ -29,8 +34,6 @@ public class DishhiveDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-            entity.Property(e => e.Allergies).HasMaxLength(500);
-            entity.Property(e => e.DietaryConstraints).HasMaxLength(500);
             entity.Property(e => e.PreferenceNotes).HasMaxLength(1000);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -59,6 +62,34 @@ public class DishhiveDbContext : DbContext
                   .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasIndex(e => e.FamilyMemberId);
+        });
+
+        // DietaryTag configuration
+        modelBuilder.Entity<DietaryTag>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            // One tag per name per kind; lookups are case-insensitive in the API
+            entity.HasIndex(e => new { e.Name, e.Kind }).IsUnique();
+        });
+
+        // FamilyMemberDietaryTag configuration (composite key join table)
+        modelBuilder.Entity<FamilyMemberDietaryTag>(entity =>
+        {
+            entity.HasKey(e => new { e.FamilyMemberId, e.DietaryTagId });
+
+            entity.HasOne(e => e.FamilyMember)
+                  .WithMany(m => m.DietaryTags)
+                  .HasForeignKey(e => e.FamilyMemberId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.DietaryTag)
+                  .WithMany(t => t.Members)
+                  .HasForeignKey(e => e.DietaryTagId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Recipe configuration
@@ -118,6 +149,48 @@ public class DishhiveDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(e => e.RecipeId);
+        });
+
+        // RecipeTag configuration (same pattern as DietaryTag)
+        modelBuilder.Entity<RecipeTag>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            // One tag per name; lookups are case-insensitive in the API
+            entity.HasIndex(e => e.Name).IsUnique();
+        });
+
+        // RecipeTagAssignment configuration (composite key join table)
+        modelBuilder.Entity<RecipeTagAssignment>(entity =>
+        {
+            entity.HasKey(e => new { e.RecipeId, e.RecipeTagId });
+
+            entity.HasOne(e => e.Recipe)
+                  .WithMany(r => r.Tags)
+                  .HasForeignKey(e => e.RecipeId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.RecipeTag)
+                  .WithMany(t => t.Recipes)
+                  .HasForeignKey(e => e.RecipeTagId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Cookbook configuration (saved filters; tags stored by name, no FK)
+        modelBuilder.Entity<Cookbook>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.SearchTerm).HasMaxLength(200);
+            entity.Property(e => e.Category).HasMaxLength(100);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasIndex(e => e.Name).IsUnique();
         });
 
         // PlannedMeal configuration
@@ -226,6 +299,9 @@ public class DishhiveDbContext : DbContext
                     break;
                 case UserSetting setting:
                     setting.UpdatedAt = DateTime.UtcNow;
+                    break;
+                case Cookbook cookbook:
+                    cookbook.UpdatedAt = DateTime.UtcNow;
                     break;
             }
         }

@@ -6,8 +6,8 @@ namespace Dishhive.Api.Services.Demo;
 /// </summary>
 public record DemoMember(
     string Name,
-    string? Allergies,
-    string? DietaryConstraints,
+    IReadOnlyList<string> AllergyTags,
+    IReadOnlyList<string> DietTags,
     string? PreferenceNotes,
     IReadOnlyList<string> FavoriteRecipeUrls,
     IReadOnlyList<string> FavoriteDishNames);
@@ -57,8 +57,8 @@ public static class DemoData
     [
         new DemoMember(
             Name: "James Holden",
-            Allergies: "Shellfish",
-            DietaryConstraints: null,
+            AllergyTags: ["Shellfish"],
+            DietTags: [],
             PreferenceNotes: "Runs on coffee; happiest with a simple, honest plate of pasta",
             FavoriteRecipeUrls:
             [
@@ -69,8 +69,8 @@ public static class DemoData
 
         new DemoMember(
             Name: "Naomi Nagata",
-            Allergies: null,
-            DietaryConstraints: "Vegetarian",
+            AllergyTags: [],
+            DietTags: ["Vegetarian"],
             PreferenceNotes: "Prefers plant-based meals; loves noodles and anything with fresh vegetables",
             FavoriteRecipeUrls:
             [
@@ -82,8 +82,8 @@ public static class DemoData
 
         new DemoMember(
             Name: "Alex Kamal",
-            Allergies: "Lactose intolerant",
-            DietaryConstraints: null,
+            AllergyTags: ["Lactose"],
+            DietTags: [],
             PreferenceNotes: "Loves spicy food and is famous for his lasagna",
             FavoriteRecipeUrls:
             [
@@ -94,8 +94,8 @@ public static class DemoData
 
         new DemoMember(
             Name: "Amos Burton",
-            Allergies: null,
-            DietaryConstraints: null,
+            AllergyTags: [],
+            DietTags: [],
             PreferenceNotes: "Eats anything, prefers hearty meals and big portions",
             FavoriteRecipeUrls:
             [

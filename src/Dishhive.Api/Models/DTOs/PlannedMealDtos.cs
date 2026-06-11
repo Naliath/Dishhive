@@ -40,6 +40,13 @@ public class SetRatingDto
     public int Rating { get; set; }
 }
 
+/// <summary>Attaches a recipe to a planned meal (e.g. from the shopping list's "still to decide")</summary>
+public class SetMealRecipeDto
+{
+    [Required]
+    public Guid RecipeId { get; set; }
+}
+
 public class CreatePlannedMealDto
 {
     [Required]

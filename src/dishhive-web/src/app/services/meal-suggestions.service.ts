@@ -17,7 +17,11 @@ export class MealSuggestionsService {
   }
 
   /** Propose dinners for the unplanned days of a week; nothing is persisted */
-  suggestWeek(weekStart: string, attendeeIds: string[] = []): Observable<MealSuggestions> {
-    return this.http.post<MealSuggestions>(this.apiUrl, { weekStart, attendeeIds });
+  suggestWeek(weekStart: string, instructions?: string, attendeeIds: string[] = []): Observable<MealSuggestions> {
+    return this.http.post<MealSuggestions>(this.apiUrl, {
+      weekStart,
+      attendeeIds,
+      instructions: instructions?.trim() || undefined
+    });
   }
 }

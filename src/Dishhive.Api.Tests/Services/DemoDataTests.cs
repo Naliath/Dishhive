@@ -28,10 +28,9 @@ public class DemoDataTests
     [Fact]
     public void Members_IncludeOneVegetarianAndSomeDietaryNeeds()
     {
-        DemoData.Members.Should().ContainSingle(m =>
-            m.DietaryConstraints != null && m.DietaryConstraints.Contains("Vegetarian"));
+        DemoData.Members.Should().ContainSingle(m => m.DietTags.Contains("Vegetarian"));
 
-        DemoData.Members.Count(m => m.Allergies != null || m.DietaryConstraints != null)
+        DemoData.Members.Count(m => m.AllergyTags.Count > 0 || m.DietTags.Count > 0)
             .Should().BeGreaterThanOrEqualTo(2, "a few members should have specific dietary needs");
     }
 

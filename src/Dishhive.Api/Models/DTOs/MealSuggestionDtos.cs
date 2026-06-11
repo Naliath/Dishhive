@@ -9,6 +9,13 @@ public class SuggestWeekRequestDto
 
     /// <summary>Empty = all active household members (guests excluded)</summary>
     public List<Guid> AttendeeIds { get; set; } = new();
+
+    /// <summary>
+    /// Optional free-text planning instructions for the LLM (e.g. "3 days vegetarian,
+    /// at least one fish dish"). Ignored by the deterministic rules fallback.
+    /// </summary>
+    [MaxLength(500)]
+    public string? Instructions { get; set; }
 }
 
 public class MealSuggestionDto

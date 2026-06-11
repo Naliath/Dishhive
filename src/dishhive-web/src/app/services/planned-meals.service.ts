@@ -33,6 +33,11 @@ export class PlannedMealsService {
     return this.http.put<PlannedMeal>(`${this.apiUrl}/${id}/eaten`, { status });
   }
 
+  /** Attach a recipe to a meal (resolves a "still to decide" shopping list entry) */
+  setRecipe(id: string, recipeId: string): Observable<PlannedMeal> {
+    return this.http.put<PlannedMeal>(`${this.apiUrl}/${id}/recipe`, { recipeId });
+  }
+
   /** Set a member's 1-5 rating; re-rating overwrites */
   setRating(id: string, memberId: string, rating: number): Observable<PlannedMeal> {
     return this.http.put<PlannedMeal>(`${this.apiUrl}/${id}/ratings/${memberId}`, { rating });

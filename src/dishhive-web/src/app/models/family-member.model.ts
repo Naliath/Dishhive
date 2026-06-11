@@ -1,9 +1,20 @@
+export enum DietaryTagKind {
+  Allergy = 0,
+  Diet = 1
+}
+
+export interface DietaryTag {
+  id: string;
+  name: string;
+  kind: DietaryTagKind;
+}
+
 export interface FamilyMember {
   id: string;
   name: string;
   isGuest: boolean;
-  allergies?: string;
-  dietaryConstraints?: string;
+  allergyTags: string[];
+  dietTags: string[];
   preferenceNotes?: string;
   isActive: boolean;
   createdAt: string;
@@ -13,8 +24,8 @@ export interface FamilyMember {
 export interface CreateFamilyMember {
   name: string;
   isGuest: boolean;
-  allergies?: string;
-  dietaryConstraints?: string;
+  allergyTags: string[];
+  dietTags: string[];
   preferenceNotes?: string;
 }
 

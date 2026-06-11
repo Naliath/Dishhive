@@ -6,8 +6,8 @@ and generate shopping lists.
 
 ## Features
 
-- 👨‍👩‍👧 **Family Composition** - Household members, guests, allergies, constraints and favorite dishes
-- 📖 **Recipe Store** - Recipes with ingredients, steps and planning metadata; manual entry and editing
+- 👨‍👩‍👧 **Family Composition** - Household members, guests, reusable allergy/diet tags and favorite dishes
+- 📖 **Recipe Store** - Recipes with ingredients, steps and planning metadata; manual entry and editing; filterable tags, categories and cookbooks (saved filters)
 - ⬇️ **Recipe Import** - Import recipes from Dagelijkse Kost by URL (pluggable sources, locally stored images)
 - 📅 **Week Planner** - Plan recipes, dishes or vague intentions per day with per-meal attendance; multiple dishes per day (e.g. lunch + dinner with appetizer and dessert)
 - 🧊 **Freezy Integration** - Reuse frozen leftovers/meals tracked in Freezy *(optional)*

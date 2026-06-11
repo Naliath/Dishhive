@@ -11,6 +11,51 @@ public class PlannedMealsControllerIntegrationTests : TestBase
     private static readonly DateOnly Monday = new(2026, 6, 15);
 
     [Fact]
+    public async Task SetRecipe_LinksRecipeAndResolvesVagueInstruction()
+    {
+        var recipe = new Recipe { Title = "Lasagne verde" };
+        var meal = new PlannedMeal { Date = Monday, VagueInstruction = "iets met pasta" };
+        DbContext.Recipes.Add(recipe);
+        DbContext.PlannedMeals.Add(meal);
+        await DbContext.SaveChangesAsync();
+
+        var response = await Client.PutAsJsonAsync(
+            $"/api/plannedmeals/{meal.Id}/recipe", new SetMealRecipeDto { RecipeId = recipe.Id });
+        var updated = await response.Content.ReadFromJsonAsync<PlannedMealDto>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        updated!.RecipeId.Should().Be(recipe.Id);
+        updated.DishName.Should().Be("Lasagne verde");
+        updated.VagueInstruction.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SetRecipe_UnknownRecipe_ReturnsBadRequest()
+    {
+        var meal = new PlannedMeal { Date = Monday, DishName = "Iets" };
+        DbContext.PlannedMeals.Add(meal);
+        await DbContext.SaveChangesAsync();
+
+        var response = await Client.PutAsJsonAsync(
+            $"/api/plannedmeals/{meal.Id}/recipe", new SetMealRecipeDto { RecipeId = Guid.NewGuid() });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task SetRecipe_UnknownMeal_ReturnsNotFound()
+    {
+        var recipe = new Recipe { Title = "Lasagne" };
+        DbContext.Recipes.Add(recipe);
+        await DbContext.SaveChangesAsync();
+
+        var response = await Client.PutAsJsonAsync(
+            $"/api/plannedmeals/{Guid.NewGuid()}/recipe", new SetMealRecipeDto { RecipeId = recipe.Id });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task GetMeals_ReturnsMealsInRange_OrderedByDate()
     {
         DbContext.PlannedMeals.AddRange(

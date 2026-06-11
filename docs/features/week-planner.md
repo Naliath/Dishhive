@@ -95,9 +95,11 @@ feature. See [ai-week-planning.md](ai-week-planning.md).
 
 ## Frontend Requirements
 
-- Page `pages/week-planner/` — 7-day grid, prev/next week navigation, today highlight
+- Page `pages/week-planner/` — 7-day grid, prev/next week navigation, today highlight;
+  recipe-linked dishes link through to the recipe detail page
 - Slot editor dialog: tabbed or segmented choice (recipe search / dish name / vague text),
-  attendee chips (members preselected, guests opt-in), Freezy leftovers picker (later phase)
+  attendee chips (members preselected, guests opt-in), Freezy leftovers picker (later phase);
+  the selected recipe has an open-recipe shortcut
 - `planned-meals.service.ts`
 - Mobile-friendly: day cards stack vertically on small screens (Material, no media queries)
 

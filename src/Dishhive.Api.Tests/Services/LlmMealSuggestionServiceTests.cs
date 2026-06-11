@@ -14,6 +14,7 @@ public class LlmMealSuggestionServiceTests
     {
         private readonly Func<ChatResponse> _respond;
         public int Calls { get; private set; }
+        public List<ChatMessage> LastMessages { get; private set; } = [];
 
         public FakeChatClient(string responseText)
             : this(() => new ChatResponse(new ChatMessage(ChatRole.Assistant, responseText))) { }
@@ -24,6 +25,7 @@ public class LlmMealSuggestionServiceTests
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             Calls++;
+            LastMessages = messages.ToList();
             return Task.FromResult(_respond());
         }
 
@@ -43,12 +45,14 @@ public class LlmMealSuggestionServiceTests
     private static MealSuggestionRequest Request(
         IReadOnlyList<DateOnly>? daysToFill = null,
         IReadOnlyList<RecipeOption>? recipes = null,
-        IReadOnlyList<FavoriteDish>? favorites = null) => new()
+        IReadOnlyList<FavoriteDish>? favorites = null,
+        string? instructions = null) => new()
     {
         WeekStart = WeekStart,
         DaysToFill = daysToFill ?? [WeekStart, WeekStart.AddDays(1)],
         KnownRecipes = recipes ?? [],
-        Favorites = favorites ?? []
+        Favorites = favorites ?? [],
+        Instructions = instructions
     };
 
     [Fact]
@@ -138,5 +142,51 @@ public class LlmMealSuggestionServiceTests
 
         suggestions.Should().BeEmpty();
         chatClient.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Suggest_Instructions_AreIncludedInThePrompt()
+    {
+        var chatClient = new FakeChatClient("""{"suggestions":[]}""");
+
+        await CreateService(chatClient).SuggestAsync(
+            Request(instructions: "3 days vegetarian, at least one fish dish"));
+
+        var userPrompt = chatClient.LastMessages.Single(m => m.Role == ChatRole.User).Text;
+        userPrompt.Should().Contain("3 days vegetarian, at least one fish dish");
+    }
+
+    [Fact]
+    public async Task Suggest_MultipleDishesOnOneDay_AreAllKept()
+    {
+        // Two small leftovers proposed for the same dinner (see freezer rule in the prompt)
+        var chatClient = new FakeChatClient(
+            """
+            {"suggestions":[
+              {"date":"2026-06-15","dishName":"Leftover chili","recipeTitle":null,"reason":"Small portion"},
+              {"date":"2026-06-15","dishName":"Leftover soup","recipeTitle":null,"reason":"Completes the dinner"}
+            ]}
+            """);
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        suggestions.Should().HaveCount(2);
+        suggestions.Select(s => s.Date).Should().AllBeEquivalentTo(WeekStart);
+    }
+
+    [Fact]
+    public async Task Suggest_DuplicateDishOnSameDay_IsDeduplicated()
+    {
+        var chatClient = new FakeChatClient(
+            """
+            {"suggestions":[
+              {"date":"2026-06-15","dishName":"Spaghetti","recipeTitle":null,"reason":null},
+              {"date":"2026-06-15","dishName":"spaghetti","recipeTitle":null,"reason":null}
+            ]}
+            """);
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        suggestions.Should().ContainSingle();
     }
 }

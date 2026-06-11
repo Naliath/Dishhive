@@ -93,14 +93,18 @@ public class LlmMealSuggestionService : IMealSuggestionService
 
     private const string SystemPrompt =
         """
-        You are a meal planner for a family household. Propose one dinner main course for
-        each requested date. Rules:
+        You are a meal planner for a family household. Propose a dinner for each
+        requested date. Rules:
         - NEVER suggest dishes that conflict with the listed allergies or dietary constraints.
         - Prefer variety: avoid dishes eaten in the last two weeks.
         - Favor household favorites and dishes with high ratings; avoid low-rated dishes.
-        - Use expiring freezer items where sensible.
-        - When a day has a vague instruction (e.g. "something with fish"), your suggestion
-          for that day must satisfy it.
+        - Use expiring freezer items where sensible. Freezer leftovers may not feed the whole
+          household — check their notes for portion hints; you may propose two or three small
+          leftovers for the SAME date (one suggestion entry per dish) to make a full dinner.
+        - When a day has a vague instruction (e.g. "something with fish" or "vegetarian"),
+          every dish you suggest for that day must satisfy it.
+        - When the planner gives additional instructions, they override the other
+          preferences (never the allergies/constraints).
         - Prefer recipes from the known-recipes list; when you use one, copy its exact title
           into recipeTitle.
         - Keep each reason to one short sentence.
@@ -154,13 +158,13 @@ public class LlmMealSuggestionService : IMealSuggestionService
         foreach (var member in request.Members)
         {
             sb.Append($"- {member.Name}");
-            if (!string.IsNullOrWhiteSpace(member.Allergies))
+            if (member.Allergies.Count > 0)
             {
-                sb.Append($"; allergies: {member.Allergies}");
+                sb.Append($"; allergies: {string.Join(", ", member.Allergies)}");
             }
-            if (!string.IsNullOrWhiteSpace(member.DietaryConstraints))
+            if (member.Diets.Count > 0)
             {
-                sb.Append($"; constraints: {member.DietaryConstraints}");
+                sb.Append($"; constraints: {string.Join(", ", member.Diets)}");
             }
             if (!string.IsNullOrWhiteSpace(member.PreferenceNotes))
             {
@@ -209,9 +213,15 @@ public class LlmMealSuggestionService : IMealSuggestionService
             foreach (var item in request.AvailableFrozenItems.Take(10))
             {
                 sb.Append($"- {item.Name} ({item.Quantity} {item.Unit ?? "x"})");
-                sb.AppendLine(item.ExpirationDate.HasValue
-                    ? $", expires {item.ExpirationDate:yyyy-MM-dd}"
-                    : "");
+                if (item.ExpirationDate.HasValue)
+                {
+                    sb.Append($", expires {item.ExpirationDate:yyyy-MM-dd}");
+                }
+                if (!string.IsNullOrWhiteSpace(item.Notes))
+                {
+                    sb.Append($", notes: {item.Notes}");
+                }
+                sb.AppendLine();
             }
         }
 
@@ -228,6 +238,11 @@ public class LlmMealSuggestionService : IMealSuggestionService
                     ? $"- {meal.Date:yyyy-MM-dd}: \"{meal.DishName}\""
                     : $"- {meal.Date:yyyy-MM-dd}: vague: \"{meal.VagueInstruction}\"");
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Instructions))
+        {
+            sb.AppendLine($"Additional instructions from the planner: {request.Instructions}");
         }
 
         sb.AppendLine($"Propose dinners for: {string.Join(", ", request.DaysToFill.Select(d => d.ToString("yyyy-MM-dd")))}");
@@ -271,10 +286,13 @@ public class LlmMealSuggestionService : IMealSuggestionService
             });
         }
 
-        // One suggestion per day, in date order
+        // A day may hold several dishes (e.g. two small leftovers making one dinner),
+        // but never duplicates and at most three proposals per date
         return suggestions
-            .GroupBy(s => s.Date)
+            .GroupBy(s => (s.Date, Dish: s.DishName!.ToLowerInvariant()))
             .Select(g => g.First())
+            .GroupBy(s => s.Date)
+            .SelectMany(g => g.Take(3))
             .OrderBy(s => s.Date)
             .ToList();
     }

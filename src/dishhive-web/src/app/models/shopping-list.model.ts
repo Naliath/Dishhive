@@ -7,6 +7,8 @@ export interface ShoppingListItem {
 }
 
 export interface ShoppingListReminder {
+  /** The underlying planned meal, so a recipe can be attached to it */
+  plannedMealId: string;
   /** ISO date (yyyy-MM-dd) */
   date: string;
   text: string;

@@ -87,15 +87,25 @@ RecipeStep
 ## Backend Requirements
 
 - `RecipesController`: `GET /api/recipes?search=`, `GET /api/recipes/{id}`, `POST`, `PUT`, `DELETE`
+- `GET /api/recipes/ingredients` — distinct ingredient names in use (case variants
+  collapsed), feeding the form autocomplete so spelling variants ("ei"/"eieren") converge
 - Ingredients/steps replaced wholesale on update (simple, atomic; no per-line endpoints)
 - DTOs: `RecipeDtos.cs` (list DTO is slim — id/title/image/servings/times — detail DTO is full)
 - Indexes: `Title`, `SourceUrl` (unique when not null — prevents duplicate imports)
 
 ## Frontend Requirements
 
-- Page `pages/recipes/` — searchable card grid (image, title, time, servings)
-- Page `pages/recipe-detail/` — full view incl. original ingredient text toggle
-- Page `pages/recipe-form/` — manual create/edit (dynamic ingredient + step rows)
+- Page `pages/recipes/` — searchable card grid (image, title, time, servings) with
+  rating (★) and favorite-count (♥) badges from history/favorites; category/tag filter
+  bar and cookbook chips (see [recipe-organization.md](recipe-organization.md)).
+  Search is debounced (300 ms) and results keep the previous grid until they arrive;
+  newly matching cards fade in instead of the page flashing a spinner
+- Page `pages/recipe-detail/` — full view incl. original ingredient text toggle and
+  a history widget (last planned, planned/eaten counts, rating button → shared rating
+  dialog, see meal-feedback.md). Favorites show as heart chips only for members who
+  favorited the dish, plus a quiet "mark as favorite" menu for the rest
+- Page `pages/recipe-form/` — manual create/edit (dynamic ingredient + step rows);
+  ingredient names autocomplete from the library's known ingredients
 - `recipes.service.ts`, models
 
 ## Integration Requirements

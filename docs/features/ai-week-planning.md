@@ -40,7 +40,7 @@ behind the existing `IMealSuggestionService` seam — AI is not bolted on anywhe
 | `Ai__ApiKey` | Falls back to standard `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `MISTRAL_API_KEY` env vars; local providers need none |
 | `Ai__BaseUrl` | Optional endpoint override (required for `openai-compatible`) |
 | `Ai__Model` | e.g. `llama3.1`, `gpt-4o-mini`, `claude-opus-4-8` |
-| `Ai__MaxOutputTokens` / `Ai__TimeoutSeconds` | Defaults 8000 / 60 (generous: reasoning models think inside the output budget) |
+| `Ai__MaxOutputTokens` / `Ai__TimeoutSeconds` | Defaults 12000 / 60 (generous: reasoning models burn 6-8k thinking tokens on instruction-heavy requests before any JSON appears) |
 
 ## Architecture
 
@@ -62,6 +62,14 @@ IMealSuggestionService
   `POST /api/plannedmeals`. `DaysToFill` = days without a concrete dinner main (vague-only
   days are included — the suggestion resolves the vague text). Suggestions never overwrite
   concretely planned dishes.
+- **Free-text instructions**: the request takes optional planner instructions (e.g.
+  "3 days vegetarian, at least one fish dish") that the LLM must follow (never overriding
+  allergies). The rules fallback ignores them — AI-only by design.
+- **Day adherence & leftovers**: dishes proposed for a day with a vague instruction must
+  all satisfy it (a "vegetarian" day gets only vegetarian proposals). Freezer leftovers
+  carry their Freezy notes in the prompt (portion hints); the model may propose several
+  small leftovers for the same date — post-processing allows up to three distinct dishes
+  per day instead of one.
 - **Rules fallback**: expiring freezer items (≤10 days past week end) first, then rotate
   favorites — skip dishes planned <14 days ago or rated <3, prefer loved (≥4), round-robin
   across members. Pure function, unit-tested.
@@ -72,9 +80,13 @@ IMealSuggestionService
 
 - Planner toolbar: `auto_awesome` "Suggest week" button, visible only when the status
   endpoint reports enabled
-- `components/suggestion-review-dialog/`: spinner while the model runs, then one row per
-  proposal (date, dish, matched-recipe icon, reason, checkbox default-on); "Add selected"
-  creates the meals (Dinner/Main, household members attending)
+- `components/suggestion-review-dialog/`: a live AI check (integrations status) decides
+  the opening phase — AI reachable → instructions are asked **before** generating
+  ("compose" phase with a Generate button); AI down → generation starts immediately,
+  since the rules fallback ignores instructions. Then one row per proposal (date, dish,
+  matched-recipe icon, reason, checkbox default-on); "Add selected" creates the meals
+  (Dinner/Main, household members attending). The instructions field stays available
+  with "Regenerate" to re-run with adjusted wishes.
 
 ## Risks / Notes
 

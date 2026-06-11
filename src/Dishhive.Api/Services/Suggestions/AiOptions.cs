@@ -32,9 +32,11 @@ public class AiOptions
 
     /// <summary>
     /// Generous default: reasoning models (Qwen3, DeepSeek-R1, ...) spend their
-    /// thinking inside the output budget before any JSON appears
+    /// thinking inside the output budget before any JSON appears — instruction-heavy
+    /// requests routinely burn 6-8k thinking tokens, so leave ample headroom
+    /// (pairs with a ≥16k model context window)
     /// </summary>
-    public int MaxOutputTokens { get; set; } = 8000;
+    public int MaxOutputTokens { get; set; } = 12000;
 
     /// <summary>Timeout for one suggestion call; local models can be slow</summary>
     public int TimeoutSeconds { get; set; } = 60;

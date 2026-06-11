@@ -17,28 +17,72 @@
       <form class="member-form" (ngSubmit)="save()">
         <mat-form-field appearance="outline">
           <mat-label>Name</mat-label>
-          <input matInput name="name" [(ngModel)]="form.name" required maxlength="100">
+          <input matInput name="name" [(ngModel)]="name" required maxlength="100">
         </mat-form-field>
 
-        <mat-slide-toggle name="isGuest" [(ngModel)]="form.isGuest">
+        <mat-slide-toggle name="isGuest" [(ngModel)]="isGuest">
           Guest (temporary attendee)
         </mat-slide-toggle>
 
         <mat-form-field appearance="outline">
           <mat-label>Allergies / intolerances</mat-label>
-          <input matInput name="allergies" [(ngModel)]="form.allergies" maxlength="500"
-                 placeholder="e.g. nuts, lactose">
+          <mat-chip-grid #allergyGrid aria-label="Allergy tags">
+            @for (tag of allergyTags(); track tag) {
+              <mat-chip-row (removed)="removeTag('allergy', tag)">
+                {{ tag }}
+                <button matChipRemove [attr.aria-label]="'Remove ' + tag">
+                  <mat-icon>cancel</mat-icon>
+                </button>
+              </mat-chip-row>
+            }
+          </mat-chip-grid>
+          <input matInput name="allergyInput"
+                 [ngModel]="allergyInput()" (ngModelChange)="allergyInput.set($event)"
+                 [matChipInputFor]="allergyGrid"
+                 [matChipInputSeparatorKeyCodes]="separatorKeys"
+                 (matChipInputTokenEnd)="addTagFromInput('allergy', $event)"
+                 [matAutocomplete]="allergyAuto"
+                 placeholder="e.g. Nuts, Lactose" maxlength="50">
+          <mat-autocomplete #allergyAuto="matAutocomplete"
+                            (optionSelected)="selectTag('allergy', $event)">
+            @for (option of allergyOptions(); track option) {
+              <mat-option [value]="option">{{ option }}</mat-option>
+            }
+          </mat-autocomplete>
+          <mat-hint>Press Enter or comma to add a tag</mat-hint>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>Dietary constraints</mat-label>
-          <input matInput name="dietaryConstraints" [(ngModel)]="form.dietaryConstraints" maxlength="500"
-                 placeholder="e.g. vegetarian, no pork">
+          <mat-label>Diets</mat-label>
+          <mat-chip-grid #dietGrid aria-label="Diet tags">
+            @for (tag of dietTags(); track tag) {
+              <mat-chip-row (removed)="removeTag('diet', tag)">
+                {{ tag }}
+                <button matChipRemove [attr.aria-label]="'Remove ' + tag">
+                  <mat-icon>cancel</mat-icon>
+                </button>
+              </mat-chip-row>
+            }
+          </mat-chip-grid>
+          <input matInput name="dietInput"
+                 [ngModel]="dietInput()" (ngModelChange)="dietInput.set($event)"
+                 [matChipInputFor]="dietGrid"
+                 [matChipInputSeparatorKeyCodes]="separatorKeys"
+                 (matChipInputTokenEnd)="addTagFromInput('diet', $event)"
+                 [matAutocomplete]="dietAuto"
+                 placeholder="e.g. Vegetarian, No pork" maxlength="50">
+          <mat-autocomplete #dietAuto="matAutocomplete"
+                            (optionSelected)="selectTag('diet', $event)">
+            @for (option of dietOptions(); track option) {
+              <mat-option [value]="option">{{ option }}</mat-option>
+            }
+          </mat-autocomplete>
+          <mat-hint>Press Enter or comma to add a tag</mat-hint>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
           <mat-label>Preferences</mat-label>
-          <textarea matInput name="preferenceNotes" [(ngModel)]="form.preferenceNotes" maxlength="1000"
+          <textarea matInput name="preferenceNotes" [(ngModel)]="preferenceNotes" maxlength="1000"
                     rows="2" placeholder="Likes and dislikes"></textarea>
         </mat-form-field>
 
@@ -59,19 +103,31 @@
               <mat-form-field appearance="outline" subscriptSizing="dynamic" class="favorite-field">
                 <mat-label>Add favorite dish</mat-label>
                 <input matInput name="newFavorite" [(ngModel)]="newFavorite"
-                       maxlength="200" (keydown.enter)="$event.preventDefault(); addFavorite()">
+                       maxlength="200" (input)="searchFavoriteRecipes()"
+                       (keydown.enter)="$event.preventDefault(); addFavorite()">
+                <mat-icon matSuffix>search</mat-icon>
               </mat-form-field>
               <button mat-icon-button type="button" (click)="addFavorite()"
                       [disabled]="!newFavorite.trim()" aria-label="Add favorite">
                 <mat-icon>add</mat-icon>
               </button>
             </div>
+            @if (favoriteRecipeResults().length > 0) {
+              <mat-action-list class="favorite-recipe-results">
+                @for (recipe of favoriteRecipeResults(); track recipe.id) {
+                  <button mat-list-item type="button" (click)="addFavoriteRecipe(recipe)">
+                    <mat-icon matListItemIcon>menu_book</mat-icon>
+                    <span matListItemTitle>{{ recipe.title }}</span>
+                  </button>
+                }
+              </mat-action-list>
+            }
           </div>
         }
 
         <div class="form-actions">
           <button mat-button type="button" (click)="cancelForm()">Cancel</button>
-          <button mat-flat-button type="submit" [disabled]="saving() || !form.name.trim()">
+          <button mat-flat-button type="submit" [disabled]="saving() || !name.trim()">
             {{ editingId() ? 'Save' : 'Add' }}
           </button>
         </div>
@@ -106,19 +162,30 @@
           }
         </mat-card-header>
         <mat-card-content>
-          @if (member.allergies) {
-            <p class="detail-line"><mat-icon>warning</mat-icon> {{ member.allergies }}</p>
-          }
-          @if (member.dietaryConstraints) {
-            <p class="detail-line"><mat-icon>restaurant</mat-icon> {{ member.dietaryConstraints }}</p>
+          @if (member.allergyTags.length > 0 || member.dietTags.length > 0) {
+            <div class="tag-chips" aria-label="Dietary tags">
+              @for (tag of member.allergyTags; track tag) {
+                <span class="tag-chip tag-chip--allergy">
+                  <mat-icon>warning</mat-icon>{{ tag }}
+                </span>
+              }
+              @for (tag of member.dietTags; track tag) {
+                <span class="tag-chip tag-chip--diet">
+                  <mat-icon>restaurant</mat-icon>{{ tag }}
+                </span>
+              }
+            </div>
           }
           @if (member.preferenceNotes) {
-            <p class="detail-line"><mat-icon>favorite</mat-icon> {{ member.preferenceNotes }}</p>
+            <p class="detail-line"><mat-icon>thumbs_up_down</mat-icon> {{ member.preferenceNotes }}</p>
           }
           @if (favoritesOf(member.id).length > 0) {
             <mat-chip-set class="favorite-chips" aria-label="Favorite dishes">
               @for (favorite of favoritesOf(member.id); track favorite.id) {
-                <mat-chip>{{ favorite.dishName }}</mat-chip>
+                <mat-chip [matTooltip]="favorite.dishName ?? ''">
+                  <mat-icon matChipAvatar class="favorite-heart">favorite</mat-icon>
+                  {{ favorite.dishName }}
+                </mat-chip>
               }
             </mat-chip-set>
           }

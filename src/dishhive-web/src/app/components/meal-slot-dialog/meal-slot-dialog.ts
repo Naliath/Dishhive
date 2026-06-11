@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, Inject, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -41,6 +42,7 @@ type PlanMode = 'recipe' | 'dish' | 'idea';
   standalone: true,
   imports: [
     FormsModule,
+    RouterLink,
     MatDialogModule,
     MatButtonModule,
     MatButtonToggleModule,
@@ -77,12 +79,12 @@ export class MealSlotDialog {
   notes = '';
   recipeSearch = '';
 
-  /** Allergies of the selected attendees, shown as a planning hint */
+  /** Allergy and diet tags of the selected attendees, shown as a planning hint */
   readonly allergyHints = computed(() => {
     const selected = this.attendeeIds();
     return this.data.members
-      .filter(m => selected.has(m.id) && m.allergies)
-      .map(m => `${m.name}: ${m.allergies}`);
+      .filter(m => selected.has(m.id) && (m.allergyTags.length > 0 || m.dietTags.length > 0))
+      .map(m => `${m.name}: ${[...m.allergyTags, ...m.dietTags].join(', ')}`);
   });
 
   readonly selectedFreezerItem = computed(() =>
@@ -126,7 +128,8 @@ export class MealSlotDialog {
           id: meal.recipeId,
           title: meal.recipeTitle,
           servings: 0,
-          hasLocalImage: false
+          hasLocalImage: false,
+          tags: []
         });
       }
     } else {

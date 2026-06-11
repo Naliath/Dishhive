@@ -1,51 +1,94 @@
 <h2 mat-dialog-title>Suggested dinners</h2>
 
 <mat-dialog-content>
-  @if (loading()) {
-    <div class="suggestion-loading">
-      <mat-spinner diameter="40"></mat-spinner>
-      <p>Thinking up a week of dinners…</p>
-    </div>
-  } @else if (failed()) {
-    <div class="suggestion-empty">
-      <mat-icon>error_outline</mat-icon>
-      <p>Could not get suggestions. Try again later.</p>
-    </div>
-  } @else if (suggestions().length === 0) {
-    <div class="suggestion-empty">
-      <mat-icon>event_available</mat-icon>
-      <p>Nothing to suggest — every day already has a dinner planned.</p>
-    </div>
-  } @else {
-    <div class="suggestion-list">
-      @for (suggestion of suggestions(); track suggestion.date) {
-        <div class="suggestion-row" (click)="toggle(suggestion)">
-          <mat-checkbox
-            [checked]="isSelected(suggestion)"
-            (click)="$event.stopPropagation()"
-            (change)="toggle(suggestion)">
-          </mat-checkbox>
-          <div class="suggestion-body">
-            <span class="suggestion-date">{{ suggestion.date | date:'EEEE d MMM' }}</span>
-            <span class="suggestion-dish">
-              {{ suggestion.dishName }}
-              @if (suggestion.recipeId) {
-                <mat-icon class="recipe-icon" matTooltip="Matches a recipe in your store">menu_book</mat-icon>
-              }
-            </span>
-            @if (suggestion.reason) {
-              <span class="suggestion-reason">{{ suggestion.reason }}</span>
-            }
-          </div>
+  @switch (phase()) {
+    @case ('checking') {
+      <div class="suggestion-loading">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p>Checking the AI assistant…</p>
+      </div>
+    }
+    @case ('compose') {
+      <p class="compose-hint">
+        Any wishes for this week? They are passed to the AI before it plans the menu.
+      </p>
+      <div class="instructions-row">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
+          <mat-label>Instructions (optional)</mat-label>
+          <input matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
+                 placeholder="e.g. 3 days vegetarian, at least one fish dish"
+                 (keydown.enter)="$event.preventDefault(); fetch()">
+        </mat-form-field>
+      </div>
+    }
+    @case ('generating') {
+      <div class="suggestion-loading">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p>Thinking up a week of dinners…</p>
+      </div>
+    }
+    @case ('review') {
+      @if (failed()) {
+        <div class="suggestion-empty">
+          <mat-icon>error_outline</mat-icon>
+          <p>Could not get suggestions. Try again later.</p>
+        </div>
+      } @else if (suggestions().length === 0) {
+        <div class="suggestion-empty">
+          <mat-icon>event_available</mat-icon>
+          <p>Nothing to suggest — every day already has a dinner planned.</p>
+        </div>
+      } @else {
+        <div class="suggestion-list">
+          @for (suggestion of suggestions(); track $index) {
+            <div class="suggestion-row" (click)="toggle($index)">
+              <mat-checkbox
+                [checked]="isSelected($index)"
+                (click)="$event.stopPropagation()"
+                (change)="toggle($index)">
+              </mat-checkbox>
+              <div class="suggestion-body">
+                <span class="suggestion-date">{{ suggestion.date | date:'EEEE d MMM' }}</span>
+                <span class="suggestion-dish">
+                  {{ suggestion.dishName }}
+                  @if (suggestion.recipeId) {
+                    <mat-icon class="recipe-icon" matTooltip="Matches a recipe in your store">menu_book</mat-icon>
+                  }
+                </span>
+                @if (suggestion.reason) {
+                  <span class="suggestion-reason">{{ suggestion.reason }}</span>
+                }
+              </div>
+            </div>
+          }
         </div>
       }
-    </div>
+
+      <div class="instructions-row">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
+          <mat-label>Instructions (optional)</mat-label>
+          <input matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
+                 placeholder="e.g. 3 days vegetarian, at least one fish dish"
+                 (keydown.enter)="$event.preventDefault(); fetch()">
+        </mat-form-field>
+        <button mat-stroked-button type="button" (click)="fetch()">
+          <mat-icon>refresh</mat-icon>
+          Regenerate
+        </button>
+      </div>
+    }
   }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Cancel</button>
-  @if (!loading() && !failed() && suggestions().length > 0) {
+  @if (phase() === 'compose') {
+    <button mat-flat-button (click)="fetch()">
+      <mat-icon>auto_awesome</mat-icon>
+      Generate
+    </button>
+  }
+  @if (phase() === 'review' && !failed() && suggestions().length > 0) {
     <button mat-flat-button [disabled]="selectedCount() === 0" (click)="addSelected()">
       Add {{ selectedCount() }} to plan
     </button>

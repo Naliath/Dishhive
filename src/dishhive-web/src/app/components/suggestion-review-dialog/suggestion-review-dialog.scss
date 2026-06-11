@@ -75,3 +75,20 @@
   color: var(--mat-sys-on-surface-variant);
   font-size: 13px;
 }
+
+.instructions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 16px;
+
+  .instructions-field {
+    flex: 1;
+  }
+}
+
+.compose-hint {
+  margin: 0;
+  max-width: min(420px, 80vw);
+  color: var(--mat-sys-on-surface-variant);
+}

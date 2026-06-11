@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { CreateRecipe, Recipe, RecipeListItem } from '../models/recipe.model';
+import { CreateRecipe, Recipe, RecipeFilter, RecipeListItem, RecipeTag } from '../models/recipe.model';
 
 @Injectable({ providedIn: 'root' })
 export class RecipesService {
@@ -10,10 +10,42 @@ export class RecipesService {
 
   constructor(private http: HttpClient) {}
 
-  getRecipes(search?: string): Observable<RecipeListItem[]> {
-    return this.http.get<RecipeListItem[]>(this.apiUrl, {
-      params: search ? { search } : {}
-    }).pipe(catchError(this.handleError));
+  getRecipes(search?: string, category?: string, tags: string[] = []): Observable<RecipeListItem[]> {
+    const params: Record<string, string> = {};
+    if (search?.trim()) {
+      params['search'] = search.trim();
+    }
+    if (category?.trim()) {
+      params['category'] = category.trim();
+    }
+    if (tags.length > 0) {
+      params['tags'] = tags.join(',');
+    }
+    return this.http.get<RecipeListItem[]>(this.apiUrl, { params })
+      .pipe(catchError(this.handleError));
+  }
+
+  /** Convenience overload taking the library filter shape cookbooks store */
+  getRecipesFiltered(filter: RecipeFilter): Observable<RecipeListItem[]> {
+    return this.getRecipes(filter.search, filter.category, filter.tags);
+  }
+
+  /** Distinct categories in use, for the library filter */
+  getCategories(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.apiUrl}/categories`)
+      .pipe(catchError(this.handleError));
+  }
+
+  /** Distinct ingredient names in use, for the recipe form autocomplete */
+  getIngredientNames(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.apiUrl}/ingredients`)
+      .pipe(catchError(this.handleError));
+  }
+
+  /** The pool of recipe tags in use, for filter chips and autocomplete */
+  getRecipeTags(): Observable<RecipeTag[]> {
+    return this.http.get<RecipeTag[]>('/api/recipetags')
+      .pipe(catchError(this.handleError));
   }
 
   getRecipe(id: string): Observable<Recipe> {

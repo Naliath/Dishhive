@@ -65,18 +65,84 @@
 
 .favorite-chips {
   margin-block-start: 8px;
+
+  // Long dish names are truncated with an ellipsis instead of overflowing
+  // the chip boundary (full name in the tooltip)
+  mat-chip {
+    max-width: 100%;
+  }
+
+  ::ng-deep .mdc-evolution-chip__cell--primary,
+  ::ng-deep .mdc-evolution-chip__action--primary {
+    overflow: hidden;
+  }
+
+  ::ng-deep .mdc-evolution-chip__text-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .favorite-heart {
+    color: var(--mat-sys-error, #c2185b);
+    font-size: 16px;
+  }
+}
+
+.favorite-recipe-results {
+  border: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .detail-line {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   margin: 4px 0;
   color: var(--mat-sys-on-surface-variant);
 
+  // Fixed icon footprint: never shrinks or clips next to long wrapped text
   mat-icon {
     font-size: 18px;
     width: 18px;
     height: 18px;
+    flex-shrink: 0;
+    margin-block-start: 2px;
+  }
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block: 4px 8px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px 2px 6px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 500;
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+
+  &--allergy {
+    background-color: color-mix(in srgb, var(--mat-sys-error, #b00020) 12%, transparent);
+    color: var(--mat-sys-error, #b00020);
+  }
+
+  &--diet {
+    background-color: color-mix(in srgb, var(--mat-sys-tertiary, #1976d2) 12%, transparent);
+    color: var(--mat-sys-tertiary, #1565c0);
   }
 }

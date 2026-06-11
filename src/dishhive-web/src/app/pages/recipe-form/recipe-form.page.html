@@ -49,6 +49,33 @@
           </mat-form-field>
         </div>
 
+        <mat-form-field appearance="outline">
+          <mat-label>Tags</mat-label>
+          <mat-chip-grid #tagGrid aria-label="Recipe tags">
+            @for (tag of tags(); track tag) {
+              <mat-chip-row (removed)="removeTag(tag)">
+                {{ tag }}
+                <button matChipRemove [attr.aria-label]="'Remove ' + tag">
+                  <mat-icon>cancel</mat-icon>
+                </button>
+              </mat-chip-row>
+            }
+          </mat-chip-grid>
+          <input matInput name="tagInput"
+                 [ngModel]="tagInput()" (ngModelChange)="tagInput.set($event)"
+                 [matChipInputFor]="tagGrid"
+                 [matChipInputSeparatorKeyCodes]="separatorKeys"
+                 (matChipInputTokenEnd)="addTagFromInput($event)"
+                 [matAutocomplete]="tagAuto"
+                 placeholder="e.g. pasta, quick, comfort food" maxlength="50">
+          <mat-autocomplete #tagAuto="matAutocomplete" (optionSelected)="selectTag($event)">
+            @for (option of tagOptions(); track option) {
+              <mat-option [value]="option">{{ option }}</mat-option>
+            }
+          </mat-autocomplete>
+          <mat-hint>Press Enter or comma to add a tag — used to filter the library</mat-hint>
+        </mat-form-field>
+
         <div class="field-row">
           <mat-form-field appearance="outline">
             <mat-label>Image URL</mat-label>
@@ -79,7 +106,13 @@
             </mat-form-field>
             <mat-form-field appearance="outline" class="name-field">
               <mat-label>Ingredient</mat-label>
-              <input matInput [name]="'ingredient' + $index" [(ngModel)]="ingredient.name" maxlength="200">
+              <input matInput [name]="'ingredient' + $index" [(ngModel)]="ingredient.name" maxlength="200"
+                     [matAutocomplete]="ingredientAuto">
+              <mat-autocomplete #ingredientAuto="matAutocomplete">
+                @for (option of ingredientOptions(ingredient.name); track option) {
+                  <mat-option [value]="option">{{ option }}</mat-option>
+                }
+              </mat-autocomplete>
             </mat-form-field>
             <button mat-icon-button type="button" (click)="removeIngredient($index)"
                     [disabled]="ingredients.length === 1" aria-label="Remove ingredient">

@@ -39,8 +39,7 @@ FamilyMember
 ├── Id (Guid)
 ├── Name (string, required, max 100)
 ├── IsGuest (bool, default false)        // temporary attendee vs. household member
-├── Allergies (string?, max 500)         // comma-separated free text, kept simple initially
-├── DietaryConstraints (string?, max 500)
+├── DietaryTags (n:m via FamilyMemberDietaryTags)  // structured allergy/diet tags, see dietary-tags.md
 ├── PreferenceNotes (string?, max 1000)  // likes/dislikes free text
 ├── IsActive (bool, default true)        // soft delete; preserves meal history
 ├── CreatedAt / UpdatedAt
@@ -52,8 +51,8 @@ FamilyMemberFavorite
 ├── DishName (string?, max 200)          // …or free-text dish; at least one required
 ```
 
-- Allergies/constraints start as free text. Structured tags (enum/table) are a later
-  refinement once real usage shows which values recur — recorded in `possible-features.md`.
+- Allergies/constraints started as free text and were replaced by structured, reusable
+  tags in June 2026 — see [dietary-tags.md](dietary-tags.md) for model and migration.
 - Soft delete (`IsActive`) instead of hard delete so attendance history and statistics survive.
 - Guests are full `FamilyMember` rows with `IsGuest = true`; identical capabilities, different
   default selection behavior in the planner.
@@ -82,8 +81,9 @@ FamilyMemberFavorite
 
 ## Risks / Unknowns
 
-- Free-text allergies can't be machine-matched against recipe ingredients reliably — accepted
-  for now; planner shows warnings rather than enforcing rules.
+- Tags aren't matched against recipe ingredients (recipes carry no allergen data) —
+  the planner shows warnings rather than enforcing rules; the AI suggestions treat
+  allergy tags as hard constraints in the prompt.
 - Favorite "dish" vs "recipe" duality (text vs link) must stay consistent with the planner's
   same duality.
 

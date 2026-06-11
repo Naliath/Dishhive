@@ -148,6 +148,48 @@ public class PlannedMealsController : ControllerBase
     }
 
     /// <summary>
+    /// Attach a recipe to a planned meal: the dish becomes the recipe (title
+    /// denormalized, vague instruction resolved). Used from the shopping list's
+    /// "still to decide" section so the ingredients land on the list.
+    /// </summary>
+    [HttpPut("{id:guid}/recipe")]
+    [ProducesResponseType(typeof(PlannedMealDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<PlannedMealDto>> SetRecipe(Guid id, SetMealRecipeDto dto)
+    {
+        var meal = await _context.PlannedMeals
+            .Include(m => m.Attendees)
+            .Include(m => m.Ratings)
+            .FirstOrDefaultAsync(m => m.Id == id);
+
+        if (meal == null)
+        {
+            return NotFound();
+        }
+
+        var recipe = await _context.Recipes.FindAsync(dto.RecipeId);
+        if (recipe == null)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Unknown recipe",
+                Detail = $"Recipe '{dto.RecipeId}' does not exist."
+            });
+        }
+
+        meal.RecipeId = recipe.Id;
+        meal.DishName = recipe.Title;
+        meal.VagueInstruction = null;
+
+        await _context.SaveChangesAsync();
+
+        await _context.Entry(meal).Reference(m => m.Recipe).LoadAsync();
+        _logger.LogInformation("Linked recipe {RecipeId} to meal {MealId}", recipe.Id, id);
+        return Ok(ToDto(meal));
+    }
+
+    /// <summary>
     /// Remove a planned meal from the plan
     /// </summary>
     [HttpDelete("{id:guid}")]
@@ -197,7 +239,7 @@ public class PlannedMealsController : ControllerBase
         }
 
         var request = await _suggestionRequestBuilder.BuildAsync(
-            dto.WeekStart, dto.AttendeeIds, cancellationToken);
+            dto.WeekStart, dto.AttendeeIds, dto.Instructions, cancellationToken);
         var suggestions = await _suggestionService.SuggestAsync(request, cancellationToken);
 
         var recipeTitles = request.KnownRecipes.ToDictionary(r => r.Id, r => r.Title);

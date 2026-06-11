@@ -29,11 +29,15 @@ public class RecipesController : ControllerBase
     }
 
     /// <summary>
-    /// List recipes, optionally filtered by a title/keyword search term
+    /// List recipes, optionally filtered by a title/keyword search term, a category
+    /// and/or tags (comma-separated names; a recipe must carry all of them)
     /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<RecipeListItemDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IEnumerable<RecipeListItemDto>>> GetRecipes([FromQuery] string? search = null)
+    public async Task<ActionResult<IEnumerable<RecipeListItemDto>>> GetRecipes(
+        [FromQuery] string? search = null,
+        [FromQuery] string? category = null,
+        [FromQuery] string? tags = null)
     {
         var query = _context.Recipes.AsNoTracking();
 
@@ -43,6 +47,18 @@ public class RecipesController : ControllerBase
             query = query.Where(r =>
                 r.Title.ToLower().Contains(term) ||
                 (r.Keywords != null && r.Keywords.ToLower().Contains(term)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            var wanted = category.Trim().ToLower();
+            query = query.Where(r => r.Category != null && r.Category.ToLower() == wanted);
+        }
+
+        foreach (var tag in SplitTags(tags))
+        {
+            var wanted = tag.ToLower();
+            query = query.Where(r => r.Tags.Any(a => a.RecipeTag!.Name.ToLower() == wanted));
         }
 
         var recipes = await query
@@ -56,7 +72,8 @@ public class RecipesController : ControllerBase
                 Category = r.Category,
                 ImageUrl = r.ImageData != null ? null : r.ImageUrl,
                 HasLocalImage = r.ImageData != null,
-                SourceProvider = r.SourceProvider
+                SourceProvider = r.SourceProvider,
+                Tags = r.Tags.Select(a => a.RecipeTag!.Name).OrderBy(n => n).ToList()
             })
             .ToListAsync();
 
@@ -66,6 +83,49 @@ public class RecipesController : ControllerBase
         }
 
         return Ok(recipes);
+    }
+
+    /// <summary>
+    /// Distinct recipe categories in use, for the library filter
+    /// </summary>
+    [HttpGet("categories")]
+    [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<string>>> GetCategories()
+    {
+        var categories = await _context.Recipes
+            .AsNoTracking()
+            .Where(r => r.Category != null && r.Category != "")
+            .Select(r => r.Category!)
+            .Distinct()
+            .OrderBy(c => c)
+            .ToListAsync();
+
+        return Ok(categories);
+    }
+
+    /// <summary>
+    /// Distinct ingredient names in use, for the recipe form autocomplete.
+    /// Helps converge on one spelling per ingredient ("ei" vs "eieren").
+    /// </summary>
+    [HttpGet("ingredients")]
+    [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<string>>> GetIngredientNames()
+    {
+        var names = await _context.Recipes
+            .AsNoTracking()
+            .SelectMany(r => r.Ingredients)
+            .Select(i => i.Name)
+            .Where(n => n != "")
+            .Distinct()
+            .OrderBy(n => n)
+            .ToListAsync();
+
+        // Postgres DISTINCT is case-sensitive; collapse spelling-case variants here
+        var deduped = names
+            .GroupBy(n => n.ToLowerInvariant())
+            .Select(g => g.First());
+
+        return Ok(deduped);
     }
 
     /// <summary>
@@ -104,6 +164,7 @@ public class RecipesController : ControllerBase
             .AsNoTracking()
             .Include(r => r.Ingredients)
             .Include(r => r.Steps)
+            .Include(r => r.Tags).ThenInclude(a => a.RecipeTag)
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (recipe == null)
@@ -115,17 +176,24 @@ public class RecipesController : ControllerBase
     }
 
     /// <summary>
-    /// Create a recipe manually
+    /// Create a recipe manually. Tags are created on the fly and reused
+    /// case-insensitively across recipes.
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(RecipeDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<RecipeDto>> CreateRecipe(CreateRecipeDto dto)
     {
+        if (dto.Tags.Any(t => t.Trim().Length > 50))
+        {
+            return TagTooLong();
+        }
+
         var recipe = new Recipe();
         ApplyDto(recipe, dto);
 
         _context.Recipes.Add(recipe);
+        await SyncTagsAsync(recipe, dto.Tags);
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Created recipe {Title} ({Id})", recipe.Title, recipe.Id);
@@ -133,16 +201,24 @@ public class RecipesController : ControllerBase
     }
 
     /// <summary>
-    /// Update a recipe. Ingredients and steps are replaced wholesale.
+    /// Update a recipe. Ingredients and steps are replaced wholesale; tags are
+    /// synced to the submitted list (unused tags leave the pool).
     /// </summary>
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(RecipeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<RecipeDto>> UpdateRecipe(Guid id, UpdateRecipeDto dto)
     {
+        if (dto.Tags.Any(t => t.Trim().Length > 50))
+        {
+            return TagTooLong();
+        }
+
         var recipe = await _context.Recipes
             .Include(r => r.Ingredients)
             .Include(r => r.Steps)
+            .Include(r => r.Tags).ThenInclude(a => a.RecipeTag)
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (recipe == null)
@@ -156,7 +232,9 @@ public class RecipesController : ControllerBase
         recipe.Steps.Clear();
 
         ApplyDto(recipe, dto);
+        await SyncTagsAsync(recipe, dto.Tags);
         await _context.SaveChangesAsync();
+        await RemoveOrphanedTagsAsync();
 
         return Ok(ToDto(recipe));
     }
@@ -197,8 +275,14 @@ public class RecipesController : ControllerBase
             favorite.RecipeId = null; // DishName stays denormalized, favorite survives
         }
 
+        var tagAssignments = await _context.RecipeTagAssignments
+            .Where(a => a.RecipeId == id)
+            .ToListAsync();
+        _context.RecipeTagAssignments.RemoveRange(tagAssignments);
+
         _context.Recipes.Remove(recipe);
         await _context.SaveChangesAsync();
+        await RemoveOrphanedTagsAsync();
 
         _logger.LogInformation("Deleted recipe {Id}", id);
         return NoContent();
@@ -233,6 +317,76 @@ public class RecipesController : ControllerBase
             return UnprocessableEntity(new ProblemDetails { Title = "Could not fetch page", Detail = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Syncs a recipe's tag links to the submitted names: missing tags are created
+    /// (reused case-insensitively), removed names unlinked. Matching is by name —
+    /// never by entity id, whose generation timing differs between EF providers.
+    /// </summary>
+    private async Task SyncTagsAsync(Recipe recipe, List<string> tagNames)
+    {
+        var targets = tagNames
+            .Select(n => n.Trim())
+            .Where(n => n.Length > 0)
+            .DistinctBy(n => n.ToLowerInvariant())
+            .ToList();
+        var targetKeys = targets.Select(n => n.ToLowerInvariant()).ToHashSet();
+
+        var obsolete = recipe.Tags
+            .Where(a => a.RecipeTag == null || !targetKeys.Contains(a.RecipeTag.Name.ToLowerInvariant()))
+            .ToList();
+        foreach (var assignment in obsolete)
+        {
+            recipe.Tags.Remove(assignment);
+            _context.RecipeTagAssignments.Remove(assignment);
+        }
+
+        var existingTags = await _context.RecipeTags.ToListAsync();
+        foreach (var name in targets)
+        {
+            var alreadyLinked = recipe.Tags.Any(a =>
+                a.RecipeTag != null && string.Equals(a.RecipeTag.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (alreadyLinked)
+            {
+                continue;
+            }
+
+            var tag = existingTags.FirstOrDefault(t =>
+                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (tag == null)
+            {
+                tag = new RecipeTag { Name = name };
+                _context.RecipeTags.Add(tag);
+                existingTags.Add(tag);
+            }
+
+            recipe.Tags.Add(new RecipeTagAssignment { Recipe = recipe, RecipeTag = tag });
+        }
+    }
+
+    /// <summary>Tags are kept only while at least one recipe uses them</summary>
+    private async Task RemoveOrphanedTagsAsync()
+    {
+        var orphans = await _context.RecipeTags
+            .Where(t => !_context.RecipeTagAssignments.Any(a => a.RecipeTagId == t.Id))
+            .ToListAsync();
+
+        if (orphans.Count > 0)
+        {
+            _context.RecipeTags.RemoveRange(orphans);
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    private static List<string> SplitTags(string? tags) => (tags ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .ToList();
+
+    private BadRequestObjectResult TagTooLong() => BadRequest(new ProblemDetails
+    {
+        Title = "Tag too long",
+        Detail = "Tags are at most 50 characters."
+    });
 
     private static void ApplyDto(Recipe recipe, CreateRecipeDto dto)
     {
@@ -316,6 +470,11 @@ public class RecipesController : ControllerBase
                 StepNumber = s.StepNumber,
                 Instruction = s.Instruction
             })
+            .ToList(),
+        Tags = recipe.Tags
+            .Where(a => a.RecipeTag != null)
+            .Select(a => a.RecipeTag!.Name)
+            .OrderBy(n => n)
             .ToList()
     };
 }

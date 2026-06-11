@@ -48,7 +48,9 @@ meals as input, so groceries match the plan.
 ## Backend Requirements
 
 - `GET /api/shoppinglist?from=YYYY-MM-DD&to=YYYY-MM-DD` →
-  `{ items: [ { name, quantity?, unit?, sourceRecipes: [titles] } ], reminders: [ { date, text } ] }`
+  `{ items: [ { name, quantity?, unit?, sourceRecipes: [titles] } ], reminders: [ { plannedMealId, date, text } ] }`
+- `PUT /api/plannedmeals/{id}/recipe` attaches a recipe to a reminder's meal (title
+  denormalized, vague instruction resolved) so its ingredients land on the list
 - Aggregation/scaling service `ShoppingListService` with unit tests (the math is the feature)
 - Always metric in the API; display conversion is frontend (measurement-preferences.md)
 
@@ -56,6 +58,9 @@ meals as input, so groceries match the plan.
 
 - Page `pages/shopping-list/` — date-range (defaults to planner's current week), grouped list,
   reminder section, copy-as-text button
+- "Still to decide" entries resolve in place: link an existing recipe via inline search, or
+  jump to recipe creation prefilled with the dish name (`/recipes/new?title=…&linkMealId=…`);
+  the form links the new recipe to the meal and returns to the shopping list
 - Entry point from the week planner ("Shopping list for this week")
 - `shopping-list.service.ts`
 

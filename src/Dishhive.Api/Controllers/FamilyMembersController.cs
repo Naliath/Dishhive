@@ -29,7 +29,10 @@ public class FamilyMembersController : ControllerBase
     [ProducesResponseType(typeof(IEnumerable<FamilyMemberDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<FamilyMemberDto>>> GetMembers([FromQuery] bool includeInactive = false)
     {
-        var query = _context.FamilyMembers.AsNoTracking();
+        var query = _context.FamilyMembers
+            .AsNoTracking()
+            .Include(m => m.DietaryTags).ThenInclude(t => t.DietaryTag)
+            .AsQueryable();
 
         if (!includeInactive)
         {
@@ -39,10 +42,9 @@ public class FamilyMembersController : ControllerBase
         var members = await query
             .OrderBy(m => m.IsGuest)
             .ThenBy(m => m.Name)
-            .Select(m => ToDto(m))
             .ToListAsync();
 
-        return Ok(members);
+        return Ok(members.Select(ToDto));
     }
 
     /// <summary>
@@ -55,6 +57,7 @@ public class FamilyMembersController : ControllerBase
     {
         var member = await _context.FamilyMembers
             .AsNoTracking()
+            .Include(m => m.DietaryTags).ThenInclude(t => t.DietaryTag)
             .FirstOrDefaultAsync(m => m.Id == id);
 
         if (member == null)
@@ -66,23 +69,28 @@ public class FamilyMembersController : ControllerBase
     }
 
     /// <summary>
-    /// Create a family member or guest
+    /// Create a family member or guest. Allergy/diet tags are created on the fly
+    /// and reused case-insensitively across members.
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(FamilyMemberDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<FamilyMemberDto>> CreateMember(CreateFamilyMemberDto dto)
     {
+        if (HasOverlongTag(dto.AllergyTags) || HasOverlongTag(dto.DietTags))
+        {
+            return TagTooLong();
+        }
+
         var member = new FamilyMember
         {
             Name = dto.Name,
             IsGuest = dto.IsGuest,
-            Allergies = dto.Allergies,
-            DietaryConstraints = dto.DietaryConstraints,
             PreferenceNotes = dto.PreferenceNotes
         };
 
         _context.FamilyMembers.Add(member);
+        await SyncTagsAsync(member, dto.AllergyTags, dto.DietTags);
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Created family member {Name} ({Id})", member.Name, member.Id);
@@ -90,14 +98,23 @@ public class FamilyMembersController : ControllerBase
     }
 
     /// <summary>
-    /// Update a family member
+    /// Update a family member. The member's tags are synced to the submitted lists;
+    /// tags no longer used by any member are removed from the pool.
     /// </summary>
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(FamilyMemberDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<FamilyMemberDto>> UpdateMember(Guid id, UpdateFamilyMemberDto dto)
     {
-        var member = await _context.FamilyMembers.FindAsync(id);
+        if (HasOverlongTag(dto.AllergyTags) || HasOverlongTag(dto.DietTags))
+        {
+            return TagTooLong();
+        }
+
+        var member = await _context.FamilyMembers
+            .Include(m => m.DietaryTags).ThenInclude(t => t.DietaryTag)
+            .FirstOrDefaultAsync(m => m.Id == id);
         if (member == null)
         {
             return NotFound();
@@ -105,12 +122,12 @@ public class FamilyMembersController : ControllerBase
 
         member.Name = dto.Name;
         member.IsGuest = dto.IsGuest;
-        member.Allergies = dto.Allergies;
-        member.DietaryConstraints = dto.DietaryConstraints;
         member.PreferenceNotes = dto.PreferenceNotes;
         member.IsActive = dto.IsActive;
 
+        await SyncTagsAsync(member, dto.AllergyTags, dto.DietTags);
         await _context.SaveChangesAsync();
+        await RemoveOrphanedTagsAsync();
 
         return Ok(ToDto(member));
     }
@@ -138,16 +155,23 @@ public class FamilyMembersController : ControllerBase
         }
         else
         {
-            // Remove favorites explicitly so behavior is identical across EF providers
+            // Remove favorites and tag links explicitly so behavior is identical across EF providers
             var favorites = await _context.FamilyMemberFavorites
                 .Where(f => f.FamilyMemberId == id)
                 .ToListAsync();
             _context.FamilyMemberFavorites.RemoveRange(favorites);
+
+            var tagLinks = await _context.FamilyMemberDietaryTags
+                .Where(t => t.FamilyMemberId == id)
+                .ToListAsync();
+            _context.FamilyMemberDietaryTags.RemoveRange(tagLinks);
+
             _context.FamilyMembers.Remove(member);
             _logger.LogInformation("Deleted family member {Id}", id);
         }
 
         await _context.SaveChangesAsync();
+        await RemoveOrphanedTagsAsync();
         return NoContent();
     }
 
@@ -266,16 +290,103 @@ public class FamilyMembersController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Syncs a member's tag links to the submitted names: missing tags are created
+    /// (reusing existing ones case-insensitively per kind), removed names unlinked.
+    /// </summary>
+    private async Task SyncTagsAsync(FamilyMember member, List<string> allergyNames, List<string> dietNames)
+    {
+        var targets = Normalize(allergyNames).Select(n => (Name: n, Kind: DietaryTagKind.Allergy))
+            .Concat(Normalize(dietNames).Select(n => (Name: n, Kind: DietaryTagKind.Diet)))
+            .ToList();
+
+        // Links and tags are matched by (name, kind) case-insensitively — never by
+        // entity id, whose generation timing differs between Npgsql and InMemory
+        var targetKeys = targets.Select(t => (Name: t.Name.ToLowerInvariant(), t.Kind)).ToHashSet();
+
+        var obsolete = member.DietaryTags
+            .Where(link => link.DietaryTag == null
+                || !targetKeys.Contains((link.DietaryTag.Name.ToLowerInvariant(), link.DietaryTag.Kind)))
+            .ToList();
+        foreach (var link in obsolete)
+        {
+            member.DietaryTags.Remove(link);
+            _context.FamilyMemberDietaryTags.Remove(link);
+        }
+
+        var existingTags = await _context.DietaryTags.ToListAsync();
+        foreach (var (name, kind) in targets)
+        {
+            var alreadyLinked = member.DietaryTags.Any(link =>
+                link.DietaryTag != null
+                && link.DietaryTag.Kind == kind
+                && string.Equals(link.DietaryTag.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (alreadyLinked)
+            {
+                continue;
+            }
+
+            var tag = existingTags.FirstOrDefault(t =>
+                t.Kind == kind && string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (tag == null)
+            {
+                tag = new DietaryTag { Name = name, Kind = kind };
+                _context.DietaryTags.Add(tag);
+                existingTags.Add(tag);
+            }
+
+            member.DietaryTags.Add(new FamilyMemberDietaryTag
+            {
+                FamilyMember = member,
+                DietaryTag = tag
+            });
+        }
+    }
+
+    /// <summary>Tags are kept only while at least one member uses them</summary>
+    private async Task RemoveOrphanedTagsAsync()
+    {
+        var orphans = await _context.DietaryTags
+            .Where(t => !_context.FamilyMemberDietaryTags.Any(l => l.DietaryTagId == t.Id))
+            .ToListAsync();
+
+        if (orphans.Count > 0)
+        {
+            _context.DietaryTags.RemoveRange(orphans);
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    private static List<string> Normalize(List<string> names) => names
+        .Select(n => n.Trim())
+        .Where(n => n.Length > 0)
+        .DistinctBy(n => n.ToLowerInvariant())
+        .ToList();
+
+    private static bool HasOverlongTag(List<string> names) => names.Any(n => n.Trim().Length > 50);
+
+    private BadRequestObjectResult TagTooLong() => BadRequest(new ProblemDetails
+    {
+        Title = "Tag too long",
+        Detail = "Tags are at most 50 characters."
+    });
+
     private static FamilyMemberDto ToDto(FamilyMember member) => new()
     {
         Id = member.Id,
         Name = member.Name,
         IsGuest = member.IsGuest,
-        Allergies = member.Allergies,
-        DietaryConstraints = member.DietaryConstraints,
+        AllergyTags = TagNames(member, DietaryTagKind.Allergy),
+        DietTags = TagNames(member, DietaryTagKind.Diet),
         PreferenceNotes = member.PreferenceNotes,
         IsActive = member.IsActive,
         CreatedAt = member.CreatedAt,
         UpdatedAt = member.UpdatedAt
     };
+
+    private static List<string> TagNames(FamilyMember member, DietaryTagKind kind) => member.DietaryTags
+        .Where(link => link.DietaryTag != null && link.DietaryTag.Kind == kind)
+        .Select(link => link.DietaryTag!.Name)
+        .OrderBy(n => n)
+        .ToList();
 }

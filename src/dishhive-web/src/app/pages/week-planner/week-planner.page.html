@@ -51,7 +51,14 @@
                     } @else if (!meal.dishName) {
                       <mat-icon class="meal-icon" aria-label="Idea">lightbulb</mat-icon>
                     }
-                    <span class="meal-name">{{ mealSummary(meal) }}</span>
+                    @if (meal.recipeId) {
+                      <!-- No matTooltip here: its touch handling can swallow the tap
+                           on mobile, leaving the link only openable in a new tab -->
+                      <a class="meal-name meal-name--link" [routerLink]="['/recipes', meal.recipeId]"
+                         [attr.aria-label]="'Open recipe ' + mealSummary(meal)">{{ mealSummary(meal) }}</a>
+                    } @else {
+                      <span class="meal-name">{{ mealSummary(meal) }}</span>
+                    }
                     <span class="meal-actions">
                       @if (day.isPast) {
                         <button mat-icon-button class="meal-action eaten-toggle"

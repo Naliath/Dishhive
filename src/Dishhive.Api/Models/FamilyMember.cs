@@ -19,16 +19,10 @@ public class FamilyMember
     public bool IsGuest { get; set; } = false;
 
     /// <summary>
-    /// Allergies and intolerances, free text (e.g. "nuts, lactose")
+    /// Structured allergy and diet tags (see <see cref="DietaryTag"/>);
+    /// replaced the former free-text Allergies/DietaryConstraints fields
     /// </summary>
-    [MaxLength(500)]
-    public string? Allergies { get; set; }
-
-    /// <summary>
-    /// Dietary constraints, free text (e.g. "vegetarian, no pork")
-    /// </summary>
-    [MaxLength(500)]
-    public string? DietaryConstraints { get; set; }
+    public List<FamilyMemberDietaryTag> DietaryTags { get; set; } = [];
 
     /// <summary>
     /// Likes and dislikes, free text

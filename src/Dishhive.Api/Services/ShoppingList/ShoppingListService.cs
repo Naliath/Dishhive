@@ -56,6 +56,7 @@ public class ShoppingListService : IShoppingListService
             {
                 reminders.Add(new ShoppingListReminderDto
                 {
+                    PlannedMealId = meal.Id,
                     Date = meal.Date,
                     Text = meal.DishName ?? meal.VagueInstruction ?? "(unspecified)"
                 });

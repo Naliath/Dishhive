@@ -7,8 +7,13 @@ public class FamilyMemberDto
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public bool IsGuest { get; set; }
-    public string? Allergies { get; set; }
-    public string? DietaryConstraints { get; set; }
+
+    /// <summary>Allergy/intolerance tag names (e.g. "Shellfish", "Lactose")</summary>
+    public List<string> AllergyTags { get; set; } = [];
+
+    /// <summary>Diet tag names (e.g. "Vegetarian", "No pork")</summary>
+    public List<string> DietTags { get; set; } = [];
+
     public string? PreferenceNotes { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -23,11 +28,13 @@ public class CreateFamilyMemberDto
 
     public bool IsGuest { get; set; } = false;
 
-    [MaxLength(500)]
-    public string? Allergies { get; set; }
+    /// <summary>Allergy/intolerance tag names; tags are created when new</summary>
+    [MaxLength(20)]
+    public List<string> AllergyTags { get; set; } = [];
 
-    [MaxLength(500)]
-    public string? DietaryConstraints { get; set; }
+    /// <summary>Diet tag names; tags are created when new</summary>
+    [MaxLength(20)]
+    public List<string> DietTags { get; set; } = [];
 
     [MaxLength(1000)]
     public string? PreferenceNotes { get; set; }
@@ -58,14 +65,23 @@ public class UpdateFamilyMemberDto
 
     public bool IsGuest { get; set; }
 
-    [MaxLength(500)]
-    public string? Allergies { get; set; }
+    /// <summary>Allergy/intolerance tag names; the member's tags are synced to this list</summary>
+    [MaxLength(20)]
+    public List<string> AllergyTags { get; set; } = [];
 
-    [MaxLength(500)]
-    public string? DietaryConstraints { get; set; }
+    /// <summary>Diet tag names; the member's tags are synced to this list</summary>
+    [MaxLength(20)]
+    public List<string> DietTags { get; set; } = [];
 
     [MaxLength(1000)]
     public string? PreferenceNotes { get; set; }
 
     public bool IsActive { get; set; } = true;
+}
+
+public class DietaryTagDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public DietaryTagKind Kind { get; set; }
 }

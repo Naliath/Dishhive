@@ -80,6 +80,30 @@ public class RecipesControllerIntegrationTests : TestBase
     }
 
     [Fact]
+    public async Task GetIngredientNames_ReturnsDistinctNamesAcrossRecipes()
+    {
+        DbContext.Recipes.AddRange(
+            new Recipe
+            {
+                Title = "Omelet",
+                Ingredients = { new RecipeIngredient { Name = "ei" }, new RecipeIngredient { Name = "boter" } }
+            },
+            new Recipe
+            {
+                Title = "Pannenkoeken",
+                Ingredients = { new RecipeIngredient { Name = "Ei" }, new RecipeIngredient { Name = "bloem" } }
+            });
+        await DbContext.SaveChangesAsync();
+
+        var names = await Client.GetFromJsonAsync<List<string>>("/api/recipes/ingredients");
+
+        // case variants collapse to one entry for the autocomplete
+        names.Should().HaveCount(3);
+        names.Should().ContainSingle(n => n.Equals("ei", StringComparison.OrdinalIgnoreCase));
+        names.Should().Contain("boter").And.Contain("bloem");
+    }
+
+    [Fact]
     public async Task GetRecipe_UnknownId_ReturnsNotFound()
     {
         var response = await Client.GetAsync($"/api/recipes/{Guid.NewGuid()}");

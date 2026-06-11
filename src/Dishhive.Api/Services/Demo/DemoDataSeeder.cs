@@ -131,16 +131,17 @@ public class DemoDataSeeder : BackgroundService
         }
 
         var familyMembers = new List<FamilyMember>();
+        var tagPool = new Dictionary<(string Name, DietaryTagKind Kind), DietaryTag>();
         foreach (var demoMember in DemoData.Members)
         {
             var member = new FamilyMember
             {
                 Id = Guid.NewGuid(),
                 Name = demoMember.Name,
-                Allergies = demoMember.Allergies,
-                DietaryConstraints = demoMember.DietaryConstraints,
                 PreferenceNotes = demoMember.PreferenceNotes
             };
+            AddTags(context, member, demoMember.AllergyTags, DietaryTagKind.Allergy, tagPool);
+            AddTags(context, member, demoMember.DietTags, DietaryTagKind.Diet, tagPool);
             context.FamilyMembers.Add(member);
             familyMembers.Add(member);
 
@@ -174,6 +175,29 @@ public class DemoDataSeeder : BackgroundService
 
         _logger.LogInformation("Demo data seeded: {RecipeCount} recipes, {MemberCount} family members",
             recipesByUrl.Count, DemoData.Members.Count);
+    }
+
+    /// <summary>Links a member to dietary tags, sharing tag entities across members</summary>
+    private static void AddTags(
+        DishhiveDbContext context, FamilyMember member, IReadOnlyList<string> names,
+        DietaryTagKind kind, Dictionary<(string Name, DietaryTagKind Kind), DietaryTag> tagPool)
+    {
+        foreach (var name in names)
+        {
+            var key = (name.ToLowerInvariant(), kind);
+            if (!tagPool.TryGetValue(key, out var tag))
+            {
+                tag = new DietaryTag { Id = Guid.NewGuid(), Name = name, Kind = kind };
+                context.DietaryTags.Add(tag);
+                tagPool[key] = tag;
+            }
+
+            member.DietaryTags.Add(new FamilyMemberDietaryTag
+            {
+                FamilyMember = member,
+                DietaryTag = tag
+            });
+        }
     }
 
     /// <summary>

@@ -21,6 +21,9 @@ public class RecipeListItemDto
     public bool HasLocalImage { get; set; }
 
     public string? SourceProvider { get; set; }
+
+    /// <summary>Organization tag names (user-curated, see recipe-organization.md)</summary>
+    public List<string> Tags { get; set; } = new();
 }
 
 /// <summary>Full recipe DTO for the detail view</summary>
@@ -52,6 +55,9 @@ public class RecipeDto
     public DateTime UpdatedAt { get; set; }
     public List<RecipeIngredientDto> Ingredients { get; set; } = new();
     public List<RecipeStepDto> Steps { get; set; } = new();
+
+    /// <summary>Organization tag names (user-curated, see recipe-organization.md)</summary>
+    public List<string> Tags { get; set; } = new();
 }
 
 public class RecipeIngredientDto
@@ -103,6 +109,10 @@ public class CreateRecipeDto
 
     public List<CreateRecipeIngredientDto> Ingredients { get; set; } = new();
     public List<CreateRecipeStepDto> Steps { get; set; } = new();
+
+    /// <summary>Organization tag names; tags are created when new, synced on update</summary>
+    [MaxLength(20)]
+    public List<string> Tags { get; set; } = new();
 }
 
 public class CreateRecipeIngredientDto
@@ -138,4 +148,40 @@ public class ImportRecipeRequestDto
     [Required]
     [MaxLength(1000)]
     public string Url { get; set; } = string.Empty;
+}
+
+public class RecipeTagDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>A cookbook: a named, saved recipe filter</summary>
+public class CookbookDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? SearchTerm { get; set; }
+    public string? Category { get; set; }
+    public List<string> Tags { get; set; } = new();
+}
+
+public class CreateCookbookDto
+{
+    [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty;
+
+    [MaxLength(200)]
+    public string? SearchTerm { get; set; }
+
+    [MaxLength(100)]
+    public string? Category { get; set; }
+
+    [MaxLength(20)]
+    public List<string> Tags { get; set; } = new();
+}
+
+public class UpdateCookbookDto : CreateCookbookDto
+{
 }

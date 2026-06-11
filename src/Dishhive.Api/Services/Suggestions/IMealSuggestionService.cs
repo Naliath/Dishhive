@@ -6,8 +6,13 @@ namespace Dishhive.Api.Services.Suggestions;
 public record MemberProfile
 {
     public required string Name { get; init; }
-    public string? Allergies { get; init; }
-    public string? DietaryConstraints { get; init; }
+
+    /// <summary>Allergy/intolerance tag names (hard "must not contain")</summary>
+    public IReadOnlyList<string> Allergies { get; init; } = [];
+
+    /// <summary>Diet tag names (e.g. vegetarian, no pork)</summary>
+    public IReadOnlyList<string> Diets { get; init; } = [];
+
     public string? PreferenceNotes { get; init; }
 }
 
@@ -65,6 +70,12 @@ public record MealSuggestionRequest
     public IReadOnlyList<DateOnly> DaysToFill { get; init; } = [];
 
     public IReadOnlyList<FrozenItem> AvailableFrozenItems { get; init; } = [];
+
+    /// <summary>
+    /// Free-text planning instructions from the user (e.g. "3 days vegetarian").
+    /// Interpreted by the LLM provider; the rules fallback ignores it.
+    /// </summary>
+    public string? Instructions { get; init; }
 }
 
 public record MealSuggestion

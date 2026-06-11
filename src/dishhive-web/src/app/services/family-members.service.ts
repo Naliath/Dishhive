@@ -7,7 +7,8 @@ import {
   CreateFamilyMember,
   UpdateFamilyMember,
   FamilyMemberFavorite,
-  CreateFamilyMemberFavorite
+  CreateFamilyMemberFavorite,
+  DietaryTag
 } from '../models/family-member.model';
 
 @Injectable({ providedIn: 'root' })
@@ -39,6 +40,12 @@ export class FamilyMembersService {
 
   deleteMember(id: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${id}`)
+      .pipe(catchError(this.handleError));
+  }
+
+  /** The pool of allergy/diet tags in use, for tag autocomplete */
+  getDietaryTags(): Observable<DietaryTag[]> {
+    return this.http.get<DietaryTag[]>('/api/dietarytags')
       .pipe(catchError(this.handleError));
   }
 

@@ -83,4 +83,7 @@ public class Recipe
     public List<RecipeIngredient> Ingredients { get; set; } = new();
 
     public List<RecipeStep> Steps { get; set; } = new();
+
+    /// <summary>Organization tags (see <see cref="RecipeTag"/>); user-curated</summary>
+    public List<RecipeTagAssignment> Tags { get; set; } = new();
 }

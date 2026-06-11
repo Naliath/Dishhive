@@ -23,8 +23,8 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         var dto = new CreateFamilyMemberDto
         {
             Name = "Anna",
-            Allergies = "noten",
-            DietaryConstraints = "vegetarisch",
+            AllergyTags = ["Noten"],
+            DietTags = ["Vegetarisch"],
             PreferenceNotes = "houdt van pasta"
         };
 
@@ -34,8 +34,8 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         created!.Id.Should().NotBeEmpty();
         created.Name.Should().Be("Anna");
-        created.Allergies.Should().Be("noten");
-        created.DietaryConstraints.Should().Be("vegetarisch");
+        created.AllergyTags.Should().Equal("Noten");
+        created.DietTags.Should().Equal("Vegetarisch");
         created.IsGuest.Should().BeFalse();
         created.IsActive.Should().BeTrue();
     }
@@ -75,7 +75,7 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         {
             Name = "Bijgewerkt",
             IsGuest = true,
-            Allergies = "lactose",
+            AllergyTags = ["Lactose"],
             IsActive = true
         };
 
@@ -85,7 +85,94 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         updated!.Name.Should().Be("Bijgewerkt");
         updated.IsGuest.Should().BeTrue();
-        updated.Allergies.Should().Be("lactose");
+        updated.AllergyTags.Should().Equal("Lactose");
+    }
+
+    [Fact]
+    public async Task Tags_AreReusedCaseInsensitively_AcrossMembers()
+    {
+        var first = await CreateMemberAsync("Eerste", allergyTags: ["Noten"]);
+        var second = await CreateMemberAsync("Tweede", allergyTags: ["noten"]);
+
+        // Both members link to the same tag, original casing preserved
+        second.AllergyTags.Should().Equal("Noten");
+        var tags = await Client.GetFromJsonAsync<List<DietaryTagDto>>("/api/dietarytags");
+        tags!.Should().ContainSingle(t => t.Kind == DietaryTagKind.Allergy)
+            .Which.Name.Should().Be("Noten");
+        first.AllergyTags.Should().Equal("Noten");
+    }
+
+    [Fact]
+    public async Task Tags_SameNameDifferentKind_AreSeparateTags()
+    {
+        await CreateMemberAsync("Anna", allergyTags: ["Varkensvlees"], dietTags: ["Varkensvlees"]);
+
+        var tags = await Client.GetFromJsonAsync<List<DietaryTagDto>>("/api/dietarytags");
+
+        tags!.Should().HaveCount(2);
+        tags.Select(t => t.Kind).Should().BeEquivalentTo(
+            [DietaryTagKind.Allergy, DietaryTagKind.Diet]);
+    }
+
+    [Fact]
+    public async Task UpdateMember_RemovingLastUse_DeletesOrphanedTag()
+    {
+        var member = await CreateMemberAsync("Anna", allergyTags: ["Schaaldieren"]);
+
+        var update = new UpdateFamilyMemberDto { Name = "Anna", AllergyTags = [] };
+        var response = await Client.PutAsJsonAsync($"/api/familymembers/{member.Id}", update);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var tags = await Client.GetFromJsonAsync<List<DietaryTagDto>>("/api/dietarytags");
+        tags!.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateMember_RemovingSharedTag_KeepsTagForOtherMembers()
+    {
+        var anna = await CreateMemberAsync("Anna", allergyTags: ["Noten"]);
+        await CreateMemberAsync("Bart", allergyTags: ["Noten"]);
+
+        var update = new UpdateFamilyMemberDto { Name = "Anna", AllergyTags = [] };
+        await Client.PutAsJsonAsync($"/api/familymembers/{anna.Id}", update);
+
+        var tags = await Client.GetFromJsonAsync<List<DietaryTagDto>>("/api/dietarytags");
+        tags!.Should().ContainSingle().Which.Name.Should().Be("Noten");
+    }
+
+    [Fact]
+    public async Task CreateMember_WithOverlongTag_ReturnsBadRequest()
+    {
+        var dto = new CreateFamilyMemberDto
+        {
+            Name = "Anna",
+            AllergyTags = [new string('x', 51)]
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/familymembers", dto);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task CreateMember_DeduplicatesTagsWithinRequest()
+    {
+        var created = await CreateMemberAsync("Anna", allergyTags: ["Noten", " noten ", "NOTEN"]);
+
+        created.AllergyTags.Should().Equal("Noten");
+    }
+
+    private async Task<FamilyMemberDto> CreateMemberAsync(
+        string name, List<string>? allergyTags = null, List<string>? dietTags = null)
+    {
+        var response = await Client.PostAsJsonAsync("/api/familymembers", new CreateFamilyMemberDto
+        {
+            Name = name,
+            AllergyTags = allergyTags ?? [],
+            DietTags = dietTags ?? []
+        });
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        return (await response.Content.ReadFromJsonAsync<FamilyMemberDto>())!;
     }
 
     [Fact]

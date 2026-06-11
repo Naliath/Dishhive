@@ -4,13 +4,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { SettingsService } from '../../services/settings.service';
+import { IntegrationsStatusComponent } from '../../components/integrations-status/integrations-status';
 import { MeasurementSystem } from '../../models/user-setting.model';
 import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-settings-page',
   standalone: true,
-  imports: [MatCardModule, MatIconModule, MatRadioModule, MatSnackBarModule],
+  imports: [MatCardModule, MatIconModule, MatRadioModule, MatSnackBarModule, IntegrationsStatusComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings.page.html',
   styleUrl: './settings.page.scss'

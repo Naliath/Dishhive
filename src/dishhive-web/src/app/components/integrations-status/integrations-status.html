@@ -1,0 +1,57 @@
+<mat-card appearance="outlined">
+  <mat-card-header>
+    <mat-icon mat-card-avatar>cable</mat-icon>
+    <mat-card-title>Integrations</mat-card-title>
+    <mat-card-subtitle>External services connected to Dishhive</mat-card-subtitle>
+  </mat-card-header>
+  <mat-card-content>
+    @if (integrations(); as status) {
+      <div class="integration-list">
+
+        <div class="integration-row">
+          <mat-icon class="integration-icon">auto_awesome</mat-icon>
+          <div class="integration-info">
+            <div class="integration-name">AI Week Suggestions</div>
+            @if (status.ai.configured) {
+              <div class="integration-detail">{{ status.ai.provider }} &middot; {{ status.ai.model }}</div>
+              @if (status.ai.baseUrl) {
+                <div class="integration-detail muted">{{ status.ai.baseUrl }}</div>
+              }
+              @if (!status.ai.reachable) {
+                <div class="integration-detail warn">Could not reach the AI endpoint — check provider settings and that the service is running</div>
+              }
+            } @else {
+              <div class="integration-detail muted">Set Ai__Provider and Ai__Model to enable</div>
+            }
+          </div>
+          <span class="status-chip" [class]="chipClass(status.ai)">
+            <mat-icon>{{ chipIcon(status.ai) }}</mat-icon>
+            {{ chipLabel(status.ai) }}
+          </span>
+        </div>
+
+        <div class="integration-row">
+          <mat-icon class="integration-icon">kitchen</mat-icon>
+          <div class="integration-info">
+            <div class="integration-name">Freezy (Freezer Inventory)</div>
+            @if (status.freezy.configured) {
+              <div class="integration-detail">{{ status.freezy.baseUrl }}</div>
+              @if (!status.freezy.reachable) {
+                <div class="integration-detail warn">Could not reach Freezy — check the URL and that it is running</div>
+              }
+            } @else {
+              <div class="integration-detail muted">Set Freezy__BaseUrl to enable freezer-aware suggestions</div>
+            }
+          </div>
+          <span class="status-chip" [class]="chipClass(status.freezy)">
+            <mat-icon>{{ chipIcon(status.freezy) }}</mat-icon>
+            {{ chipLabel(status.freezy) }}
+          </span>
+        </div>
+
+      </div>
+    } @else {
+      <p class="integration-loading">Loading…</p>
+    }
+  </mat-card-content>
+</mat-card>

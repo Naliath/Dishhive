@@ -22,6 +22,28 @@ public class FreezyHttpClient : IFreezyClient
 
     public bool IsConfigured => _httpClient.BaseAddress != null;
 
+    public string? BaseUrl => _httpClient.BaseAddress?.ToString().TrimEnd('/');
+
+    public async Task<bool> IsReachableAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(3));
+            using var response = await _httpClient.GetAsync("api/items", cts.Token);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public async Task<IReadOnlyList<FrozenItem>> GetFrozenItemsAsync(CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)

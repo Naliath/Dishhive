@@ -26,6 +26,14 @@ public interface IFreezyClient
     /// <summary>Whether a Freezy base URL is configured</summary>
     bool IsConfigured { get; }
 
+    /// <summary>The configured Freezy base URL, or null when unconfigured</summary>
+    string? BaseUrl { get; }
+
+    /// <summary>
+    /// Attempts a live ping to Freezy. Returns false when unconfigured or unreachable.
+    /// </summary>
+    Task<bool> IsReachableAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Frozen items available for meal planning, ordered soonest-expiring first.
     /// Returns an empty list when Freezy is unconfigured or unreachable.

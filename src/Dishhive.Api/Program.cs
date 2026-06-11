@@ -63,9 +63,10 @@ builder.Services.AddHttpClient<IFreezyClient, FreezyHttpClient>(client =>
 // a deterministic rules fallback when Ai:Provider is configured, no-op otherwise.
 // Testing always gets the no-op so integration tests stay deterministic.
 var aiOptions = builder.Configuration.GetSection(AiOptions.SectionName).Get<AiOptions>() ?? new AiOptions();
+// Always register so IntegrationsController can report config state regardless of environment
+builder.Services.AddSingleton(aiOptions);
 if (!builder.Environment.IsEnvironment("Testing") && aiOptions.IsConfigured)
 {
-    builder.Services.AddSingleton(aiOptions);
     builder.Services.AddSingleton(_ => ChatClientFactory.Create(aiOptions));
     builder.Services.AddSingleton<RulesMealSuggestionService>();
     builder.Services.AddSingleton<IMealSuggestionService, LlmMealSuggestionService>();

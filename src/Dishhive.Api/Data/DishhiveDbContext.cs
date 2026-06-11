@@ -16,6 +16,7 @@ public class DishhiveDbContext : DbContext
     public DbSet<RecipeStep> RecipeSteps => Set<RecipeStep>();
     public DbSet<PlannedMeal> PlannedMeals => Set<PlannedMeal>();
     public DbSet<PlannedMealAttendee> PlannedMealAttendees => Set<PlannedMealAttendee>();
+    public DbSet<MealRating> MealRatings => Set<MealRating>();
     public DbSet<UserSetting> UserSettings => Set<UserSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -158,6 +159,27 @@ public class DishhiveDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
+        // MealRating configuration (composite key join table, like PlannedMealAttendee)
+        modelBuilder.Entity<MealRating>(entity =>
+        {
+            entity.HasKey(e => new { e.PlannedMealId, e.FamilyMemberId });
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(e => e.PlannedMeal)
+                  .WithMany(m => m.Ratings)
+                  .HasForeignKey(e => e.PlannedMealId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.FamilyMember)
+                  .WithMany()
+                  .HasForeignKey(e => e.FamilyMemberId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // For per-member rating statistics
+            entity.HasIndex(e => e.FamilyMemberId);
+        });
+
         // UserSetting configuration
         modelBuilder.Entity<UserSetting>(entity =>
         {
@@ -198,6 +220,9 @@ public class DishhiveDbContext : DbContext
                     break;
                 case PlannedMeal meal:
                     meal.UpdatedAt = DateTime.UtcNow;
+                    break;
+                case MealRating rating:
+                    rating.UpdatedAt = DateTime.UtcNow;
                     break;
                 case UserSetting setting:
                     setting.UpdatedAt = DateTime.UtcNow;

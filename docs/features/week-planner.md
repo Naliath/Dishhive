@@ -26,7 +26,8 @@ future AI-assisted planning.
 - Navigation between weeks; copying is future work
 
 **Out of scope (seams only)**
-- AI-assisted plan generation — only the `IMealSuggestionService` seam is created
+- AI-assisted plan generation — implemented behind the `IMealSuggestionService` seam,
+  see [ai-week-planning.md](ai-week-planning.md)
 - Recurring meal rules ("pizza every Friday")
 
 ## User Stories / Use Cases
@@ -68,19 +69,20 @@ PlannedMealAttendee
 - History is *the same table*: past `PlannedMeal` rows are the dish history
   (see past-dishes-and-statistics.md). No separate history table.
 
-### AI-assistance extension point (seam only)
+### AI-assistance extension point (implemented)
 
 ```csharp
 public interface IMealSuggestionService
 {
+    bool IsEnabled { get; }
     Task<IReadOnlyList<MealSuggestion>> SuggestAsync(MealSuggestionRequest request, CancellationToken ct);
 }
 ```
 
-`MealSuggestionRequest` carries the week, attendees, constraints, recent history, and available
-Freezy items. The default registered implementation returns an empty list. A future AI provider
-(LLM, rules engine) replaces the registration without touching the planner. **Do not implement
-providers now.**
+The seam now has a real provider: when `Ai:Provider` is configured, an LLM-backed
+implementation (Microsoft.Extensions.AI, five providers) with a deterministic rules
+fallback is registered; otherwise the no-op stays registered and the UI hides the
+feature. See [ai-week-planning.md](ai-week-planning.md).
 
 ## Backend Requirements
 
@@ -140,3 +142,6 @@ providers now.**
 - [x] Allergy hints in slot editor
 - [x] Multiple dishes per day (meal + course selects in editor, "Add dish" on day cards,
       labels only shown when deviating from dinner main)
+- [x] Phase 4 seam hardening: `IsEnabled` + widened `MealSuggestionRequest`, real providers
+      (see ai-week-planning.md); "Suggest week" button when AI is configured
+- [x] Eaten checkmark on past day cards (see meal-feedback.md)

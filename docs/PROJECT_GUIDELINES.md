@@ -18,8 +18,10 @@ decisions; the shared Angular and .NET standards are mirrored in [angular/](angu
   (see `features/recipe-import.md`)
 - Freezy integration only through `IFreezyClient` over Freezy's REST API; optional and
   read-only (see `features/freezy-integration.md`)
-- AI-assisted planning exists only as the `IMealSuggestionService` seam — no speculative
-  implementation (see `features/week-planner.md`)
+- AI-assisted planning goes exclusively through the `IMealSuggestionService` seam:
+  LLM-backed (Microsoft.Extensions.AI, configurable provider) with a deterministic rules
+  fallback when `Ai:Provider` is set, no-op otherwise — AI is never bolted on anywhere
+  else (see `features/ai-week-planning.md`)
 - Ingredient storage is always metric; original source values preserved verbatim; measurement
   preference is a display concern (see `features/measurement-preferences.md`)
 

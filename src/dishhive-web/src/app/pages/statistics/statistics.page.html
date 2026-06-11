@@ -30,6 +30,31 @@
           <td mat-cell *matCellDef="let dish">{{ dish.timesPlanned }}×</td>
         </ng-container>
 
+        <ng-container matColumnDef="timesEaten">
+          <th mat-header-cell *matHeaderCellDef>Eaten</th>
+          <td mat-cell *matCellDef="let dish">
+            @if (dish.timesEaten > 0) {
+              {{ dish.timesEaten }}×
+            } @else {
+              <span class="muted">—</span>
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="rating">
+          <th mat-header-cell *matHeaderCellDef>Rating</th>
+          <td mat-cell *matCellDef="let dish">
+            @if (dish.averageRating !== null) {
+              <span class="rating-cell">
+                <mat-icon>star</mat-icon>
+                {{ dish.averageRating | number:'1.1-1' }}
+              </span>
+            } @else {
+              <span class="muted">—</span>
+            }
+          </td>
+        </ng-container>
+
         <ng-container matColumnDef="lastPlanned">
           <th mat-header-cell *matHeaderCellDef>Last planned</th>
           <td mat-cell *matCellDef="let dish">{{ dish.lastPlanned | date:'d MMM y' }}</td>

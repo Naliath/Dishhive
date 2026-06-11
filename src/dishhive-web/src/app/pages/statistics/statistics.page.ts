@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -20,6 +20,7 @@ import { FamilyMember } from '../../models/family-member.model';
   standalone: true,
   imports: [
     DatePipe,
+    DecimalPipe,
     FormsModule,
     MatButtonModule,
     MatCardModule,
@@ -41,7 +42,7 @@ export class StatisticsPage implements OnInit {
   readonly loading = signal(true);
   readonly filter = signal('');
 
-  readonly displayedColumns = ['dishName', 'timesPlanned', 'lastPlanned', 'favorite'];
+  readonly displayedColumns = ['dishName', 'timesPlanned', 'timesEaten', 'rating', 'lastPlanned', 'favorite'];
 
   readonly filteredDishes = computed<DishStatistic[]>(() => {
     const stats = this.statistics();

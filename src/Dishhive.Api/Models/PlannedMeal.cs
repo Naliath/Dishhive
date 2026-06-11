@@ -23,6 +23,15 @@ public enum Course
 }
 
 /// <summary>
+/// Whether a planned meal was actually cooked/eaten. Null on the entity means "not marked".
+/// </summary>
+public enum EatenStatus
+{
+    Eaten = 0,
+    Skipped = 1
+}
+
+/// <summary>
 /// A planned dish on the week plan. A day can hold any number of dishes, e.g. a lunch
 /// plus a dinner with appetizer and dessert; the typical day has a single dinner main.
 /// At least one of RecipeId, DishName or VagueInstruction must be set.
@@ -67,9 +76,16 @@ public class PlannedMeal
     [MaxLength(500)]
     public string? Notes { get; set; }
 
+    /// <summary>
+    /// Whether this meal was actually cooked/eaten; null until someone marks it
+    /// </summary>
+    public EatenStatus? Eaten { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public List<PlannedMealAttendee> Attendees { get; set; } = new();
+
+    public List<MealRating> Ratings { get; set; } = new();
 }

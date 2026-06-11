@@ -1,0 +1,77 @@
+.suggestion-loading,
+.suggestion-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  min-width: 320px;
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    font-size: 36px;
+    width: 36px;
+    height: 36px;
+  }
+
+  p {
+    margin: 0;
+    text-align: center;
+  }
+}
+
+.suggestion-list {
+  display: flex;
+  flex-direction: column;
+  min-width: min(420px, 80vw);
+}
+
+.suggestion-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+
+  & + & {
+    border-block-start: 1px solid var(--mat-sys-outline-variant);
+  }
+}
+
+.suggestion-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.suggestion-date {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.suggestion-dish {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+
+  .recipe-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: var(--mat-sys-primary);
+  }
+}
+
+.suggestion-reason {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 13px;
+}

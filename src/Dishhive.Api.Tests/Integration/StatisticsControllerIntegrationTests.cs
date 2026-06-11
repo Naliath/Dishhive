@@ -92,4 +92,77 @@ public class StatisticsControllerIntegrationTests : TestBase
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task GetDishStatistics_WithEatenAndRatings_ComputesAggregates()
+    {
+        var anna = new FamilyMember { Name = "Anna" };
+        var tom = new FamilyMember { Name = "Tom" };
+        DbContext.PlannedMeals.AddRange(
+            new PlannedMeal
+            {
+                Date = LastWeek,
+                DishName = "Spaghetti",
+                Eaten = EatenStatus.Eaten,
+                Ratings =
+                {
+                    new MealRating { FamilyMember = anna, Rating = 5 },
+                    new MealRating { FamilyMember = tom, Rating = 4 }
+                }
+            },
+            new PlannedMeal
+            {
+                Date = LastWeek.AddDays(2),
+                DishName = "Spaghetti",
+                Eaten = EatenStatus.Eaten,
+                Ratings = { new MealRating { FamilyMember = anna, Rating = 3 } }
+            },
+            // Planned but skipped: counts as planned, not eaten
+            new PlannedMeal { Date = LastWeek.AddDays(4), DishName = "Spaghetti", Eaten = EatenStatus.Skipped },
+            // Never marked or rated
+            new PlannedMeal { Date = LastWeek.AddDays(1), DishName = "Vis" });
+        await DbContext.SaveChangesAsync();
+
+        var stats = await Client.GetFromJsonAsync<DishStatisticsDto>("/api/statistics/dishes");
+
+        var spaghetti = stats!.Dishes.Single(d => d.DishName == "Spaghetti");
+        spaghetti.TimesPlanned.Should().Be(3);
+        spaghetti.TimesEaten.Should().Be(2);
+        spaghetti.AverageRating.Should().Be(4.0); // (5 + 4 + 3) / 3
+        spaghetti.LovedCount.Should().Be(2);      // ratings >= 4
+
+        var vis = stats.Dishes.Single(d => d.DishName == "Vis");
+        vis.TimesEaten.Should().Be(0);
+        vis.AverageRating.Should().BeNull();
+        vis.LovedCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetMemberStatistics_IncludesEatenCountAndAverageRatingGiven()
+    {
+        var anna = new FamilyMember { Name = "Anna" };
+        DbContext.PlannedMeals.AddRange(
+            new PlannedMeal
+            {
+                Date = LastWeek,
+                DishName = "Spaghetti",
+                Eaten = EatenStatus.Eaten,
+                Attendees = { new PlannedMealAttendee { FamilyMember = anna } },
+                Ratings = { new MealRating { FamilyMember = anna, Rating = 5 } }
+            },
+            new PlannedMeal
+            {
+                Date = LastWeek.AddDays(1),
+                DishName = "Vis",
+                Attendees = { new PlannedMealAttendee { FamilyMember = anna } },
+                Ratings = { new MealRating { FamilyMember = anna, Rating = 2 } }
+            });
+        await DbContext.SaveChangesAsync();
+
+        var stats = await Client.GetFromJsonAsync<MemberStatisticsDto>($"/api/statistics/members/{anna.Id}");
+
+        stats!.MealsAttended.Should().Be(2);
+        stats.MealsEaten.Should().Be(1);
+        stats.AverageRatingGiven.Should().Be(3.5);
+    }
 }

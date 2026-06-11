@@ -88,6 +88,10 @@
       height: 18px;
     }
   }
+
+  .eaten-toggle.eaten {
+    color: var(--mat-sys-primary);
+  }
 }
 
 .meal-icon {

@@ -13,6 +13,8 @@ and generate shopping lists.
 - 🧊 **Freezy Integration** - Reuse frozen leftovers/meals tracked in Freezy *(optional)*
 - 🛒 **Shopping Lists** - Generated from the planned week, scaled by attendance, copy-as-text
 - 📊 **History & Statistics** - Past dishes, frequency stats, favorites from history
+- ⭐ **Meal Feedback** - Mark meals eaten/skipped and rate them per member (1–5 stars); feeds statistics and AI suggestions
+- ✨ **AI Week Suggestions** - Propose dinners for unplanned days from your household's constraints, favorites, ratings and freezer *(optional; Ollama, LM Studio, OpenAI, Mistral or Anthropic)*
 - 📏 **Measurement Preferences** - Metric (default) or imperial display
 - 🎬 **Demo Mode** - Seeds an empty database with 20 Dagelijkse Kost recipes and a demo household (on by default in Docker)
 - 🐳 **Self-Hosted** - Run everything in Docker containers
@@ -176,6 +178,31 @@ Enable it by setting the Freezy base URL:
 
 When unset, the integration is disabled and Dishhive works standalone.
 
+## AI Week Suggestions
+
+The week planner can propose dinners for unplanned days using a configurable LLM provider
+(via Microsoft.Extensions.AI), with a deterministic rules fallback when the model is
+unreachable. The feature is **optional**: while `Ai__Provider` is empty the "Suggest week"
+button is hidden and nothing AI-related runs. See
+[docs/features/ai-week-planning.md](docs/features/ai-week-planning.md).
+
+| Provider | Example configuration |
+|----------|----------------------|
+| Ollama (local) | `Ai__Provider=ollama` `Ai__Model=llama3.1` `Ai__BaseUrl=http://host.docker.internal:11434/v1` |
+| LM Studio (local) | `Ai__Provider=lmstudio` `Ai__Model=<loaded model>` `Ai__BaseUrl=http://host.docker.internal:1234/v1` |
+| OpenAI | `Ai__Provider=openai` `Ai__Model=gpt-4o-mini` `Ai__ApiKey=sk-...` |
+| Anthropic | `Ai__Provider=anthropic` `Ai__Model=claude-opus-4-8` `Ai__ApiKey=sk-ant-...` |
+| Mistral | `Ai__Provider=mistral` `Ai__Model=mistral-small-latest` `Ai__ApiKey=...` |
+| Other OpenAI-compatible | `Ai__Provider=openai-compatible` `Ai__Model=...` `Ai__BaseUrl=https://.../v1` |
+
+API keys also resolve from the standard `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` /
+`MISTRAL_API_KEY` environment variables when `Ai__ApiKey` is not set.
+
+> **Local reasoning models** (Qwen3 family etc.): load them with a context window of at
+> least 16k (e.g. `lms load <model> --context-length 16384` in LM Studio). With the default
+> 4k context the model's thinking exhausts the window before the answer appears and every
+> request falls back to the deterministic rules suggestions.
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -185,6 +212,10 @@ When unset, the integration is disabled and Dishhive works standalone.
 | `Freezy__BaseUrl` | empty (disabled) | Base URL of a Freezy instance |
 | `RecipeImport__UserAgent` | `Dishhive/0.1` | User-Agent for outbound recipe fetches |
 | `Demo__Enabled` | `false` (`true` in docker-compose) | Seed an empty database with demo recipes and household |
+| `Ai__Provider` | empty (disabled) | AI suggestion provider: `openai` \| `anthropic` \| `mistral` \| `ollama` \| `lmstudio` \| `openai-compatible` |
+| `Ai__ApiKey` | empty | API key (falls back to `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `MISTRAL_API_KEY`) |
+| `Ai__BaseUrl` | per-provider default | Endpoint override (required for `openai-compatible`) |
+| `Ai__Model` | empty | Model name, e.g. `llama3.1`, `gpt-4o-mini`, `claude-opus-4-8` |
 
 ## Documentation
 

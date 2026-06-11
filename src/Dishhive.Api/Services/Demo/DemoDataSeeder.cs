@@ -130,6 +130,7 @@ public class DemoDataSeeder : BackgroundService
             recipesByUrl[record.SourceUrl] = recipe;
         }
 
+        var familyMembers = new List<FamilyMember>();
         foreach (var demoMember in DemoData.Members)
         {
             var member = new FamilyMember
@@ -141,6 +142,7 @@ public class DemoDataSeeder : BackgroundService
                 PreferenceNotes = demoMember.PreferenceNotes
             };
             context.FamilyMembers.Add(member);
+            familyMembers.Add(member);
 
             foreach (var url in demoMember.FavoriteRecipeUrls)
             {
@@ -165,11 +167,63 @@ public class DemoDataSeeder : BackgroundService
             }
         }
 
+        SeedPastMeals(context, recipesByUrl.Values.ToList(), familyMembers);
+
         context.UserSettings.Add(new UserSetting { Key = SeededSettingKey, Value = "true" });
         await context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Demo data seeded: {RecipeCount} recipes, {MemberCount} family members",
             recipesByUrl.Count, DemoData.Members.Count);
+    }
+
+    /// <summary>
+    /// Two weeks of past demo dinners with eaten marks and ratings, so the history,
+    /// statistics and AI suggestion features have data to show. Deterministic: same
+    /// dishes and ratings on every fresh seed.
+    /// </summary>
+    private static void SeedPastMeals(
+        DishhiveDbContext context, IReadOnlyList<Recipe> recipes, IReadOnlyList<FamilyMember> members)
+    {
+        if (recipes.Count == 0 || members.Count == 0)
+        {
+            return;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        for (var daysAgo = 14; daysAgo >= 1; daysAgo--)
+        {
+            var recipe = recipes[daysAgo % recipes.Count];
+            // One skipped day keeps the demo data honest; the rest were eaten
+            var skipped = daysAgo == 5;
+
+            var meal = new PlannedMeal
+            {
+                Id = Guid.NewGuid(),
+                Date = today.AddDays(-daysAgo),
+                MealType = MealType.Dinner,
+                Course = Course.Main,
+                RecipeId = recipe.Id,
+                DishName = recipe.Title,
+                Eaten = skipped ? EatenStatus.Skipped : EatenStatus.Eaten
+            };
+
+            foreach (var (member, index) in members.Select((m, i) => (m, i)))
+            {
+                meal.Attendees.Add(new PlannedMealAttendee { FamilyMemberId = member.Id });
+                if (!skipped)
+                {
+                    // Spread deterministic ratings between 3 and 5
+                    meal.Ratings.Add(new MealRating
+                    {
+                        FamilyMemberId = member.Id,
+                        Rating = 3 + (daysAgo + index) % 3
+                    });
+                }
+            }
+
+            context.PlannedMeals.Add(meal);
+        }
     }
 
     private static async Task<SeedRecipeRecord[]> LoadSeedRecordsAsync(CancellationToken cancellationToken)

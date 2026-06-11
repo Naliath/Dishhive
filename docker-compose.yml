@@ -52,6 +52,17 @@ services:
       # Demo mode: seeds an empty database with 20 Dagelijkse Kost recipes and a
       # demo household (the Rocinante crew). Set to "false" for real use.
       Demo__Enabled: "true"
+      # Optional AI week-plan suggestions; disabled while Ai__Provider is empty.
+      # Providers: openai | anthropic | mistral | ollama | lmstudio | openai-compatible
+      #   Ollama:    Ai__Provider=ollama    Ai__Model=llama3.1           Ai__BaseUrl=http://host.docker.internal:11434/v1
+      #   OpenAI:    Ai__Provider=openai    Ai__Model=gpt-4o-mini        Ai__ApiKey=sk-...   (or OPENAI_API_KEY)
+      #   Anthropic: Ai__Provider=anthropic Ai__Model=claude-opus-4-8    Ai__ApiKey=sk-ant-... (or ANTHROPIC_API_KEY)
+      #   Mistral:   Ai__Provider=mistral   Ai__Model=mistral-small-latest Ai__ApiKey=...     (or MISTRAL_API_KEY)
+      #   LM Studio: Ai__Provider=lmstudio  Ai__Model=<loaded model>     Ai__BaseUrl=http://host.docker.internal:1234/v1
+      Ai__Provider: "lmstudio"
+      Ai__ApiKey: ""
+      Ai__BaseUrl: "http://host.docker.internal:1234/v1"
+      Ai__Model: "qwen/qwen3.6-35b-a3b"
     ports:
       - "5100:5100"
     depends_on:

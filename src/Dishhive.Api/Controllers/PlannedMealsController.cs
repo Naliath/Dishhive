@@ -1,6 +1,7 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
+using Dishhive.Api.Services.Suggestions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,11 +18,19 @@ namespace Dishhive.Api.Controllers;
 public class PlannedMealsController : ControllerBase
 {
     private readonly DishhiveDbContext _context;
+    private readonly IMealSuggestionService _suggestionService;
+    private readonly MealSuggestionRequestBuilder _suggestionRequestBuilder;
     private readonly ILogger<PlannedMealsController> _logger;
 
-    public PlannedMealsController(DishhiveDbContext context, ILogger<PlannedMealsController> logger)
+    public PlannedMealsController(
+        DishhiveDbContext context,
+        IMealSuggestionService suggestionService,
+        MealSuggestionRequestBuilder suggestionRequestBuilder,
+        ILogger<PlannedMealsController> logger)
     {
         _context = context;
+        _suggestionService = suggestionService;
+        _suggestionRequestBuilder = suggestionRequestBuilder;
         _logger = logger;
     }
 
@@ -43,6 +52,7 @@ public class PlannedMealsController : ControllerBase
             .AsNoTracking()
             .Include(m => m.Recipe)
             .Include(m => m.Attendees)
+            .Include(m => m.Ratings)
             .Where(m => m.Date >= from && m.Date <= to)
             .OrderBy(m => m.Date)
             .ThenBy(m => m.MealType)
@@ -64,6 +74,7 @@ public class PlannedMealsController : ControllerBase
             .AsNoTracking()
             .Include(m => m.Recipe)
             .Include(m => m.Attendees)
+            .Include(m => m.Ratings)
             .FirstOrDefaultAsync(m => m.Id == id);
 
         if (meal == null)
@@ -144,13 +155,173 @@ public class PlannedMealsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMeal(Guid id)
     {
-        var meal = await _context.PlannedMeals.FindAsync(id);
+        // Dependents loaded so cascade also applies on providers without FK
+        // enforcement (EF InMemory in tests); Postgres cascades via FK anyway
+        var meal = await _context.PlannedMeals
+            .Include(m => m.Attendees)
+            .Include(m => m.Ratings)
+            .FirstOrDefaultAsync(m => m.Id == id);
         if (meal == null)
         {
             return NotFound();
         }
 
         _context.PlannedMeals.Remove(meal);
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Whether AI week-plan suggestions are available (drives the planner UI)
+    /// </summary>
+    [HttpGet("suggestions/status")]
+    [ProducesResponseType(typeof(SuggestionStatusDto), StatusCodes.Status200OK)]
+    public ActionResult<SuggestionStatusDto> GetSuggestionStatus()
+    {
+        return Ok(new SuggestionStatusDto { Enabled = _suggestionService.IsEnabled });
+    }
+
+    /// <summary>
+    /// Propose dinners for the unplanned days of a week. Proposals only — nothing
+    /// is persisted; accepted suggestions are created via POST /api/plannedmeals.
+    /// Returns enabled=false with an empty list when AI is not configured.
+    /// </summary>
+    [HttpPost("suggestions")]
+    [ProducesResponseType(typeof(MealSuggestionsDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<MealSuggestionsDto>> SuggestWeek(
+        SuggestWeekRequestDto dto, CancellationToken cancellationToken)
+    {
+        if (!_suggestionService.IsEnabled)
+        {
+            return Ok(new MealSuggestionsDto { Enabled = false });
+        }
+
+        var request = await _suggestionRequestBuilder.BuildAsync(
+            dto.WeekStart, dto.AttendeeIds, cancellationToken);
+        var suggestions = await _suggestionService.SuggestAsync(request, cancellationToken);
+
+        var recipeTitles = request.KnownRecipes.ToDictionary(r => r.Id, r => r.Title);
+
+        return Ok(new MealSuggestionsDto
+        {
+            Enabled = true,
+            Suggestions = suggestions.Select(s => new MealSuggestionDto
+            {
+                Date = s.Date,
+                RecipeId = s.RecipeId,
+                RecipeTitle = s.RecipeId.HasValue ? recipeTitles.GetValueOrDefault(s.RecipeId.Value) : null,
+                DishName = s.DishName ?? string.Empty,
+                Reason = s.Reason
+            }).ToList()
+        });
+    }
+
+    /// <summary>
+    /// Mark a past meal as eaten or skipped; a null status clears the mark
+    /// </summary>
+    [HttpPut("{id:guid}/eaten")]
+    [ProducesResponseType(typeof(PlannedMealDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<PlannedMealDto>> SetEaten(Guid id, SetEatenDto dto)
+    {
+        var meal = await _context.PlannedMeals
+            .Include(m => m.Recipe)
+            .Include(m => m.Attendees)
+            .Include(m => m.Ratings)
+            .FirstOrDefaultAsync(m => m.Id == id);
+
+        if (meal == null)
+        {
+            return NotFound();
+        }
+
+        if (meal.Date > DateOnly.FromDateTime(DateTime.Today))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Meal is in the future",
+                Detail = "A meal can only be marked eaten or skipped on or after its planned date."
+            });
+        }
+
+        meal.Eaten = dto.Status;
+        await _context.SaveChangesAsync();
+
+        return Ok(ToDto(meal));
+    }
+
+    /// <summary>
+    /// Set a family member's 1–5 rating for a past meal; re-rating overwrites
+    /// </summary>
+    [HttpPut("{id:guid}/ratings/{memberId:guid}")]
+    [ProducesResponseType(typeof(PlannedMealDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<PlannedMealDto>> SetRating(Guid id, Guid memberId, SetRatingDto dto)
+    {
+        var meal = await _context.PlannedMeals
+            .Include(m => m.Recipe)
+            .Include(m => m.Attendees)
+            .Include(m => m.Ratings)
+            .FirstOrDefaultAsync(m => m.Id == id);
+
+        if (meal == null)
+        {
+            return NotFound();
+        }
+
+        if (meal.Date > DateOnly.FromDateTime(DateTime.Today))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Meal is in the future",
+                Detail = "A meal can only be rated on or after its planned date."
+            });
+        }
+
+        // The rater must exist but need not be an attendee (someone may have joined unplanned)
+        if (!await _context.FamilyMembers.AnyAsync(m => m.Id == memberId))
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Unknown family member",
+                Detail = $"Family member '{memberId}' does not exist."
+            });
+        }
+
+        var rating = meal.Ratings.FirstOrDefault(r => r.FamilyMemberId == memberId);
+        if (rating == null)
+        {
+            meal.Ratings.Add(new MealRating { FamilyMemberId = memberId, Rating = dto.Rating });
+        }
+        else
+        {
+            rating.Rating = dto.Rating;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(ToDto(meal));
+    }
+
+    /// <summary>
+    /// Remove a family member's rating from a meal
+    /// </summary>
+    [HttpDelete("{id:guid}/ratings/{memberId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteRating(Guid id, Guid memberId)
+    {
+        var rating = await _context.MealRatings
+            .FirstOrDefaultAsync(r => r.PlannedMealId == id && r.FamilyMemberId == memberId);
+
+        if (rating == null)
+        {
+            return NotFound();
+        }
+
+        _context.MealRatings.Remove(rating);
         await _context.SaveChangesAsync();
         return NoContent();
     }
@@ -235,6 +406,10 @@ public class PlannedMealsController : ControllerBase
         VagueInstruction = meal.VagueInstruction,
         FreezyItemRef = meal.FreezyItemRef,
         Notes = meal.Notes,
-        AttendeeIds = meal.Attendees.Select(a => a.FamilyMemberId).ToList()
+        Eaten = meal.Eaten,
+        AttendeeIds = meal.Attendees.Select(a => a.FamilyMemberId).ToList(),
+        Ratings = meal.Ratings
+            .Select(r => new MealRatingDto { FamilyMemberId = r.FamilyMemberId, Rating = r.Rating })
+            .ToList()
     };
 }

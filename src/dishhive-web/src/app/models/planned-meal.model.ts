@@ -34,6 +34,16 @@ export const COURSE_ORDER: Record<Course, number> = {
   [Course.Dessert]: 3
 };
 
+export enum EatenStatus {
+  Eaten = 0,
+  Skipped = 1
+}
+
+export interface MealRating {
+  familyMemberId: string;
+  rating: number;
+}
+
 export interface PlannedMeal {
   id: string;
   /** ISO date (yyyy-MM-dd) */
@@ -46,7 +56,10 @@ export interface PlannedMeal {
   vagueInstruction?: string;
   freezyItemRef?: string;
   notes?: string;
+  /** Whether the meal was actually cooked/eaten; null/undefined = not marked */
+  eaten?: EatenStatus | null;
   attendeeIds: string[];
+  ratings: MealRating[];
 }
 
 export interface CreatePlannedMeal {

@@ -28,6 +28,7 @@ public abstract class TestBase : IDisposable
     protected void ClearDatabase()
     {
         DbContext.FamilyMemberFavorites.RemoveRange(DbContext.FamilyMemberFavorites);
+        DbContext.MealRatings.RemoveRange(DbContext.MealRatings);
         DbContext.PlannedMealAttendees.RemoveRange(DbContext.PlannedMealAttendees);
         DbContext.PlannedMeals.RemoveRange(DbContext.PlannedMeals);
         DbContext.RecipeIngredients.RemoveRange(DbContext.RecipeIngredients);

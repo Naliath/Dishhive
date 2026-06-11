@@ -17,6 +17,8 @@ implementation checklist that is updated as work progresses.
 | [past-dishes-and-statistics.md](past-dishes-and-statistics.md) | History, favorites, frequency stats | week-planner |
 | [shopping-list-export.md](shopping-list-export.md) | Shopping list from the planned week | week-planner, recipe-store |
 | [demo-mode.md](demo-mode.md) | Seed demo recipes + household into an empty database | recipe-import, family-composition |
+| [meal-feedback.md](meal-feedback.md) | Mark meals eaten/skipped, per-member ratings | past-dishes-and-statistics |
+| [ai-week-planning.md](ai-week-planning.md) | LLM week suggestions (5 providers) + rules fallback | week-planner, meal-feedback, freezy-integration |
 
 Future ideas live in [`../../possible-features.md`](../../possible-features.md).
 The infrastructure foundation is planned in

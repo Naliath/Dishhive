@@ -20,12 +20,12 @@ with a realistic household and a filled recipe store so every page has something
 
 ## Seeded Data
 
-**Recipes** — 20 recipes scraped live from [Dagelijkse Kost](https://dagelijksekost.vrt.be)
-through the regular import pipeline (`IRecipeImportService`), so they get parsed
-ingredients, full steps and locally stored images. The set (in
-`Services/Demo/DemoData.cs`) spreads across meat, fish, vegetarian dishes, lunches and
-desserts. A URL that fails to import (offline, page changed) is logged and skipped; the
-demo works with fewer recipes.
+**Recipes** — 20 recipes from [Dagelijkse Kost](https://dagelijksekost.vrt.be) with parsed
+ingredients, full steps and locally stored images, read from the embedded
+`Services/Demo/demo-seed.json` so seeding needs no network access at runtime. The seed
+file is generated once via `dotnet run --project src/Dishhive.Api -- --generate-demo-seed`
+(re-run when the URL list in `Services/Demo/DemoData.cs` changes). The set spreads across
+meat, fish, vegetarian dishes, lunches and desserts.
 
 **Household** — the crew of the Rocinante (The Expanse):
 
@@ -39,10 +39,16 @@ demo works with fewer recipes.
 Favorites link to the imported recipes where possible (denormalized dish name as usual)
 plus a free-text favorite per member.
 
+**Past meals** — two weeks of past dinners (one per day, rotating through the seeded
+recipes, all four crew members attending), most marked eaten with deterministic 3–5 star
+ratings and one skipped day. This fills the history, statistics and meal-feedback pages
+and gives AI week suggestions real data on a fresh database.
+
 ## Implementation Checklist
 
 - [x] `Demo:Enabled` flag (appsettings default false, docker-compose default true)
 - [x] `DemoData` static dataset (20 URLs, 4 members, favorites, dietary needs)
 - [x] `DemoDataSeeder` background service with empty-database guard + seeded marker
-- [x] Tolerant import loop (per-URL failures logged, seeding continues)
+- [x] Pre-baked embedded seed file (`demo-seed.json`) + `--generate-demo-seed` generator
+- [x] Past dinners with eaten marks and ratings (history/statistics/AI demo data)
 - [x] Consistency tests on the dataset (`DemoDataTests`)

@@ -1,0 +1,33 @@
+.rating-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 280px;
+}
+
+.rating-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.member-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stars {
+  display: flex;
+}
+
+.star-button {
+  width: 36px;
+  height: 36px;
+  padding: 6px;
+
+  mat-icon {
+    color: var(--mat-sys-primary);
+  }
+}

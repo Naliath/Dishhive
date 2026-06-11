@@ -59,8 +59,22 @@ builder.Services.AddHttpClient<IFreezyClient, FreezyHttpClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(2);
 });
 
-// Extension point for future AI-assisted planning (no-op by design, see week-planner.md)
-builder.Services.AddSingleton<IMealSuggestionService, NoOpMealSuggestionService>();
+// AI week-plan suggestions (see docs/features/ai-week-planning.md): LLM-backed with
+// a deterministic rules fallback when Ai:Provider is configured, no-op otherwise.
+// Testing always gets the no-op so integration tests stay deterministic.
+var aiOptions = builder.Configuration.GetSection(AiOptions.SectionName).Get<AiOptions>() ?? new AiOptions();
+if (!builder.Environment.IsEnvironment("Testing") && aiOptions.IsConfigured)
+{
+    builder.Services.AddSingleton(aiOptions);
+    builder.Services.AddSingleton(_ => ChatClientFactory.Create(aiOptions));
+    builder.Services.AddSingleton<RulesMealSuggestionService>();
+    builder.Services.AddSingleton<IMealSuggestionService, LlmMealSuggestionService>();
+}
+else
+{
+    builder.Services.AddSingleton<IMealSuggestionService, NoOpMealSuggestionService>();
+}
+builder.Services.AddScoped<MealSuggestionRequestBuilder>();
 
 // Demo mode: seed Dagelijkse Kost recipes and a demo household into an empty
 // database when Demo:Enabled is set (see docs/features/demo-mode.md)

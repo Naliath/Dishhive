@@ -1,0 +1,26 @@
+<h2 mat-dialog-title>Rate {{ meal().dishName ?? 'this meal' }}</h2>
+
+<mat-dialog-content>
+  <div class="rating-rows">
+    @for (member of members; track member.id) {
+      <div class="rating-row">
+        <span class="member-name">{{ member.name }}</span>
+        <span class="stars">
+          @for (star of stars; track star) {
+            <button
+              mat-icon-button
+              class="star-button"
+              [attr.aria-label]="'Rate ' + star + ' of 5 for ' + member.name"
+              (click)="rate(member.id, star)">
+              <mat-icon>{{ star <= ratingOf(member.id) ? 'star' : 'star_border' }}</mat-icon>
+            </button>
+          }
+        </span>
+      </div>
+    }
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()">Done</button>
+</mat-dialog-actions>

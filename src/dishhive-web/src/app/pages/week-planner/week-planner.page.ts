@@ -12,11 +12,14 @@ import { forkJoin } from 'rxjs';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { FreezerService } from '../../services/freezer.service';
+import { MealSuggestionsService } from '../../services/meal-suggestions.service';
+import { MealSuggestion } from '../../models/meal-suggestion.model';
 import {
   COURSE_LABELS,
   COURSE_ORDER,
   Course,
   CreatePlannedMeal,
+  EatenStatus,
   MEAL_TYPE_LABELS,
   MealType,
   PlannedMeal
@@ -24,11 +27,17 @@ import {
 import { FamilyMember } from '../../models/family-member.model';
 import { FreezerSuggestions } from '../../models/frozen-item.model';
 import { MealSlotDialog, MealSlotDialogData } from '../../components/meal-slot-dialog/meal-slot-dialog';
+import {
+  SuggestionReviewDialog,
+  SuggestionReviewDialogData
+} from '../../components/suggestion-review-dialog/suggestion-review-dialog';
 
 interface PlannerDay {
   date: Date;
   iso: string;
   isToday: boolean;
+  /** Day has passed: eaten feedback becomes available */
+  isPast: boolean;
   /** All dishes planned for the day, in meal then serving order */
   meals: PlannedMeal[];
 }
@@ -69,6 +78,7 @@ export class WeekPlannerPage implements OnInit {
   readonly meals = signal<PlannedMeal[]>([]);
   readonly members = signal<FamilyMember[]>([]);
   readonly freezer = signal<FreezerSuggestions>({ enabled: false, items: [] });
+  readonly suggestionsEnabled = signal(false);
   readonly loading = signal(true);
 
   readonly weekEnd = computed(() => {
@@ -97,7 +107,7 @@ export class WeekPlannerPage implements OnInit {
       const iso = toIso(date);
       const meals = (mealsByDate.get(iso) ?? [])
         .sort((a, b) => a.mealType - b.mealType || COURSE_ORDER[a.course] - COURSE_ORDER[b.course]);
-      return { date, iso, isToday: iso === todayIso, meals };
+      return { date, iso, isToday: iso === todayIso, isPast: iso < todayIso, meals };
     });
   });
 
@@ -105,6 +115,7 @@ export class WeekPlannerPage implements OnInit {
     private plannedMealsService: PlannedMealsService,
     private familyMembersService: FamilyMembersService,
     private freezerService: FreezerService,
+    private mealSuggestionsService: MealSuggestionsService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar
   ) {}
@@ -112,11 +123,13 @@ export class WeekPlannerPage implements OnInit {
   ngOnInit(): void {
     forkJoin({
       members: this.familyMembersService.getMembers(),
-      freezer: this.freezerService.getSuggestions()
+      freezer: this.freezerService.getSuggestions(),
+      suggestions: this.mealSuggestionsService.getStatus()
     }).subscribe({
-      next: ({ members, freezer }) => {
+      next: ({ members, freezer, suggestions }) => {
         this.members.set(members);
         this.freezer.set(freezer);
+        this.suggestionsEnabled.set(suggestions.enabled);
       },
       error: () => this.snackBar.open('Could not load planner data', 'Dismiss', { duration: 4000 })
     });
@@ -184,6 +197,41 @@ export class WeekPlannerPage implements OnInit {
       });
   }
 
+  /** Opens the AI suggestion review dialog; accepted proposals become planned meals */
+  suggestWeek(): void {
+    const data: SuggestionReviewDialogData = { weekStart: toIso(this.weekStart()) };
+    this.dialog.open<SuggestionReviewDialog, SuggestionReviewDialogData, MealSuggestion[]>(
+      SuggestionReviewDialog, { data })
+      .afterClosed().subscribe(selected => {
+        if (!selected || selected.length === 0) {
+          return;
+        }
+
+        const householdIds = this.members().filter(m => !m.isGuest).map(m => m.id);
+        const creations = selected.map(suggestion => this.plannedMealsService.createMeal({
+          date: suggestion.date,
+          mealType: MealType.Dinner,
+          course: Course.Main,
+          recipeId: suggestion.recipeId,
+          dishName: suggestion.dishName,
+          familyMemberIds: householdIds
+        }));
+
+        forkJoin(creations).subscribe({
+          next: created => {
+            this.loadWeek();
+            this.snackBar.open(
+              `Added ${created.length} suggested dinner${created.length === 1 ? '' : 's'}`,
+              'Dismiss', { duration: 3000 });
+          },
+          error: () => {
+            this.loadWeek();
+            this.snackBar.open('Could not add all suggestions', 'Dismiss', { duration: 4000 });
+          }
+        });
+      });
+  }
+
   clearSlot(meal: PlannedMeal): void {
     this.plannedMealsService.deleteMeal(meal.id).subscribe({
       next: () => this.loadWeek(),
@@ -193,6 +241,19 @@ export class WeekPlannerPage implements OnInit {
 
   mealSummary(meal: PlannedMeal): string {
     return meal.dishName ?? meal.vagueInstruction ?? '';
+  }
+
+  isEaten(meal: PlannedMeal): boolean {
+    return meal.eaten === EatenStatus.Eaten;
+  }
+
+  /** One-tap eaten toggle on past days; skipping and rating live on the history page */
+  toggleEaten(meal: PlannedMeal): void {
+    const next = this.isEaten(meal) ? null : EatenStatus.Eaten;
+    this.plannedMealsService.setEaten(meal.id, next).subscribe({
+      next: updated => this.meals.update(meals => meals.map(m => m.id === updated.id ? updated : m)),
+      error: () => this.snackBar.open('Could not update the meal', 'Dismiss', { duration: 4000 })
+    });
   }
 
   /**

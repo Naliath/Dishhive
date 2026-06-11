@@ -3,6 +3,7 @@ using System;
 using Dishhive.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Dishhive.Api.Data.Migrations
 {
     [DbContext(typeof(DishhiveDbContext))]
-    partial class DishhiveDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260610203517_AddMealFeedback")]
+    partial class AddMealFeedback
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

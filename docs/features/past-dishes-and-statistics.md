@@ -18,7 +18,8 @@ planned dishes, per-member favorites, and statistics such as how often a dish wa
 - Mark a favorite directly from a past dish
 
 **Out of scope**
-- "Was it actually eaten / how was it rated" feedback loop (future feature)
+- "Was it actually eaten / how was it rated" feedback loop — now its own feature, see
+  [meal-feedback.md](meal-feedback.md)
 - Nutritional statistics
 - Charts beyond simple counts/lists initially (Freezy uses chart.js — can be added when a chart
   earns its place)

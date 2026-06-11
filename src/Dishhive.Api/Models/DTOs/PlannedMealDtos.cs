@@ -17,7 +17,27 @@ public class PlannedMealDto
     public string? VagueInstruction { get; set; }
     public string? FreezyItemRef { get; set; }
     public string? Notes { get; set; }
+    public EatenStatus? Eaten { get; set; }
     public List<Guid> AttendeeIds { get; set; } = new();
+    public List<MealRatingDto> Ratings { get; set; } = new();
+}
+
+public class MealRatingDto
+{
+    public Guid FamilyMemberId { get; set; }
+    public int Rating { get; set; }
+}
+
+/// <summary>Marks a meal as eaten or skipped; null clears the mark</summary>
+public class SetEatenDto
+{
+    public EatenStatus? Status { get; set; }
+}
+
+public class SetRatingDto
+{
+    [Range(1, 5)]
+    public int Rating { get; set; }
 }
 
 public class CreatePlannedMealDto

@@ -6,15 +6,9 @@ not copied blindly. Items graduate from this list into `docs/features/*.md` when
 
 ## Needed soon
 
-### AI-assisted week planning
-Implement a real provider behind the existing `IMealSuggestionService` seam: propose a week
-plan from family constraints/allergies, favorites, dish history (variety), vague instructions
-already on the plan, and expiring Freezy items. Likely an LLM-backed provider with a
-deterministic rules fallback. The seam exists; do not bolt AI on anywhere else.
-
-### Meal eaten / rating feedback
-Mark planned meals as actually cooked/eaten and let members rate them. Feeds statistics
-("planned 9×, loved 8×") and future AI suggestions.
+*(empty — AI-assisted week planning and meal eaten/rating feedback graduated to
+[docs/features/ai-week-planning.md](docs/features/ai-week-planning.md) and
+[docs/features/meal-feedback.md](docs/features/meal-feedback.md))*
 
 ## Small Scope Features
 

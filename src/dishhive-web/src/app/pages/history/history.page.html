@@ -27,7 +27,30 @@
               } @else {
                 <mat-icon aria-label="Dish">restaurant</mat-icon>
               }
-              <span>{{ mealSummary(meal) }}</span>
+              <span class="meal-name" [class.skipped]="meal.eaten === EatenStatus.Skipped">
+                {{ mealSummary(meal) }}
+              </span>
+              <span class="meal-feedback">
+                <button
+                  mat-icon-button
+                  class="feedback-button"
+                  [class.eaten]="meal.eaten === EatenStatus.Eaten"
+                  [class.skipped]="meal.eaten === EatenStatus.Skipped"
+                  [matTooltip]="eatenTooltip(meal)"
+                  (click)="cycleEaten(meal)">
+                  <mat-icon>{{ eatenIcon(meal) }}</mat-icon>
+                </button>
+                <button
+                  mat-button
+                  class="rate-button"
+                  matTooltip="Rate this meal"
+                  (click)="openRating(meal)">
+                  <mat-icon>{{ meal.ratings.length > 0 ? 'star' : 'star_border' }}</mat-icon>
+                  @if (averageRating(meal); as avg) {
+                    {{ avg }}
+                  }
+                </button>
+              </span>
             </div>
           }
         </mat-card-content>

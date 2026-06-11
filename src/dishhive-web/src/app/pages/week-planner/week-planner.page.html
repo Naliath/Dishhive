@@ -10,6 +10,12 @@
     <button mat-icon-button (click)="nextWeek()" aria-label="Next week">
       <mat-icon>chevron_right</mat-icon>
     </button>
+    @if (suggestionsEnabled()) {
+      <button mat-stroked-button (click)="suggestWeek()">
+        <mat-icon>auto_awesome</mat-icon>
+        Suggest week
+      </button>
+    }
     <a mat-stroked-button routerLink="/shopping-list" [queryParams]="shoppingListParams()">
       <mat-icon>shopping_cart</mat-icon>
       Shopping list
@@ -47,6 +53,14 @@
                     }
                     <span class="meal-name">{{ mealSummary(meal) }}</span>
                     <span class="meal-actions">
+                      @if (day.isPast) {
+                        <button mat-icon-button class="meal-action eaten-toggle"
+                                [class.eaten]="isEaten(meal)"
+                                (click)="toggleEaten(meal)"
+                                [attr.aria-label]="isEaten(meal) ? 'Eaten — tap to clear' : 'Mark as eaten'">
+                          <mat-icon>{{ isEaten(meal) ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+                        </button>
+                      }
                       <button mat-icon-button class="meal-action" (click)="openSlot(day, meal)"
                               aria-label="Edit dish">
                         <mat-icon>edit</mat-icon>

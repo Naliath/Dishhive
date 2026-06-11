@@ -19,6 +19,23 @@ table {
   background: transparent;
 }
 
+.rating-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: var(--mat-sys-tertiary);
+  }
+}
+
+.muted {
+  color: var(--mat-sys-outline);
+}
+
 .unspecified-note {
   margin: 0;
   color: var(--mat-sys-on-surface-variant);

@@ -2,6 +2,7 @@
 
 Future feature ideas for Dishhive. Functional inspiration drawn from the
 [Mealie](https://github.com/mealie-recipes/mealie) project — used for capability discovery,
+[KitchenOwn](https://github.com/TomBursch/kitchenowl) possible insipiration
 not copied blindly. Items graduate from this list into `docs/features/*.md` when they get planned.
 
 ## Fixes
@@ -43,9 +44,6 @@ existing API (Dishhive→Freezy direction preserved).
 ### Nutrition information
 Per-recipe nutrition (imported when sources provide it; manual otherwise). (Mealie: nutrition
 fields per recipe.)
-
-### Recipes scraping generalization
-Perhaps use one of these instead of a pure own implementation https://github.com/hhursev/recipe-scrapers, https://github.com/simfoley/RecipeScraper
 
 ## Large Scope Features
 

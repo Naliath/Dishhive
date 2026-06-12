@@ -135,6 +135,66 @@ public class RecipeImportServiceTests : IDisposable
         await act.Should().ThrowAsync<UnsupportedRecipeSourceException>();
     }
 
+    // -------------------------------------------------------------------------
+    // Provider precedence: dedicated providers win over the recipe-scrapers
+    // sidecar fallback; the fallback only sees sites nobody else handles
+    // -------------------------------------------------------------------------
+
+    private const string SidecarBaseUrl = "http://scraper:8000/";
+
+    private const string SidecarScrapeResponse = """
+        {
+          "title": "Fallback dish",
+          "ingredients": ["1 thing"],
+          "instructions": ["Do the thing."],
+          "yields": "2 servings",
+          "canonicalUrl": "https://unknown-site.test/dish"
+        }
+        """;
+
+    private RecipeImportService CreateServiceWithFallback(MockHttpMessageHandler handler)
+    {
+        var sidecarHttpClient = new HttpClient(handler) { BaseAddress = new Uri(SidecarBaseUrl) };
+        var fallback = new RecipeScrapersFallbackProvider(
+            new RecipeScrapersClient(sidecarHttpClient, NullLogger<RecipeScrapersClient>.Instance),
+            NullLogger<RecipeScrapersFallbackProvider>.Instance);
+
+        return new RecipeImportService(
+            new HttpClient(handler),
+            [new DagelijkseKostProvider(), fallback],
+            _context,
+            NullLogger<RecipeImportService>.Instance);
+    }
+
+    [Fact]
+    public async Task Import_SiteWithDedicatedProvider_DoesNotUseFallback()
+    {
+        var handler = FixtureHandler()
+            .RespondWith(SidecarBaseUrl, SidecarScrapeResponse, "application/json");
+        var service = CreateServiceWithFallback(handler);
+
+        var recipe = await service.ImportAsync(FixtureUrl);
+
+        recipe.SourceProvider.Should().Be("dagelijkse-kost");
+        handler.Requests.Should().NotContain(r => r.AbsoluteUri.StartsWith(SidecarBaseUrl));
+    }
+
+    [Fact]
+    public async Task Import_SiteWithoutDedicatedProvider_UsesScrapersFallback()
+    {
+        var handler = new MockHttpMessageHandler()
+            .RespondWith("https://unknown-site.test/dish", "<html>some page</html>")
+            .RespondWith(SidecarBaseUrl + "scrape", SidecarScrapeResponse, "application/json");
+        var service = CreateServiceWithFallback(handler);
+
+        var recipe = await service.ImportAsync("https://unknown-site.test/dish");
+
+        recipe.SourceProvider.Should().Be("recipe-scrapers");
+        recipe.Title.Should().Be("Fallback dish");
+        recipe.Servings.Should().Be(2);
+        recipe.Steps.Should().ContainSingle().Which.Instruction.Should().Be("Do the thing.");
+    }
+
     public void Dispose()
     {
         _context.Dispose();

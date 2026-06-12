@@ -39,8 +39,23 @@ else
     builder.Services.AddHealthChecks();
 }
 
-// Recipe import: pluggable source providers + import service with its own HttpClient
+// Recipe import: pluggable source providers + import service with its own HttpClient.
+// Dedicated providers are registered first; the recipe-scrapers sidecar fallback is
+// registered last so it only handles sites without a dedicated implementation
+// (RecipeImportService picks the first provider whose CanHandle matches).
 builder.Services.AddSingleton<IRecipeSourceProvider, DagelijkseKostProvider>();
+builder.Services.AddHttpClient<IRecipeScrapersClient, RecipeScrapersClient>(client =>
+{
+    var scraperBaseUrl = builder.Configuration["RecipeScrapers:BaseUrl"];
+    if (!string.IsNullOrWhiteSpace(scraperBaseUrl))
+    {
+        client.BaseAddress = new Uri(scraperBaseUrl.TrimEnd('/') + "/");
+    }
+    // Long ceiling for package updates (pip install); individual calls use shorter
+    // per-call timeouts inside RecipeScrapersClient
+    client.Timeout = TimeSpan.FromMinutes(6);
+});
+builder.Services.AddTransient<IRecipeSourceProvider, RecipeScrapersFallbackProvider>();
 builder.Services.AddHttpClient<IRecipeImportService, RecipeImportService>((serviceProvider, client) =>
 {
     var userAgent = builder.Configuration["RecipeImport:UserAgent"] ?? "Dishhive/1.0";

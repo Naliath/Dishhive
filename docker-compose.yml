@@ -63,6 +63,9 @@ services:
       Ai__ApiKey: ""
       Ai__BaseUrl: "http://host.docker.internal:1234/v1"
       Ai__Model: "qwen/qwen3.6-35b-a3b"
+      # Recipe-scrapers sidecar: fallback import provider for sites without a
+      # dedicated C# provider. Leave empty to disable the fallback.
+      RecipeScrapers__BaseUrl: "http://scraper:8000"
     ports:
       - "5100:5100"
     depends_on:
@@ -75,9 +78,38 @@ services:
       retries: 3
       start_period: 40s
 
+  # ===========================================================================
+  # Recipe-Scraper Sidecar (Python recipe-scrapers fallback import provider)
+  # ===========================================================================
+  # The app stays fully functional when this service is down — only fallback
+  # imports (sites without a dedicated provider) become unavailable.
+  # Package updates installed via the settings UI land in the scraper_lib
+  # volume and survive container restarts and recreation.
+  scraper:
+    build:
+      context: .
+      dockerfile: docker/scraper.Dockerfile
+    container_name: dishhive-scraper
+    restart: unless-stopped
+    ports:
+      # Host access for local development (dotnet run with
+      # RecipeScrapers__BaseUrl=http://localhost:5101); the app container
+      # reaches it internally at http://scraper:8000
+      - "5101:8000"
+    volumes:
+      - scraper_lib:/data/lib
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
 # =============================================================================
 # Volumes
 # =============================================================================
 volumes:
   postgres_data:
+    driver: local
+  scraper_lib:
     driver: local

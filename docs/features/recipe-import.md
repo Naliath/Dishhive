@@ -67,12 +67,14 @@ POST /api/recipes/import { url }
         │
         ▼
 RecipeImportService
-        │  selects by CanHandle(url)
+        │  selects the FIRST provider whose CanHandle(url) matches
         ▼
-IRecipeSourceProvider                       // one per source
-├── DagelijkseKostProvider                  // key "dagelijkse-kost"
+IRecipeSourceProvider                       // one per source, registration order matters
+├── DagelijkseKostProvider                  // key "dagelijkse-kost" (dedicated, wins)
 │       └── uses SchemaOrgRecipeExtractor   // shared JSON-LD engine
-└── (future: GenericSchemaOrgProvider as fallback for any site with Recipe JSON-LD)
+└── RecipeScrapersFallbackProvider          // key "recipe-scrapers", registered LAST
+        └── RecipeScrapersClient → scraper sidecar container (Python recipe-scrapers,
+            src/dishhive-scraper; any http(s) site when RecipeScrapers:BaseUrl is set)
 
 provider returns ImportedRecipe (provider-agnostic)
         │
@@ -82,6 +84,13 @@ IngredientLineParser (quantity/unit/name, locale-aware: "0,5" decimal comma)
         ▼
 mapped to Recipe + RecipeIngredient + RecipeStep, SourceRawData = raw JSON-LD
 ```
+
+Sites with a dedicated provider never reach the fallback; the sidecar only handles
+sites Dishhive has no own implementation for (see
+[RECIPE_SCRAPERS_ADOPTION_PLAN.md](../plans/RECIPE_SCRAPERS_ADOPTION_PLAN.md)).
+The sidecar's status, installed recipe-scrapers version, update check (PyPI), and
+one-click package update live in the settings page integrations widget
+(`GET /api/integrations/status`, `GET/POST /api/integrations/scraper/...`).
 
 ```csharp
 public interface IRecipeSourceProvider
@@ -186,3 +195,6 @@ Plus `IngredientLineParser` unit tests. Tests are offline — no network depende
 - [x] Import endpoint integration test (full HTTP pipeline, mocked outbound fetch:
       created recipe, local image serving, unsupported source, unreachable page)
 - [x] Import form on recipes page (URL input + navigate to imported recipe)
+- [x] recipe-scrapers sidecar container (`src/dishhive-scraper`, FastAPI wrapper) as
+      fallback provider for sites without a dedicated implementation
+- [x] Scraper integration status + package version check/update in settings widget

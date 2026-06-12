@@ -19,8 +19,8 @@
         <mat-form-field appearance="outline" class="import-field">
           <mat-label>Recipe URL</mat-label>
           <input matInput name="importUrl" [(ngModel)]="importUrl"
-                 placeholder="https://dagelijksekost.vrt.be/gerechten/...">
-          <mat-hint>Supported source: Dagelijkse Kost</mat-hint>
+                 placeholder="https://...">
+
         </mat-form-field>
         <button mat-flat-button type="submit" [disabled]="importing() || !importUrl.trim()">
           @if (importing()) {

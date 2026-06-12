@@ -49,6 +49,54 @@
           </span>
         </div>
 
+        <div class="integration-row">
+          <mat-icon class="integration-icon">travel_explore</mat-icon>
+          <div class="integration-info">
+            <div class="integration-name">Recipe Import Scraper</div>
+            @if (status.scraper.configured) {
+              <div class="integration-detail">
+                recipe-scrapers
+                @if (status.scraper.packageVersion) {
+                  v{{ status.scraper.packageVersion }}
+                }
+                &middot; fallback importer for sites without a dedicated implementation
+              </div>
+              @if (status.scraper.baseUrl) {
+                <div class="integration-detail muted">{{ status.scraper.baseUrl }}</div>
+              }
+              @if (!status.scraper.reachable) {
+                <div class="integration-detail warn">Could not reach the scraper service — check that the scraper container is running</div>
+              } @else {
+                <div class="scraper-actions">
+                  @if (updating()) {
+                    <div class="integration-detail">Updating package and restarting the service…</div>
+                  } @else if (versionCheck(); as check) {
+                    @if (check.updateAvailable) {
+                      <div class="integration-detail">v{{ check.latestVersion }} is available (installed: v{{ check.installedVersion }})</div>
+                      <button mat-stroked-button (click)="installUpdate()">Update to v{{ check.latestVersion }}</button>
+                    } @else {
+                      <div class="integration-detail muted">Up to date (v{{ check.installedVersion }})</div>
+                    }
+                  } @else {
+                    <button mat-stroked-button (click)="checkForUpdates()" [disabled]="checkingVersion()">
+                      {{ checkingVersion() ? 'Checking…' : 'Check for updates' }}
+                    </button>
+                  }
+                  @if (scraperMessage(); as message) {
+                    <div class="integration-detail">{{ message }}</div>
+                  }
+                </div>
+              }
+            } @else {
+              <div class="integration-detail muted">Set RecipeScrapers__BaseUrl to enable importing from hundreds of recipe sites</div>
+            }
+          </div>
+          <span class="status-chip" [class]="chipClass(status.scraper)">
+            <mat-icon>{{ chipIcon(status.scraper) }}</mat-icon>
+            {{ chipLabel(status.scraper) }}
+          </span>
+        </div>
+
       </div>
     } @else {
       <p class="integration-loading">Loading…</p>

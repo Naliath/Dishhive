@@ -1,0 +1,8 @@
+# Service framework (baked into the image, not user-updatable)
+fastapi>=0.115
+uvicorn>=0.34
+packaging>=24
+
+# The scraping engine. This is only the *default* version: POST /update installs a
+# newer one into the /data/lib volume, which PYTHONPATH puts ahead of this install.
+recipe-scrapers==15.11.0

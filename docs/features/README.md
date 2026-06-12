@@ -22,6 +22,7 @@ implementation checklist that is updated as work progresses.
 | [dietary-tags.md](dietary-tags.md) | Structured allergy/diet tags replacing free text | family-composition |
 | [recipe-organization.md](recipe-organization.md) | Recipe tags, category filter, cookbooks (saved filters) | recipe-store |
 | [pwa-support.md](pwa-support.md) | Installable app + offline read of plan and shopping list | week-planner, shopping-list-export |
+| [recipe-import-export.md](recipe-import-export.md) | Library backup/restore as schema.org Recipe JSON | recipe-store, recipe-import |
 
 Future ideas live in [`../../possible-features.md`](../../possible-features.md).
 The infrastructure foundation is planned in

@@ -16,15 +16,18 @@ public class RecipesController : ControllerBase
 {
     private readonly DishhiveDbContext _context;
     private readonly IRecipeImportService _importService;
+    private readonly IRecipeExchangeService _exchangeService;
     private readonly ILogger<RecipesController> _logger;
 
     public RecipesController(
         DishhiveDbContext context,
         IRecipeImportService importService,
+        IRecipeExchangeService exchangeService,
         ILogger<RecipesController> logger)
     {
         _context = context;
         _importService = importService;
+        _exchangeService = exchangeService;
         _logger = logger;
     }
 
@@ -315,6 +318,52 @@ public class RecipesController : ControllerBase
         {
             _logger.LogWarning(ex, "Failed to fetch recipe page {Url}", dto.Url);
             return UnprocessableEntity(new ProblemDetails { Title = "Could not fetch page", Detail = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Downloads the whole recipe library as a schema.org Recipe JSON file —
+    /// the interchange format other recipe managers understand. Locally stored
+    /// images are embedded so the file is self-contained.
+    /// </summary>
+    [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportRecipes()
+    {
+        var json = await _exchangeService.ExportAsync(HttpContext.RequestAborted);
+        var fileName = $"dishhive-recipes-{DateTime.UtcNow:yyyy-MM-dd}.json";
+        return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
+    }
+
+    /// <summary>
+    /// Imports recipes from a schema.org Recipe JSON file (including Dishhive's own
+    /// export). Recipes with a known source URL are updated; recipes whose title is
+    /// already in the library are skipped; the rest are created.
+    /// </summary>
+    [HttpPost("import/file")]
+    [ProducesResponseType(typeof(RecipeFileImportResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<RecipeFileImportResultDto>> ImportRecipesFile(IFormFile? file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new ProblemDetails { Title = "No file", Detail = "Select a JSON file to import." });
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var result = await _exchangeService.ImportAsync(stream, HttpContext.RequestAborted);
+            return Ok(result);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = "Not a JSON file", Detail = ex.Message });
+        }
+        catch (RecipeExtractionFailedException ex)
+        {
+            return UnprocessableEntity(new ProblemDetails { Title = "No recipes in file", Detail = ex.Message });
         }
     }
 

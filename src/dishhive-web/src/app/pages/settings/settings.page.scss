@@ -16,3 +16,20 @@ h1 {
   gap: 8px;
   padding-block-start: 8px;
 }
+
+.exchange-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.skipped-title {
+  margin-block: 12px 4px;
+  font-weight: 500;
+}
+
+.skipped-list {
+  margin: 0;
+  padding-inline-start: 20px;
+  color: var(--mat-sys-on-surface-variant);
+}

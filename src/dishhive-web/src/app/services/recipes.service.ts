@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { CreateRecipe, Recipe, RecipeFilter, RecipeListItem, RecipeTag } from '../models/recipe.model';
+import { CreateRecipe, Recipe, RecipeFileImportResult, RecipeFilter, RecipeListItem, RecipeTag } from '../models/recipe.model';
 
 @Injectable({ providedIn: 'root' })
 export class RecipesService {
@@ -69,6 +69,16 @@ export class RecipesService {
   /** Import a recipe from a supported external source URL (see docs/features/recipe-import.md) */
   importRecipe(url: string): Observable<Recipe> {
     return this.http.post<Recipe>(`${this.apiUrl}/import`, { url });
+  }
+
+  /** Where the library export (schema.org Recipe JSON) downloads from */
+  readonly exportUrl = `${this.apiUrl}/export`;
+
+  /** Import recipes from a schema.org Recipe JSON file, including Dishhive's own export */
+  importRecipesFile(file: File): Observable<RecipeFileImportResult> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return this.http.post<RecipeFileImportResult>(`${this.apiUrl}/import/file`, form);
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {

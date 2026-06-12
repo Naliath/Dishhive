@@ -4,6 +4,9 @@ Future feature ideas for Dishhive. Functional inspiration drawn from the
 [Mealie](https://github.com/mealie-recipes/mealie) project — used for capability discovery,
 not copied blindly. Items graduate from this list into `docs/features/*.md` when they get planned.
 
+## Fixes
+Better PWA icon and update fav.ico file
+
 ## Small Scope Features
 
 ### Generic schema.org import fallback
@@ -43,9 +46,6 @@ fields per recipe.)
 
 ### Recipes scraping generalization
 Perhaps use one of these instead of a pure own implementation https://github.com/hhursev/recipe-scrapers, https://github.com/simfoley/RecipeScraper
-
-### Recipes import/export
-Figure out if there is an well used format and adopt that for an import/export function (perhaps from the settings page)
 
 ## Large Scope Features
 

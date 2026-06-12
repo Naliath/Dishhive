@@ -150,6 +150,27 @@ public class ImportRecipeRequestDto
     public string Url { get; set; } = string.Empty;
 }
 
+/// <summary>Outcome of importing a recipe file (schema.org Recipe JSON)</summary>
+public class RecipeFileImportResultDto
+{
+    public int Created { get; set; }
+
+    public int Updated { get; set; }
+
+    public int Skipped => SkippedRecipes.Count;
+
+    public int Total => Created + Updated + Skipped;
+
+    public List<RecipeFileImportSkippedDto> SkippedRecipes { get; set; } = new();
+}
+
+public class RecipeFileImportSkippedDto
+{
+    public string Title { get; set; } = string.Empty;
+
+    public string Reason { get; set; } = string.Empty;
+}
+
 public class RecipeTagDto
 {
     public Guid Id { get; set; }

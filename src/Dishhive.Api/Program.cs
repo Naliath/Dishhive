@@ -48,6 +48,15 @@ builder.Services.AddHttpClient<IRecipeImportService, RecipeImportService>((servi
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 
+// Recipe library exchange: schema.org JSON export + file import (image downloads reuse
+// the same outbound HTTP configuration as URL import)
+builder.Services.AddHttpClient<IRecipeExchangeService, RecipeExchangeService>((serviceProvider, client) =>
+{
+    var userAgent = builder.Configuration["RecipeImport:UserAgent"] ?? "Dishhive/1.0";
+    client.DefaultRequestHeaders.Add("User-Agent", userAgent);
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+
 // Freezy integration (optional; disabled when Freezy:BaseUrl is empty)
 builder.Services.AddHttpClient<IFreezyClient, FreezyHttpClient>(client =>
 {

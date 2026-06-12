@@ -82,6 +82,15 @@ export interface CreateRecipe {
   tags: string[];
 }
 
+/** Outcome of importing a recipe file (schema.org Recipe JSON) */
+export interface RecipeFileImportResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  total: number;
+  skippedRecipes: { title: string; reason: string }[];
+}
+
 export interface Recipe {
   id: string;
   title: string;

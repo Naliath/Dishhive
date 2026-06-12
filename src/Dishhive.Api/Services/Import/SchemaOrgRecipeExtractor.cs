@@ -46,6 +46,51 @@ public static partial class SchemaOrgRecipeExtractor
         return null;
     }
 
+    /// <summary>
+    /// Collects every Recipe node in a JSON-LD document (single object, array, or @graph) —
+    /// used by file import, where one file can carry a whole library.
+    /// The returned elements are views into the caller's JsonDocument.
+    /// </summary>
+    public static List<JsonElement> FindRecipeNodes(JsonElement root)
+    {
+        var nodes = new List<JsonElement>();
+        CollectRecipeNodes(root, nodes);
+        return nodes;
+    }
+
+    /// <summary>
+    /// Maps a single Recipe node without a backing page URL (file import).
+    /// Returns null when the node has no name — there is nothing useful to import.
+    /// </summary>
+    public static ImportedRecipe? MapRecipeNode(JsonElement recipe)
+    {
+        return GetString(recipe, "name") == null ? null : MapRecipe(recipe, sourceUrl: null);
+    }
+
+    private static void CollectRecipeNodes(JsonElement element, List<JsonElement> nodes)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                if (HasType(element, "Recipe"))
+                {
+                    nodes.Add(element);
+                }
+                else if (element.TryGetProperty("@graph", out var graph))
+                {
+                    CollectRecipeNodes(graph, nodes);
+                }
+                break;
+
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    CollectRecipeNodes(item, nodes);
+                }
+                break;
+        }
+    }
+
     private static JsonElement? FindRecipeNode(JsonElement element)
     {
         switch (element.ValueKind)
@@ -95,9 +140,9 @@ public static partial class SchemaOrgRecipeExtractor
         };
     }
 
-    private static ImportedRecipe MapRecipe(JsonElement recipe, Uri sourceUrl)
+    private static ImportedRecipe MapRecipe(JsonElement recipe, Uri? sourceUrl)
     {
-        var title = GetString(recipe, "name") ?? sourceUrl.AbsoluteUri;
+        var title = GetString(recipe, "name") ?? sourceUrl!.AbsoluteUri;
 
         return new ImportedRecipe
         {
@@ -108,7 +153,7 @@ public static partial class SchemaOrgRecipeExtractor
             Servings = GetServings(recipe),
             ImageUrl = GetImageUrl(recipe),
             VideoUrl = GetVideoUrl(recipe),
-            SourceUrl = GetString(recipe, "@id") ?? GetString(recipe, "url") ?? sourceUrl.AbsoluteUri,
+            SourceUrl = GetString(recipe, "@id") ?? GetString(recipe, "url") ?? sourceUrl?.AbsoluteUri,
             PrepTimeMinutes = GetDurationMinutes(recipe, "prepTime"),
             CookTimeMinutes = GetDurationMinutes(recipe, "cookTime"),
             TotalTimeMinutes = GetDurationMinutes(recipe, "totalTime"),

@@ -72,62 +72,14 @@ public class RecipeImportService : IRecipeImportService
         }
 
         ApplyImportedRecipe(recipe, imported, sourceUrl, provider.Key);
-        await DownloadImageAsync(recipe, cancellationToken);
+        await RecipeImageDownloader.TryDownloadAsync(_httpClient, recipe, _logger, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
         return recipe;
     }
 
-    /// <summary>
-    /// Downloads the recipe image and stores it on the entity so recipes don't depend on
-    /// expiring source URLs (signed Google Storage links on Dagelijkse Kost).
-    /// Failures are logged and tolerated: the remote URL remains as fallback.
-    /// </summary>
-    private async Task DownloadImageAsync(Recipe recipe, CancellationToken cancellationToken)
-    {
-        const int maxImageBytes = 5 * 1024 * 1024;
-
-        if (string.IsNullOrWhiteSpace(recipe.ImageUrl)
-            || !Uri.TryCreate(recipe.ImageUrl, UriKind.Absolute, out var imageUri))
-        {
-            return;
-        }
-
-        try
-        {
-            using var response = await _httpClient.GetAsync(imageUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            response.EnsureSuccessStatusCode();
-
-            var contentType = response.Content.Headers.ContentType?.MediaType;
-            if (contentType == null || !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogWarning("Recipe image {Url} has non-image content type {ContentType}; skipping download",
-                    imageUri, contentType ?? "(none)");
-                return;
-            }
-
-            if (response.Content.Headers.ContentLength > maxImageBytes)
-            {
-                _logger.LogWarning("Recipe image {Url} exceeds {MaxBytes} bytes; skipping download", imageUri, maxImageBytes);
-                return;
-            }
-
-            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-            if (bytes.Length == 0 || bytes.Length > maxImageBytes)
-            {
-                return;
-            }
-
-            recipe.ImageData = bytes;
-            recipe.ImageContentType = contentType;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-        {
-            _logger.LogWarning(ex, "Could not download recipe image {Url}; keeping remote URL only", imageUri);
-        }
-    }
-
-    private static void ApplyImportedRecipe(Recipe recipe, ImportedRecipe imported, string sourceUrl, string providerKey)
+    /// <summary>Maps an extracted recipe onto the entity (shared with file import)</summary>
+    internal static void ApplyImportedRecipe(Recipe recipe, ImportedRecipe imported, string? sourceUrl, string providerKey)
     {
         recipe.Title = imported.Title;
         recipe.Description = imported.Description;

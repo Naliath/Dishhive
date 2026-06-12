@@ -23,6 +23,40 @@
 
 <app-integrations-status />
 
+<mat-card appearance="outlined" class="settings-card">
+  <mat-card-header>
+    <mat-icon mat-card-avatar>import_export</mat-icon>
+    <mat-card-title>Recipe library backup</mat-card-title>
+    <mat-card-subtitle>
+      Export downloads every recipe (photos included) as a schema.org JSON file — the
+      format other recipe apps understand. Import reads such a file back: known recipes
+      are kept, new ones are added.
+    </mat-card-subtitle>
+  </mat-card-header>
+  <mat-card-content>
+    <div class="exchange-actions">
+      <a mat-stroked-button [href]="recipesService.exportUrl" download>
+        <mat-icon>download</mat-icon>
+        Export recipes
+      </a>
+      <button mat-stroked-button (click)="fileInput.click()" [disabled]="importing()">
+        <mat-icon>upload</mat-icon>
+        {{ importing() ? 'Importing…' : 'Import recipes' }}
+      </button>
+      <input #fileInput type="file" accept=".json,application/json" hidden
+             (change)="importRecipes(fileInput.files); fileInput.value = ''" />
+    </div>
+    @if (importSkipped().length > 0) {
+      <p class="skipped-title">Skipped during the last import:</p>
+      <ul class="skipped-list">
+        @for (skipped of importSkipped(); track skipped.title) {
+          <li>{{ skipped.title }} — {{ skipped.reason }}</li>
+        }
+      </ul>
+    }
+  </mat-card-content>
+</mat-card>
+
 @if (pwaService.canInstall()) {
   <mat-card appearance="outlined" class="settings-card">
     <mat-card-header>

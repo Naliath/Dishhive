@@ -1,7 +1,8 @@
 # Feature: Recipe Import / Scraping
 
 **Status legend:** `[ ]` = new · `[~]` = in progress · `[x]` = done
-**Related:** [recipe-store.md](recipe-store.md), [measurement-preferences.md](measurement-preferences.md)
+**Related:** [recipe-store.md](recipe-store.md), [measurement-preferences.md](measurement-preferences.md),
+[recipe-import-export.md](recipe-import-export.md) (file-based library exchange reusing this extractor)
 
 ## Feature Goal
 

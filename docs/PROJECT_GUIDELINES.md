@@ -12,8 +12,10 @@ decisions; the shared Angular and .NET standards are mirrored in [angular/](angu
   never shared with Freezy
 - Angular Material 21 with Material Design 3 theming — Green/Yellow palettes
   (Freezy uses Azure/Cyan; distinct identity, same theming system)
-- No PWA/service worker initially (deliberate deviation from Freezy; meal planning is not an
-  in-store flow — see `plans/INFRASTRUCTURE_SETUP_PLAN.md` §2)
+- PWA following Freezy's service-worker setup: installable, offline **read** access to the
+  week plan and shopping list; no offline write queue (see `features/pwa-support.md`;
+  added later — the initial setup deliberately skipped it, see
+  `plans/INFRASTRUCTURE_SETUP_PLAN.md` §2)
 - Recipe imports go through pluggable `IRecipeSourceProvider` implementations
   (see `features/recipe-import.md`)
 - Freezy integration only through `IFreezyClient` over Freezy's REST API; optional and

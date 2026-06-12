@@ -23,6 +23,25 @@
 
 <app-integrations-status />
 
+@if (pwaService.canInstall()) {
+  <mat-card appearance="outlined" class="settings-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>install_mobile</mat-icon>
+      <mat-card-title>Install app</mat-card-title>
+      <mat-card-subtitle>
+        Add Dishhive to your home screen for quick access and offline viewing of the
+        week plan and shopping list.
+      </mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <button mat-flat-button (click)="installApp()">
+        <mat-icon>download</mat-icon>
+        Install Dishhive
+      </button>
+    </mat-card-content>
+  </mat-card>
+}
+
 <mat-card appearance="outlined" class="settings-card">
   <mat-card-header>
     <mat-icon mat-card-avatar>info</mat-icon>

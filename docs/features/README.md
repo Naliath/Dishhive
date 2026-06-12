@@ -21,6 +21,7 @@ implementation checklist that is updated as work progresses.
 | [ai-week-planning.md](ai-week-planning.md) | LLM week suggestions (5 providers) + rules fallback | week-planner, meal-feedback, freezy-integration |
 | [dietary-tags.md](dietary-tags.md) | Structured allergy/diet tags replacing free text | family-composition |
 | [recipe-organization.md](recipe-organization.md) | Recipe tags, category filter, cookbooks (saved filters) | recipe-store |
+| [pwa-support.md](pwa-support.md) | Installable app + offline read of plan and shopping list | week-planner, shopping-list-export |
 
 Future ideas live in [`../../possible-features.md`](../../possible-features.md).
 The infrastructure foundation is planned in

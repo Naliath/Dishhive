@@ -33,10 +33,6 @@ items, shared across devices.
 Full-screen step-by-step view with kept-awake screen and step timers, like Dagelijkse Kost's
 "kookmodus". (Mealie: recipe step view with timers.)
 
-### PWA support
-Installable app + offline read access to the week plan and shopping list, following Freezy's
-service-worker setup (deliberate initial deviation, see infrastructure plan §2).
-
 ### Freezy write-back
 When a freezer-sourced meal is marked eaten, decrement/consume the item in Freezy via its
 existing API (Dishhive→Freezy direction preserved).
@@ -55,11 +51,9 @@ Figure out if there is an well used format and adopt that for an import/export f
 
 ### Meal plan rules & automation
 Recurring rules ("Friday = pizza day", "max 2× meat per week") feeding the suggestion engine.
-(Mealie: mealplan rules with random recipes by category.)
 
 ### Pantry / stock awareness
-Track staples at home and subtract them from shopping lists; integrate Freezy stock as one of
-several storage locations.
+Track staples at home and subtract them from shopping lists; integrate Freezy stock as one of several storage locations.
 
 ### External integrations
 Calendar export (iCal) of the week menu; grocery-store or Home Assistant integrations.

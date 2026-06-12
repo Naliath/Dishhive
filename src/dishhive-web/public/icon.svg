@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#43a047"/>
+      <stop offset="100%" stop-color="#1b5e20"/>
+    </linearGradient>
+    <filter id="pshadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#000000" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <!-- Rounded-square background (standard app icon crop) -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Hexagonal plate — the dish AND the hive cell in one shape -->
+  <!-- flat-top hexagon, r=170, center (256,256) -->
+  <!-- 0°:(426,256) 60°:(341,403) 120°:(171,403) 180°:(86,256) 240°:(171,109) 300°:(341,109) -->
+  <polygon
+    points="426,256 341,403 171,403 86,256 171,109 341,109"
+    fill="#f1f8e9"
+    filter="url(#pshadow)"/>
+
+  <!-- Plate inner rim (decorative ring matching hex geometry) -->
+  <!-- r=132, same center -->
+  <polygon
+    points="388,256 322,370 190,370 124,256 190,142 322,142"
+    fill="none"
+    stroke="#c8e6c9"
+    stroke-width="5.5"/>
+
+  <!-- Subtle honeycomb cell in the negative space between utensils — the hive motif -->
+  <!-- flat-top hex, r=22, center (256,182) -->
+  <polygon
+    points="278,182 267,201 245,201 234,182 245,163 267,163"
+    fill="none"
+    stroke="#a5d6a7"
+    stroke-width="3"
+    opacity="0.65"/>
+
+  <!-- FORK (left side of plate) -->
+  <g fill="#2e7d32">
+    <!-- Three tines -->
+    <rect x="184" y="166" width="8.5" height="57" rx="4.25"/>
+    <rect x="196.5" y="166" width="8.5" height="57" rx="4.25"/>
+    <rect x="209" y="166" width="8.5" height="57" rx="4.25"/>
+    <!-- Tine-to-handle connector: tapers 33 px wide → 11 px wide -->
+    <path d="M184,223 Q184,256 195,270 L206,270 Q217,256 217,223 Z"/>
+    <!-- Handle -->
+    <rect x="195" y="269" width="11" height="116" rx="5.5"/>
+  </g>
+
+  <!-- KNIFE (right side of plate) -->
+  <g fill="#2e7d32">
+    <!-- Blade: straight spine left, gently curved edge right, slight point at tip -->
+    <path d="M302,166 L315,171 Q319,218 315,270 L302,270 Z"/>
+    <!-- Handle -->
+    <rect x="302" y="269" width="12.5" height="116" rx="6.25"/>
+  </g>
+</svg>

@@ -30,7 +30,7 @@
 } @else {
   <div class="week-grid">
     @for (day of days(); track day.iso) {
-      <mat-card appearance="outlined" [class.today]="day.isToday">
+      <mat-card appearance="raised" [class.today]="day.isToday">
         <mat-card-header>
           <mat-card-title>{{ day.date | date:'EEEE' }}</mat-card-title>
           <mat-card-subtitle>{{ day.date | date:'d MMMM' }}</mat-card-subtitle>

@@ -5,7 +5,7 @@
       <mat-icon>add</mat-icon>
       New recipe
     </a>
-    <button mat-flat-button (click)="toggleImport()">
+    <button mat-stroked-button (click)="toggleImport()">
       <mat-icon>download</mat-icon>
       Import from URL
     </button>
@@ -13,7 +13,7 @@
 </div>
 
 @if (importVisible()) {
-  <mat-card class="import-card" appearance="outlined">
+  <mat-card class="import-card" appearance="raised">
     <mat-card-content>
       <form class="import-form" (ngSubmit)="import()">
         <mat-form-field appearance="outline" class="import-field">
@@ -117,7 +117,7 @@
 } @else {
   <div class="recipe-grid">
     @for (recipe of recipes(); track recipe.id) {
-      <mat-card appearance="outlined" [routerLink]="['/recipes', recipe.id]" class="recipe-card">
+      <mat-card appearance="raised" [routerLink]="['/recipes', recipe.id]" class="recipe-card">
         @if (manualCookbooks().length > 0) {
           <button mat-icon-button class="card-menu-btn" [matMenuTriggerFor]="cardMenu"
                   (click)="$event.stopPropagation(); $event.preventDefault()"

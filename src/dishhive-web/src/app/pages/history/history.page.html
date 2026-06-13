@@ -13,7 +13,7 @@
 } @else {
   <div class="history-list">
     @for (day of historyDays(); track day.date) {
-      <mat-card appearance="outlined">
+      <mat-card appearance="raised">
         <mat-card-header>
           <mat-card-title>{{ day.date | date:'EEEE d MMMM' }}</mat-card-title>
         </mat-card-header>

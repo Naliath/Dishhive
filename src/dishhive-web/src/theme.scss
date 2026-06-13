@@ -1,10 +1,13 @@
 /**
  * Custom Angular Material Theme
- * Green/Yellow palettes (Dishhive's culinary identity) with automatic light/dark mode
- * Based on Material Design 3 guidelines, following the Freezy theming conventions
+ * Amber/Cyan palettes (Dishhive culinary identity) with automatic light/dark mode.
+ * Primary: custom amber palette seeded from #f9b318 (matches the logo/icon).
+ * Tertiary: cyan — a cool complement to amber, used for ratings and diet tags.
+ * Based on Material Design 3 guidelines, following the Freezy theming conventions.
  */
 
 @use '@angular/material' as mat;
+@use 'palette.amber' as dh;
 
 // ============================================================================
 // Theme Configuration
@@ -15,11 +18,10 @@ html {
   // Enable automatic light/dark mode based on system preference
   color-scheme: light dark;
 
-  // Apply Green primary palette with modern styling
   @include mat.theme((
     color: (
-      primary: mat.$green-palette,
-      tertiary: mat.$yellow-palette,
+      primary: dh.$amber-palette,
+      tertiary: mat.$cyan-palette,
       theme-type: color-scheme,
     ),
     typography: (

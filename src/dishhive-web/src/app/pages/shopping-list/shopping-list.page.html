@@ -20,7 +20,7 @@
     </div>
   } @else {
     @if (shoppingList.items.length > 0) {
-      <mat-card appearance="outlined">
+      <mat-card appearance="raised">
         <mat-card-content>
           <ul class="shopping-items">
             @for (item of shoppingList.items; track item.name) {
@@ -36,7 +36,7 @@
     }
 
     @if (shoppingList.reminders.length > 0) {
-      <mat-card appearance="outlined" class="reminders-card">
+      <mat-card appearance="raised" class="reminders-card">
         <mat-card-header>
           <mat-icon mat-card-avatar>lightbulb</mat-icon>
           <mat-card-title>Still to decide</mat-card-title>

@@ -9,7 +9,7 @@
 </div>
 
 @if (formVisible()) {
-  <mat-card class="member-form-card" appearance="outlined">
+  <mat-card class="member-form-card" appearance="raised">
     <mat-card-header>
       <mat-card-title>{{ editingId() ? 'Edit member' : 'New member' }}</mat-card-title>
     </mat-card-header>
@@ -149,7 +149,7 @@
 } @else {
   <div class="member-grid">
     @for (member of members(); track member.id) {
-      <mat-card appearance="outlined">
+      <mat-card appearance="raised">
         <mat-card-header>
           <mat-card-title>
             {{ member.name }}

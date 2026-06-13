@@ -5,17 +5,10 @@ Future feature ideas for Dishhive. Functional inspiration drawn from the
 [KitchenOwn](https://github.com/TomBursch/kitchenowl) possible insipiration
 not copied blindly. Items graduate from this list into `docs/features/*.md` when they get planned.
 
-## Fixes
-Better PWA icon and update fav.ico file
-
 ## Small Scope Features
 
-### Generic schema.org import fallback
-Register a catch-all `GenericSchemaOrgProvider` so any site with valid Recipe JSON-LD can be
-imported without a dedicated provider. (Mealie's URL import works this way.)
-
-### Copy previous week
-One-click duplicate of a past week's plan into the current week as a starting point.
+### Light and dark theme
+Implement a light and dark theme like is already present in freezy. Freezy implementation does have a bug that should be fixed there as well. If you select light and then switch back to auto it will be dark if that is the system color but still show light in the text.
 
 ### Recipe scaling in the UI
 Servings stepper on the recipe detail page that rescales displayed ingredient quantities

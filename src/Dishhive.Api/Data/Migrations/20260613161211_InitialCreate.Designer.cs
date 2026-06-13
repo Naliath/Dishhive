@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Dishhive.Api.Data.Migrations
 {
     [DbContext(typeof(DishhiveDbContext))]
-    [Migration("20260612133031_AddCollectionMembership")]
-    partial class AddCollectionMembership
+    [Migration("20260613161211_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

@@ -12,14 +12,40 @@ namespace Dishhive.Api.Data.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "Cookbooks",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Cookbooks", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "DietaryTags",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    Name = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    Kind = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DietaryTags", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "FamilyMembers",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
                     Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     IsGuest = table.Column<bool>(type: "boolean", nullable: false),
-                    Allergies = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    DietaryConstraints = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     PreferenceNotes = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
@@ -44,6 +70,8 @@ namespace Dishhive.Api.Data.Migrations
                     Category = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     Keywords = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     ImageUrl = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    ImageData = table.Column<byte[]>(type: "bytea", nullable: true),
+                    ImageContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     VideoUrl = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     SourceUrl = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     SourceProvider = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
@@ -54,6 +82,19 @@ namespace Dishhive.Api.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Recipes", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RecipeTags",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    Name = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RecipeTags", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -71,17 +112,95 @@ namespace Dishhive.Api.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "FamilyMemberDietaryTags",
+                columns: table => new
+                {
+                    FamilyMemberId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DietaryTagId = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FamilyMemberDietaryTags", x => new { x.FamilyMemberId, x.DietaryTagId });
+                    table.ForeignKey(
+                        name: "FK_FamilyMemberDietaryTags_DietaryTags_DietaryTagId",
+                        column: x => x.DietaryTagId,
+                        principalTable: "DietaryTags",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_FamilyMemberDietaryTags_FamilyMembers_FamilyMemberId",
+                        column: x => x.FamilyMemberId,
+                        principalTable: "FamilyMembers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "CookbookEntries",
+                columns: table => new
+                {
+                    CookbookId = table.Column<Guid>(type: "uuid", nullable: false),
+                    RecipeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AddedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CookbookEntries", x => new { x.CookbookId, x.RecipeId });
+                    table.ForeignKey(
+                        name: "FK_CookbookEntries_Cookbooks_CookbookId",
+                        column: x => x.CookbookId,
+                        principalTable: "Cookbooks",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_CookbookEntries_Recipes_RecipeId",
+                        column: x => x.RecipeId,
+                        principalTable: "Recipes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "FamilyMemberFavorites",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    FamilyMemberId = table.Column<Guid>(type: "uuid", nullable: false),
+                    RecipeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DishName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FamilyMemberFavorites", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_FamilyMemberFavorites_FamilyMembers_FamilyMemberId",
+                        column: x => x.FamilyMemberId,
+                        principalTable: "FamilyMembers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_FamilyMemberFavorites_Recipes_RecipeId",
+                        column: x => x.RecipeId,
+                        principalTable: "Recipes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "PlannedMeals",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
                     Date = table.Column<DateOnly>(type: "date", nullable: false),
                     MealType = table.Column<int>(type: "integer", nullable: false),
+                    Course = table.Column<int>(type: "integer", nullable: false),
                     RecipeId = table.Column<Guid>(type: "uuid", nullable: true),
                     DishName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     VagueInstruction = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     FreezyItemRef = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     Notes = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Eaten = table.Column<int>(type: "integer", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
                 },
@@ -142,6 +261,57 @@ namespace Dishhive.Api.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "RecipeTagAssignments",
+                columns: table => new
+                {
+                    RecipeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    RecipeTagId = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RecipeTagAssignments", x => new { x.RecipeId, x.RecipeTagId });
+                    table.ForeignKey(
+                        name: "FK_RecipeTagAssignments_RecipeTags_RecipeTagId",
+                        column: x => x.RecipeTagId,
+                        principalTable: "RecipeTags",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_RecipeTagAssignments_Recipes_RecipeId",
+                        column: x => x.RecipeId,
+                        principalTable: "Recipes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "MealRatings",
+                columns: table => new
+                {
+                    PlannedMealId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FamilyMemberId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Rating = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_MealRatings", x => new { x.PlannedMealId, x.FamilyMemberId });
+                    table.ForeignKey(
+                        name: "FK_MealRatings_FamilyMembers_FamilyMemberId",
+                        column: x => x.FamilyMemberId,
+                        principalTable: "FamilyMembers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_MealRatings_PlannedMeals_PlannedMealId",
+                        column: x => x.PlannedMealId,
+                        principalTable: "PlannedMeals",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "PlannedMealAttendees",
                 columns: table => new
                 {
@@ -166,6 +336,38 @@ namespace Dishhive.Api.Data.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_CookbookEntries_RecipeId",
+                table: "CookbookEntries",
+                column: "RecipeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Cookbooks_Name",
+                table: "Cookbooks",
+                column: "Name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DietaryTags_Name_Kind",
+                table: "DietaryTags",
+                columns: new[] { "Name", "Kind" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FamilyMemberDietaryTags_DietaryTagId",
+                table: "FamilyMemberDietaryTags",
+                column: "DietaryTagId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FamilyMemberFavorites_FamilyMemberId",
+                table: "FamilyMemberFavorites",
+                column: "FamilyMemberId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FamilyMemberFavorites_RecipeId",
+                table: "FamilyMemberFavorites",
+                column: "RecipeId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_FamilyMembers_IsActive",
                 table: "FamilyMembers",
                 column: "IsActive");
@@ -176,6 +378,11 @@ namespace Dishhive.Api.Data.Migrations
                 column: "IsGuest");
 
             migrationBuilder.CreateIndex(
+                name: "IX_MealRatings_FamilyMemberId",
+                table: "MealRatings",
+                column: "FamilyMemberId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_PlannedMealAttendees_FamilyMemberId",
                 table: "PlannedMealAttendees",
                 column: "FamilyMemberId");
@@ -184,12 +391,6 @@ namespace Dishhive.Api.Data.Migrations
                 name: "IX_PlannedMeals_Date",
                 table: "PlannedMeals",
                 column: "Date");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PlannedMeals_Date_MealType",
-                table: "PlannedMeals",
-                columns: new[] { "Date", "MealType" },
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_PlannedMeals_DishName",
@@ -221,11 +422,34 @@ namespace Dishhive.Api.Data.Migrations
                 name: "IX_RecipeSteps_RecipeId",
                 table: "RecipeSteps",
                 column: "RecipeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RecipeTagAssignments_RecipeTagId",
+                table: "RecipeTagAssignments",
+                column: "RecipeTagId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RecipeTags_Name",
+                table: "RecipeTags",
+                column: "Name",
+                unique: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "CookbookEntries");
+
+            migrationBuilder.DropTable(
+                name: "FamilyMemberDietaryTags");
+
+            migrationBuilder.DropTable(
+                name: "FamilyMemberFavorites");
+
+            migrationBuilder.DropTable(
+                name: "MealRatings");
+
             migrationBuilder.DropTable(
                 name: "PlannedMealAttendees");
 
@@ -236,13 +460,25 @@ namespace Dishhive.Api.Data.Migrations
                 name: "RecipeSteps");
 
             migrationBuilder.DropTable(
+                name: "RecipeTagAssignments");
+
+            migrationBuilder.DropTable(
                 name: "UserSettings");
+
+            migrationBuilder.DropTable(
+                name: "Cookbooks");
+
+            migrationBuilder.DropTable(
+                name: "DietaryTags");
 
             migrationBuilder.DropTable(
                 name: "FamilyMembers");
 
             migrationBuilder.DropTable(
                 name: "PlannedMeals");
+
+            migrationBuilder.DropTable(
+                name: "RecipeTags");
 
             migrationBuilder.DropTable(
                 name: "Recipes");

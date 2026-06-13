@@ -13,10 +13,9 @@ referenceable from planning instructions as `#[Name]`.
 
 > **History (June 2026):** cookbooks were originally *saved filters* (search + category
 > + tags). That allowed no real curation — grouping required contorting tags or filter
-> names — so they were replaced by explicit-membership collections. The old filter rows
-> were dropped in the `AddCollectionMembership` migration (no conversion; decided
-> deliberately). Dynamic slicing stays with tags, search and category. The entity keeps
-> the `Cookbook` name in code/DB; the UI says "Collections".
+> names — so they were replaced by explicit-membership collections (no data carried over;
+> decided deliberately). Dynamic slicing stays with tags, search and category. The entity
+> keeps the `Cookbook` name in code/DB; the UI says "Collections".
 
 ## Model
 
@@ -84,8 +83,7 @@ referenceable from planning instructions as `#[Name]`.
 
 - [x] `RecipeTag` + `RecipeTagAssignment` entities, DbContext config
 - [x] Recipe DTOs/endpoints with tag sync + orphan cleanup; category/tag filters
-- [x] `Cookbook` + `CookbookEntry` explicit membership, `AddCollectionMembership`
-      migration (drops the old saved-filter rows and columns)
+- [x] `Cookbook` + `CookbookEntry` explicit membership in the EF migration
 - [x] Collections CRUD + membership endpoints + `cookbookId` recipe filter
 - [x] Auto collections (`AutoCollectionProvider`) in list/detail/filter/mentions
 - [x] Demo seed collections (Easy Weekday Dishes, Comfort Food, Feestelijk)

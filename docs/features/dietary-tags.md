@@ -38,13 +38,6 @@ Tags have no CRUD of their own; the pool always reflects real usage:
 - Consumers: the AI suggestion prompt lists tags per member ("allergies: Shellfish;
   constraints: Vegetarian"), the meal-slot dialog shows attendee tags as planning hints.
 
-## Migration of Existing Data
-
-`AddDietaryTags` converts before dropping the old columns: comma-separated free-text
-values become individual tags (trimmed, deduplicated case-insensitively across members,
-capped at 50 chars) with member links; `Down()` restores the free-text columns by
-re-joining tag names. Verified against a seeded old-schema database.
-
 ## Frontend
 
 - Family form: chip inputs (Enter/comma to add) with autocomplete from the shared tag
@@ -56,7 +49,7 @@ re-joining tag names. Verified against a seeded old-schema database.
 ## Implementation Checklist
 
 - [x] `DietaryTag` + `FamilyMemberDietaryTag` entities, DbContext config, unique (Name, Kind)
-- [x] `AddDietaryTags` migration with free-text → tags data conversion (and reverse in Down)
+- [x] `DietaryTag` / `FamilyMemberDietaryTag` schema in the EF migration
 - [x] Member DTOs/endpoints on tag lists; find-or-create sync + orphan cleanup
 - [x] `GET /api/dietarytags` for autocomplete
 - [x] AI prompt + demo data on structured tags

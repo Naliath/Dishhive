@@ -38,7 +38,6 @@ MealRating                              // composite PK, like PlannedMealAttende
 
 - A rater must exist but need **not** be an attendee (someone may have joined unplanned).
 - Feedback only applies to meals on or before today (400 for future dates).
-- Migration: `AddMealFeedback`.
 
 ## Backend
 
@@ -63,7 +62,7 @@ MealRating                              // composite PK, like PlannedMealAttende
 
 ## Implementation Checklist
 
-- [x] `EatenStatus` + `MealRating` entities, DbContext config, `AddMealFeedback` migration
+- [x] `EatenStatus` + `MealRating` entities, DbContext config, EF migration
 - [x] Eaten/rating endpoints + validation (future date, rating range, unknown member)
 - [x] Statistics aggregates (times eaten, average rating, loved count, member feedback)
 - [x] Integration tests (feedback endpoints, statistics aggregates, cascade)

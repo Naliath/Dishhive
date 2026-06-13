@@ -25,6 +25,36 @@
 
 <mat-card appearance="outlined" class="settings-card">
   <mat-card-header>
+    <mat-icon mat-card-avatar>auto_awesome</mat-icon>
+    <mat-card-title>Automatic collections</mat-card-title>
+    <mat-card-subtitle>
+      Built-in collections computed from your library (top rated, quick dishes, each
+      member's favorites). Disabled ones are hidden from the recipes page, filters and
+      #-references when planning.
+    </mat-card-subtitle>
+  </mat-card-header>
+  <mat-card-content>
+    @if (autoCollections().length === 0) {
+      <p class="auto-empty">No automatic collections available.</p>
+    } @else {
+      <div class="auto-collection-list">
+        @for (collection of autoCollections(); track collection.id) {
+          <div class="auto-collection-row">
+            <mat-slide-toggle
+              [checked]="collection.enabled"
+              (change)="toggleAutoCollection(collection, $event.checked)">
+              {{ collection.name }}
+            </mat-slide-toggle>
+            <span class="auto-collection-count">{{ collection.recipeCount }} recipes</span>
+          </div>
+        }
+      </div>
+    }
+  </mat-card-content>
+</mat-card>
+
+<mat-card appearance="outlined" class="settings-card">
+  <mat-card-header>
     <mat-icon mat-card-avatar>import_export</mat-icon>
     <mat-card-title>Recipe library backup</mat-card-title>
     <mat-card-subtitle>

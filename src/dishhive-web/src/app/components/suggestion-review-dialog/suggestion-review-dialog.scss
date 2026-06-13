@@ -92,3 +92,9 @@
   max-width: min(420px, 80vw);
   color: var(--mat-sys-on-surface-variant);
 }
+
+.mention-count {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-inline-start: 6px;
+}

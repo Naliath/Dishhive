@@ -175,6 +175,60 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
+    public void BuildUserPrompt_CollectionConstraints_GetTheirOwnBlock()
+    {
+        var request = Request() with
+        {
+            CollectionConstraints =
+            [
+                new CollectionConstraint
+                {
+                    Name = "Easy Weekday Dishes",
+                    RecipeTitles = ["Wrap", "Pasta pesto"],
+                    Dates = [WeekStart.AddDays(4)]
+                },
+                new CollectionConstraint
+                {
+                    Name = "Comfort Food",
+                    RecipeTitles = ["Stew"],
+                    Dates = [] // referenced from the global instructions
+                }
+            ]
+        };
+
+        var prompt = LlmMealSuggestionService.BuildUserPrompt(request);
+
+        prompt.Should().Contain("Referenced collections:");
+        prompt.Should().Contain("\"Easy Weekday Dishes\" (for 2026-06-19): \"Wrap\", \"Pasta pesto\"");
+        prompt.Should().Contain("\"Comfort Food\" (general instructions): \"Stew\"");
+    }
+
+    [Fact]
+    public async Task Suggest_OffListPickOnConstrainedDay_IsKept()
+    {
+        // Enforcement is soft: an off-list dish is logged but never dropped —
+        // the review dialog lets the user discard it, an empty day would be worse
+        var chatClient = new FakeChatClient(
+            """
+            {"suggestions":[
+              {"date":"2026-06-15","dishName":"Not in collection","recipeTitle":null,"reason":null}
+            ]}
+            """);
+
+        var request = Request(daysToFill: [WeekStart]) with
+        {
+            CollectionConstraints =
+            [
+                new CollectionConstraint { Name = "X", RecipeTitles = ["Wrap"], Dates = [WeekStart] }
+            ]
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().ContainSingle().Which.DishName.Should().Be("Not in collection");
+    }
+
+    [Fact]
     public async Task Suggest_DuplicateDishOnSameDay_IsDeduplicated()
     {
         var chatClient = new FakeChatClient(

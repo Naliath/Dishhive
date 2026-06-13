@@ -149,6 +149,52 @@ public class RecipeExchangeIntegrationTests : TestBase
     }
 
     [Fact]
+    public async Task Export_IncludesCollectionMemberships()
+    {
+        var recipe = FullRecipe();
+        DbContext.Recipes.Add(recipe);
+        var cookbook = new Cookbook { Name = "Comfort Food" };
+        cookbook.Entries.Add(new CookbookEntry { Cookbook = cookbook, Recipe = recipe });
+        DbContext.Cookbooks.Add(cookbook);
+        await DbContext.SaveChangesAsync();
+
+        var export = await Client.GetStringAsync("/api/recipes/export");
+
+        using var document = JsonDocument.Parse(export);
+        var node = document.RootElement.GetProperty("@graph")[0];
+        node.GetProperty("dishhive:collections").EnumerateArray()
+            .Select(c => c.GetString()).Should().Equal("Comfort Food");
+    }
+
+    [Fact]
+    public async Task Import_CollectionMemberships_RecreatesCollectionsByName()
+    {
+        const string json = """
+            {
+              "@type": "Recipe",
+              "name": "Wrap met kip",
+              "recipeIngredient": ["1 wrap"],
+              "recipeInstructions": [{ "@type": "HowToStep", "text": "Rol op." }],
+              "dishhive:collections": ["Easy Weekday Dishes", "Snel [kapot]"]
+            }
+            """;
+
+        var result = await ImportFileAsync(json);
+        result.Created.Should().Be(1);
+
+        var cookbooks = await Client.GetFromJsonAsync<List<CookbookDto>>("/api/cookbooks");
+        // the bracketed name is invalid (mention delimiter) and skipped
+        var manual = cookbooks!.Where(c => c.Kind == "manual").ToList();
+        var collection = manual.Should().ContainSingle().Subject;
+        collection.Name.Should().Be("Easy Weekday Dishes");
+        collection.RecipeCount.Should().Be(1);
+
+        var members = await Client.GetFromJsonAsync<List<RecipeListItemDto>>(
+            $"/api/cookbooks/{collection.Id}/recipes");
+        members!.Should().ContainSingle().Which.Title.Should().Be("Wrap met kip");
+    }
+
+    [Fact]
     public async Task Import_KnownSourceUrl_UpdatesInsteadOfDuplicating()
     {
         var existing = FullRecipe();

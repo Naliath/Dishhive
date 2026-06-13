@@ -18,27 +18,32 @@ export interface RecipeTag {
   name: string;
 }
 
-/** A cookbook: a named, saved recipe filter */
+/**
+ * A collection: a named set of explicitly curated recipes. Manual collections are
+ * user-managed; auto collections are computed read-only sets with slug ids
+ * (e.g. "auto-quick") instead of a Guid.
+ */
 export interface Cookbook {
   id: string;
   name: string;
-  searchTerm?: string;
-  category?: string;
-  tags: string[];
+  kind: 'manual' | 'auto';
+  recipeCount: number;
 }
 
-export interface CreateCookbook {
+/** A computed auto collection with its enabled state (settings management) */
+export interface AutoCollectionInfo {
+  id: string;
   name: string;
-  searchTerm?: string;
-  category?: string;
-  tags: string[];
+  recipeCount: number;
+  enabled: boolean;
 }
 
-/** Recipe library filter; cookbooks store exactly this shape */
+/** Recipe library filter */
 export interface RecipeFilter {
   search?: string;
   category?: string;
   tags: string[];
+  cookbookId?: string;
 }
 
 export interface RecipeIngredient {
@@ -114,4 +119,6 @@ export interface Recipe {
   steps: RecipeStep[];
   /** Organization tag names (user-curated) */
   tags: string[];
+  /** Ids of the manual collections this recipe belongs to */
+  cookbookIds: string[];
 }

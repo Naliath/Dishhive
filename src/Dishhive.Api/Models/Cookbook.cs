@@ -3,10 +3,11 @@ using System.ComponentModel.DataAnnotations;
 namespace Dishhive.Api.Models;
 
 /// <summary>
-/// A curated "cookbook": a named, saved recipe filter (search term + category +
-/// tags). Selecting a cookbook in the UI applies its filter to the recipe library.
-/// Tags are stored by name (not FK) so a cookbook never keeps an unused tag alive
-/// and survives tag pool changes — a vanished tag simply matches nothing.
+/// A collection: a named set of explicitly curated recipes. A recipe can be in any
+/// number of collections. Collections replace the earlier saved-filter cookbooks
+/// (see docs/features/recipe-organization.md); dynamic slicing stays with tags and
+/// search. Names may not contain square brackets — they delimit the #[Name] mention
+/// syntax in planning instruction fields (see docs/features/ai-week-planning.md).
 /// </summary>
 public class Cookbook
 {
@@ -16,18 +17,23 @@ public class Cookbook
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>Title/keyword search term of the saved filter</summary>
-    [MaxLength(200)]
-    public string? SearchTerm { get; set; }
-
-    /// <summary>Category of the saved filter (matches Recipe.Category)</summary>
-    [MaxLength(100)]
-    public string? Category { get; set; }
-
-    /// <summary>Tag names of the saved filter; recipes must carry all of them</summary>
-    public List<string> Tags { get; set; } = [];
+    public List<CookbookEntry> Entries { get; set; } = [];
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>Explicit membership of a recipe in a collection</summary>
+public class CookbookEntry
+{
+    public Guid CookbookId { get; set; }
+
+    public Cookbook? Cookbook { get; set; }
+
+    public Guid RecipeId { get; set; }
+
+    public Recipe? Recipe { get; set; }
+
+    public DateTime AddedAt { get; set; } = DateTime.UtcNow;
 }

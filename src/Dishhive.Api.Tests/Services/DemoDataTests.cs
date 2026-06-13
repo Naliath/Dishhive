@@ -35,6 +35,23 @@ public class DemoDataTests
     }
 
     [Fact]
+    public void Collections_ReferenceSeededRecipeUrls_AndHaveValidNames()
+    {
+        DemoData.Collections.Should().NotBeEmpty();
+        DemoData.Collections.Select(c => c.Name).Should().OnlyHaveUniqueItems();
+
+        foreach (var collection in DemoData.Collections)
+        {
+            // Brackets delimit #[Name] references in planning instructions
+            collection.Name.Should().NotContainAny("[", "]");
+            collection.RecipeUrls.Should().NotBeEmpty();
+            collection.RecipeUrls.Should().OnlyHaveUniqueItems();
+            collection.RecipeUrls.Should().BeSubsetOf(DemoData.RecipeUrls,
+                $"members of '{collection.Name}' must link to recipes the demo seeder imports");
+        }
+    }
+
+    [Fact]
     public void Members_FavoriteRecipes_ReferenceSeededRecipeUrls()
     {
         foreach (var member in DemoData.Members)

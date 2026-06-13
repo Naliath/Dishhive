@@ -13,12 +13,13 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Observable, forkJoin } from 'rxjs';
 import { RecipesService } from '../../services/recipes.service';
+import { CookbooksService } from '../../services/cookbooks.service';
 import { MeasurementService } from '../../services/measurement.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { StatisticsService } from '../../services/statistics.service';
 import { MealRatingDialog, MealRatingDialogData } from '../../components/meal-rating-dialog/meal-rating-dialog';
-import { Recipe } from '../../models/recipe.model';
+import { Cookbook, Recipe } from '../../models/recipe.model';
 import { DishStatistic } from '../../models/statistics.model';
 import { FamilyMember, FamilyMemberFavorite } from '../../models/family-member.model';
 
@@ -78,10 +79,21 @@ export class RecipeDetailPage implements OnInit {
   readonly otherMembers = computed(() =>
     this.members().filter(m => this.favoriteEntry(m.id) === null));
 
+  /** Manual collections, split by this recipe's membership */
+  private readonly manualCookbooks = computed(() =>
+    this.cookbooks().filter(c => c.kind === 'manual'));
+  readonly memberOfCookbooks = computed(() =>
+    this.manualCookbooks().filter(c => this.recipe()?.cookbookIds.includes(c.id)));
+  readonly availableCookbooks = computed(() =>
+    this.manualCookbooks().filter(c => !this.recipe()?.cookbookIds.includes(c.id)));
+
+  private readonly cookbooks = signal<Cookbook[]>([]);
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private recipesService: RecipesService,
+    private cookbooksService: CookbooksService,
     private measurementService: MeasurementService,
     private familyMembersService: FamilyMembersService,
     private plannedMealsService: PlannedMealsService,
@@ -115,6 +127,33 @@ export class RecipeDetailPage implements OnInit {
       error: () => { /* non-critical */ }
     });
     this.loadFavorites();
+    this.cookbooksService.getCookbooks().subscribe({
+      next: cookbooks => this.cookbooks.set(cookbooks),
+      error: () => { /* non-critical */ }
+    });
+  }
+
+  /** Adds or removes this recipe in a manual collection */
+  toggleCookbook(cookbook: Cookbook): void {
+    const recipe = this.recipe();
+    if (!recipe) {
+      return;
+    }
+
+    const isMember = recipe.cookbookIds.includes(cookbook.id);
+    const request: Observable<unknown> = isMember
+      ? this.cookbooksService.removeRecipe(cookbook.id, recipe.id)
+      : this.cookbooksService.addRecipes(cookbook.id, [recipe.id]);
+
+    request.subscribe({
+      next: () => {
+        const cookbookIds = isMember
+          ? recipe.cookbookIds.filter(id => id !== cookbook.id)
+          : [...recipe.cookbookIds, cookbook.id];
+        this.recipe.set({ ...recipe, cookbookIds });
+      },
+      error: () => this.snackBar.open('Could not update the collection', 'Dismiss', { duration: 4000 })
+    });
   }
 
   private loadFavorites(): void {

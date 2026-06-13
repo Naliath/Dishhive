@@ -99,6 +99,7 @@ else
 {
     builder.Services.AddSingleton<IMealSuggestionService, NoOpMealSuggestionService>();
 }
+builder.Services.AddScoped<CollectionMentionResolver>();
 builder.Services.AddScoped<MealSuggestionRequestBuilder>();
 
 // Demo mode: seed Dagelijkse Kost recipes and a demo household into an empty
@@ -110,6 +111,9 @@ if (!builder.Environment.IsEnvironment("Testing"))
 
 // Shopping list generation (computed on demand, nothing persisted)
 builder.Services.AddScoped<IShoppingListService, ShoppingListService>();
+
+// Computed read-only collections (Top rated, Quick, member favorites, …)
+builder.Services.AddScoped<Dishhive.Api.Services.Collections.AutoCollectionProvider>();
 
 // Controllers
 builder.Services.AddControllers();

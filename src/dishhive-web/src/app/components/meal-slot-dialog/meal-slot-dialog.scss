@@ -51,6 +51,32 @@
   gap: 8px;
 }
 
+// "Surprise me" chips: tap to fill the slot with a random collection member
+.collection-pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-start: 10px;
+
+  .collection-pick-chip {
+    font-size: 12px;
+    height: 30px;
+    padding-inline: 10px;
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
+
+.mention-count {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-inline-start: 6px;
+}
+
 .expiry-warning {
   color: var(--mat-sys-tertiary);
 }

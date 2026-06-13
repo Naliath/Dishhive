@@ -1,6 +1,12 @@
 namespace Dishhive.Api.Services.Demo;
 
 /// <summary>
+/// A demo collection; members reference entries of <see cref="DemoData.RecipeUrls"/>
+/// so they link to the seeded recipes.
+/// </summary>
+public record DemoCollection(string Name, IReadOnlyList<string> RecipeUrls);
+
+/// <summary>
 /// A demo household member; favorite recipes reference entries of
 /// <see cref="DemoData.RecipeUrls"/> so they link to the imported recipes.
 /// </summary>
@@ -47,6 +53,39 @@ public static class DemoData
         Base + "cheesecake-met-aardbeien-en-coulis-van-aardbei",
         Base + "havermoutcrumble-rabarber-gember",
         Base + "eton-mess-frambozen-violette"
+    ];
+
+    /// <summary>
+    /// Demo collections over the seeded recipes, so the collections feature (and the
+    /// #[Name] planning references) can be tried straight away.
+    /// </summary>
+    public static readonly IReadOnlyList<DemoCollection> Collections =
+    [
+        new DemoCollection("Easy Weekday Dishes",
+        [
+            Base + "pasta-half-en-half",
+            Base + "kip-in-romige-tomatensaus-met-gebakken-aardappelen-en-sla",
+            Base + "courgette-fetaburger-tomatensla-rode-ui-orzo",
+            Base + "pad-khee-mao-drunken-noodles",
+            Base + "loaded-fries-pulled-chicken-jalapenomaiyonaise"
+        ]),
+
+        new DemoCollection("Comfort Food",
+        [
+            Base + "lasagne-verde",
+            Base + "kiprollade-ei-champignonsaus-kroketten-kropsla",
+            Base + "lamsschenkel-bier-asperges-geroosterde-aardappelen",
+            Base + "loaded-fries-pulled-chicken-jalapenomaiyonaise"
+        ]),
+
+        new DemoCollection("Feestelijk",
+        [
+            Base + "gambas-saffraanrijst-salsa-pimiento-del-piquillo",
+            Base + "kalfsoester-looksaus-broccolini-puree",
+            Base + "kabeljauw-met-aspergepuree-en-hollandaise-met-daslook",
+            Base + "cheesecake-met-aardbeien-en-coulis-van-aardbei",
+            Base + "eton-mess-frambozen-violette"
+        ])
     ];
 
     /// <summary>

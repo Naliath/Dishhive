@@ -59,6 +59,17 @@
               }
             </mat-action-list>
           }
+          @if (collections().length > 0) {
+            <div class="collection-pick-row" aria-label="Pick from a collection">
+              @for (collection of collections(); track collection.id) {
+                <button mat-stroked-button class="collection-pick-chip" type="button"
+                        [disabled]="picking()" (click)="surpriseFrom(collection)">
+                  <mat-icon>shuffle</mat-icon>
+                  {{ collection.name }}
+                </button>
+              }
+            </div>
+          }
         }
       }
       @case ('dish') {
@@ -73,7 +84,19 @@
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Vague instruction</mat-label>
           <input matInput name="vagueInstruction" [(ngModel)]="vagueInstruction" maxlength="500"
-                 placeholder="e.g. something with fish, something quick, leftovers">
+                 placeholder="e.g. something quick, or # to reference a collection"
+                 appCollectionMention #mention="appCollectionMention"
+                 [matAutocomplete]="collectionAuto">
+          <mat-hint>Type # to reference a collection, e.g. #[Easy Weekday Dishes]</mat-hint>
+          <mat-autocomplete #collectionAuto="matAutocomplete">
+            @for (collection of mention.suggestions(); track collection.id) {
+              <mat-option [value]="mention.valueFor(collection)">
+                <mat-icon>{{ collection.kind === 'auto' ? 'auto_awesome' : 'bookmark' }}</mat-icon>
+                {{ collection.name }}
+                <span class="mention-count">{{ collection.recipeCount }} recipes</span>
+              </mat-option>
+            }
+          </mat-autocomplete>
         </mat-form-field>
       }
     }

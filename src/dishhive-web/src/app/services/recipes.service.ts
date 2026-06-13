@@ -10,7 +10,9 @@ export class RecipesService {
 
   constructor(private http: HttpClient) {}
 
-  getRecipes(search?: string, category?: string, tags: string[] = []): Observable<RecipeListItem[]> {
+  getRecipes(
+    search?: string, category?: string, tags: string[] = [], cookbookId?: string
+  ): Observable<RecipeListItem[]> {
     const params: Record<string, string> = {};
     if (search?.trim()) {
       params['search'] = search.trim();
@@ -21,13 +23,16 @@ export class RecipesService {
     if (tags.length > 0) {
       params['tags'] = tags.join(',');
     }
+    if (cookbookId) {
+      params['cookbookId'] = cookbookId;
+    }
     return this.http.get<RecipeListItem[]>(this.apiUrl, { params })
       .pipe(catchError(this.handleError));
   }
 
-  /** Convenience overload taking the library filter shape cookbooks store */
+  /** Convenience overload taking the library filter shape */
   getRecipesFiltered(filter: RecipeFilter): Observable<RecipeListItem[]> {
-    return this.getRecipes(filter.search, filter.category, filter.tags);
+    return this.getRecipes(filter.search, filter.category, filter.tags, filter.cookbookId);
   }
 
   /** Distinct categories in use, for the library filter */

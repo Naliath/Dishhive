@@ -71,32 +71,33 @@
   }
 </div>
 
-@if (cookbooks().length > 0 || hasFilter()) {
-  <div class="cookbook-row" aria-label="Cookbooks">
-    <mat-icon class="cookbook-row-icon" matTooltip="Cookbooks: saved filters">collections_bookmark</mat-icon>
-    @for (cookbook of cookbooks(); track cookbook.id) {
-      <button class="cookbook-chip" type="button"
-              [class.is-active]="activeCookbookId() === cookbook.id"
-              (click)="applyCookbook(cookbook)">
-        {{ cookbook.name }}
+<div class="cookbook-row" aria-label="Collections">
+  <mat-icon class="cookbook-row-icon" matTooltip="Collections: curated recipe sets">collections_bookmark</mat-icon>
+  @for (cookbook of cookbooks(); track cookbook.id) {
+    <button class="cookbook-chip" type="button"
+            [class.is-active]="activeCookbookId() === cookbook.id"
+            [class.is-auto]="cookbook.kind === 'auto'"
+            (click)="applyCookbook(cookbook)">
+      <mat-icon class="cookbook-kind-icon">{{ cookbook.kind === 'auto' ? 'auto_awesome' : 'bookmark' }}</mat-icon>
+      {{ cookbook.name }}
+      <span class="cookbook-count">{{ cookbook.recipeCount }}</span>
+      @if (cookbook.kind === 'manual') {
         <mat-icon class="cookbook-delete" (click)="deleteCookbook(cookbook, $event)"
-                  [attr.aria-label]="'Delete cookbook ' + cookbook.name">close</mat-icon>
-      </button>
-    }
-    @if (hasFilter() && !activeCookbookId()) {
-      <div class="cookbook-save">
-        <input class="cookbook-name-input" name="cookbookName" [(ngModel)]="cookbookName"
-               placeholder="Save filter as cookbook…" maxlength="100"
-               (keydown.enter)="saveCookbook()">
-        <button mat-icon-button (click)="saveCookbook()"
-                [disabled]="savingCookbook() || !cookbookName.trim()"
-                matTooltip="Save the current filter as a cookbook" aria-label="Save cookbook">
-          <mat-icon>bookmark_add</mat-icon>
-        </button>
-      </div>
-    }
+                  [attr.aria-label]="'Delete collection ' + cookbook.name">close</mat-icon>
+      }
+    </button>
+  }
+  <div class="cookbook-save">
+    <input class="cookbook-name-input" name="cookbookName" [(ngModel)]="cookbookName"
+           placeholder="New collection…" maxlength="100"
+           (keydown.enter)="createCookbook()">
+    <button mat-icon-button (click)="createCookbook()"
+            [disabled]="savingCookbook() || !cookbookName.trim()"
+            matTooltip="Create a new collection" aria-label="Create collection">
+      <mat-icon>bookmark_add</mat-icon>
+    </button>
   </div>
-}
+</div>
 
 @if (loading()) {
   <div class="empty-state">
@@ -117,6 +118,27 @@
   <div class="recipe-grid">
     @for (recipe of recipes(); track recipe.id) {
       <mat-card appearance="outlined" [routerLink]="['/recipes', recipe.id]" class="recipe-card">
+        @if (manualCookbooks().length > 0) {
+          <button mat-icon-button class="card-menu-btn" [matMenuTriggerFor]="cardMenu"
+                  (click)="$event.stopPropagation(); $event.preventDefault()"
+                  matTooltip="Collections" aria-label="Collection actions">
+            <mat-icon>bookmark_add</mat-icon>
+          </button>
+          <mat-menu #cardMenu="matMenu">
+            @for (cookbook of manualCookbooks(); track cookbook.id) {
+              <button mat-menu-item (click)="addToCookbook(recipe, cookbook)">
+                <mat-icon>bookmark</mat-icon>
+                Add to {{ cookbook.name }}
+              </button>
+            }
+            @if (activeCookbook()?.kind === 'manual') {
+              <button mat-menu-item (click)="removeFromActiveCookbook(recipe)">
+                <mat-icon>bookmark_remove</mat-icon>
+                Remove from {{ activeCookbook()!.name }}
+              </button>
+            }
+          </mat-menu>
+        }
         @if (recipe.imageUrl) {
           <img mat-card-image [src]="recipe.imageUrl" [alt]="recipe.title" loading="lazy">
         }

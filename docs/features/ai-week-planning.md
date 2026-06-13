@@ -62,9 +62,29 @@ IMealSuggestionService
   `POST /api/plannedmeals`. `DaysToFill` = days without a concrete dinner main (vague-only
   days are included — the suggestion resolves the vague text). Suggestions never overwrite
   concretely planned dishes.
+- **Ideas are replaced, not duplicated**: a vague-instruction-only dinner main (an "idea")
+  is input for the suggestion, but once an accepted dish lands on that date the planner
+  deletes the lingering idea meal — the day ends with the concrete dish only, not both.
 - **Free-text instructions**: the request takes optional planner instructions (e.g.
   "3 days vegetarian, at least one fish dish") that the LLM must follow (never overriding
   allergies). The rules fallback ignores them — AI-only by design.
+- **#[Collection Name] references** (June 2026, see
+  [recipe-organization.md](recipe-organization.md)): day instructions and the global
+  instructions may reference a collection — "On friday something from
+  #[Easy Weekday Dishes]". `CollectionMentionResolver` resolves them at suggest time
+  (grammar `#\[([^\[\]\r\n]{1,100})\]`, name match case-insensitive, manual + auto
+  collections) into `CollectionConstraints`: per collection ≤15 member titles,
+  least-recently-planned first, plus the dates whose instruction referenced it. The
+  prompt lists them in their own "Referenced collections" block (independent of the
+  60-recipe cap) with a rule that day-scoped references MUST pick from the list;
+  enforcement after parsing is soft (off-list picks are logged, kept for review —
+  an empty day would be worse). Dangling references (renamed/deleted collection)
+  resolve to nothing and flow through as plain-text hints. The rules fallback honors
+  day-scoped constraints (least-recently-planned member, variety window respected,
+  after the freezer step) and ignores global ones, consistent with ignoring
+  instructions. The inputs get a `#`-triggered autocomplete
+  (`directives/collection-mention.directive.ts`): typing `#ea` suggests matching
+  collections and inserts the complete token — brackets are never typed by hand.
 - **Day adherence & leftovers**: dishes proposed for a day with a vague instruction must
   all satisfy it (a "vegetarian" day gets only vegetarian proposals). Freezer leftovers
   carry their Freezy notes in the prompt (portion hints); the model may propose several
@@ -85,8 +105,10 @@ IMealSuggestionService
   ("compose" phase with a Generate button); AI down → generation starts immediately,
   since the rules fallback ignores instructions. Then one row per proposal (date, dish,
   matched-recipe icon, reason, checkbox default-on); "Add selected" creates the meals
-  (Dinner/Main, household members attending). The instructions field stays available
-  with "Regenerate" to re-run with adjusted wishes.
+  (Dinner/Main, household members attending). The instructions field is a 3-row textarea
+  (so `#[Name]` autocomplete and longer wishes fit); Enter selects the active
+  autocomplete option or inserts a newline — it never submits. Generation runs from the
+  explicit Generate/Regenerate buttons.
 
 ## Risks / Notes
 

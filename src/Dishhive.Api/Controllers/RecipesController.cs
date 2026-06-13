@@ -1,6 +1,7 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
+using Dishhive.Api.Services.Collections;
 using Dishhive.Api.Services.Import;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -32,15 +33,20 @@ public class RecipesController : ControllerBase
     }
 
     /// <summary>
-    /// List recipes, optionally filtered by a title/keyword search term, a category
-    /// and/or tags (comma-separated names; a recipe must carry all of them)
+    /// List recipes, optionally filtered by a title/keyword search term, a category,
+    /// tags (comma-separated names; a recipe must carry all of them) and/or a
+    /// collection (manual cookbook Guid or auto slug like "auto-quick")
     /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<RecipeListItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IEnumerable<RecipeListItemDto>>> GetRecipes(
+        [FromServices] AutoCollectionProvider autoCollections,
         [FromQuery] string? search = null,
         [FromQuery] string? category = null,
-        [FromQuery] string? tags = null)
+        [FromQuery] string? tags = null,
+        [FromQuery] string? cookbookId = null,
+        CancellationToken cancellationToken = default)
     {
         var query = _context.Recipes.AsNoTracking();
 
@@ -64,27 +70,31 @@ public class RecipesController : ControllerBase
             query = query.Where(r => r.Tags.Any(a => a.RecipeTag!.Name.ToLower() == wanted));
         }
 
-        var recipes = await query
-            .OrderBy(r => r.Title)
-            .Select(r => new RecipeListItemDto
-            {
-                Id = r.Id,
-                Title = r.Title,
-                Servings = r.Servings,
-                TotalTimeMinutes = r.TotalTimeMinutes,
-                Category = r.Category,
-                ImageUrl = r.ImageData != null ? null : r.ImageUrl,
-                HasLocalImage = r.ImageData != null,
-                SourceProvider = r.SourceProvider,
-                Tags = r.Tags.Select(a => a.RecipeTag!.Name).OrderBy(n => n).ToList()
-            })
-            .ToListAsync();
-
-        foreach (var recipe in recipes.Where(r => r.HasLocalImage))
+        if (!string.IsNullOrWhiteSpace(cookbookId))
         {
-            recipe.ImageUrl = ImageEndpoint(recipe.Id);
+            if (Guid.TryParse(cookbookId, out var id))
+            {
+                if (!await _context.Cookbooks.AnyAsync(c => c.Id == id, cancellationToken))
+                {
+                    return NotFound();
+                }
+
+                query = query.Where(r => _context.CookbookEntries.Any(e => e.CookbookId == id && e.RecipeId == r.Id));
+            }
+            else
+            {
+                var auto = await autoCollections.FindByIdAsync(cookbookId, cancellationToken);
+                if (auto == null)
+                {
+                    return NotFound();
+                }
+
+                query = auto.ApplyFilter(query);
+            }
         }
 
+        var recipes = await RecipeListMapping.Project(query.OrderBy(r => r.Title)).ToListAsync(cancellationToken);
+        RecipeListMapping.ResolveLocalImageUrls(recipes);
         return Ok(recipes);
     }
 
@@ -175,7 +185,59 @@ public class RecipesController : ControllerBase
             return NotFound();
         }
 
-        return Ok(ToDto(recipe));
+        var dto = ToDto(recipe);
+        dto.CookbookIds = await _context.CookbookEntries
+            .Where(e => e.RecipeId == id)
+            .Select(e => e.CookbookId)
+            .ToListAsync();
+        return Ok(dto);
+    }
+
+    /// <summary>
+    /// Syncs a recipe's collection memberships to the submitted list (manual
+    /// collections only — auto collections are computed and read-only)
+    /// </summary>
+    [HttpPut("{id:guid}/cookbooks")]
+    [ProducesResponseType(typeof(IEnumerable<Guid>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IEnumerable<Guid>>> SetRecipeCookbooks(
+        Guid id, RecipeCookbooksRequestDto dto, CancellationToken cancellationToken)
+    {
+        if (!await _context.Recipes.AnyAsync(r => r.Id == id, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        var targetIds = dto.CookbookIds.Distinct().ToList();
+        var knownIds = await _context.Cookbooks
+            .Where(c => targetIds.Contains(c.Id))
+            .Select(c => c.Id)
+            .ToListAsync(cancellationToken);
+
+        var unknown = targetIds.Except(knownIds).ToList();
+        if (unknown.Count > 0)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Unknown collections",
+                Detail = $"No collection found for: {string.Join(", ", unknown)}"
+            });
+        }
+
+        var current = await _context.CookbookEntries
+            .Where(e => e.RecipeId == id)
+            .ToListAsync(cancellationToken);
+
+        _context.CookbookEntries.RemoveRange(current.Where(e => !targetIds.Contains(e.CookbookId)));
+        var existing = current.Select(e => e.CookbookId).ToHashSet();
+        foreach (var cookbookId in targetIds.Where(cid => !existing.Contains(cid)))
+        {
+            _context.CookbookEntries.Add(new CookbookEntry { CookbookId = cookbookId, RecipeId = id });
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return Ok(targetIds);
     }
 
     /// <summary>
@@ -282,6 +344,11 @@ public class RecipesController : ControllerBase
             .Where(a => a.RecipeId == id)
             .ToListAsync();
         _context.RecipeTagAssignments.RemoveRange(tagAssignments);
+
+        var cookbookEntries = await _context.CookbookEntries
+            .Where(e => e.RecipeId == id)
+            .ToListAsync();
+        _context.CookbookEntries.RemoveRange(cookbookEntries);
 
         _context.Recipes.Remove(recipe);
         await _context.SaveChangesAsync();

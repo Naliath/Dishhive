@@ -9,7 +9,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { HttpErrorResponse } from '@angular/common/http';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { FreezerService } from '../../services/freezer.service';
@@ -178,7 +179,10 @@ export class WeekPlannerPage implements OnInit {
       meal,
       members: this.members(),
       freezerEnabled: this.freezer().enabled,
-      freezerItems: this.freezer().items
+      freezerItems: this.freezer().items,
+      plannedRecipeIds: this.meals()
+        .map(m => m.recipeId)
+        .filter((id): id is string => !!id)
     };
 
     this.dialog.open<MealSlotDialog, MealSlotDialogData, CreatePlannedMeal>(MealSlotDialog, { data })
@@ -210,6 +214,23 @@ export class WeekPlannerPage implements OnInit {
         }
 
         const householdIds = this.members().filter(m => !m.isGuest).map(m => m.id);
+
+        // A planned day replaces its "idea": once a suggested dish lands on a date
+        // that only held a vague-instruction dinner main, that idea meal is removed
+        // (it was input for the AI; it shouldn't linger next to the concrete dish).
+        const plannedDates = new Set(selected.map(s => s.date));
+        const ideasToRemove = this.meals().filter(m =>
+          plannedDates.has(m.date)
+          && m.mealType === MealType.Dinner
+          && m.course === Course.Main
+          && !!m.vagueInstruction
+          && !m.dishName
+          && !m.recipeId);
+
+        const removals = ideasToRemove.length > 0
+          ? forkJoin(ideasToRemove.map(m => this.plannedMealsService.deleteMeal(m.id)))
+          : of([]);
+
         const creations = selected.map(suggestion => this.plannedMealsService.createMeal({
           date: suggestion.date,
           mealType: MealType.Dinner,
@@ -219,7 +240,7 @@ export class WeekPlannerPage implements OnInit {
           familyMemberIds: householdIds
         }));
 
-        forkJoin(creations).subscribe({
+        removals.pipe(switchMap(() => forkJoin(creations))).subscribe({
           next: created => {
             this.loadWeek();
             this.snackBar.open(

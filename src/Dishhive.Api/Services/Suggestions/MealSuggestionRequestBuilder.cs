@@ -16,11 +16,14 @@ public class MealSuggestionRequestBuilder
 
     private readonly DishhiveDbContext _context;
     private readonly IFreezyClient _freezyClient;
+    private readonly CollectionMentionResolver _mentionResolver;
 
-    public MealSuggestionRequestBuilder(DishhiveDbContext context, IFreezyClient freezyClient)
+    public MealSuggestionRequestBuilder(
+        DishhiveDbContext context, IFreezyClient freezyClient, CollectionMentionResolver mentionResolver)
     {
         _context = context;
         _freezyClient = freezyClient;
+        _mentionResolver = mentionResolver;
     }
 
     public async Task<MealSuggestionRequest> BuildAsync(
@@ -109,6 +112,19 @@ public class MealSuggestionRequestBuilder
 
         var frozenItems = await _freezyClient.GetFrozenItemsAsync(cancellationToken);
 
+        // Resolve #[Collection Name] references from the day instructions and the
+        // global instructions into recipe-title constraints
+        var mentionSources = weekPlan
+            .Where(m => !string.IsNullOrWhiteSpace(m.VagueInstruction))
+            .Select(m => ((DateOnly?)m.Date, m.VagueInstruction))
+            .Append((null, instructions))
+            .ToList();
+        var lastPlannedByTitle = recentDishes
+            .GroupBy(d => d.DishName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Max(d => d.LastPlanned), StringComparer.OrdinalIgnoreCase);
+        var collectionConstraints = await _mentionResolver.ResolveAsync(
+            mentionSources, lastPlannedByTitle, cancellationToken);
+
         return new MealSuggestionRequest
         {
             WeekStart = weekStart,
@@ -125,7 +141,8 @@ public class MealSuggestionRequestBuilder
             WeekPlan = weekPlan,
             DaysToFill = daysToFill,
             AvailableFrozenItems = frozenItems,
-            Instructions = string.IsNullOrWhiteSpace(instructions) ? null : instructions.Trim()
+            Instructions = string.IsNullOrWhiteSpace(instructions) ? null : instructions.Trim(),
+            CollectionConstraints = collectionConstraints
         };
     }
 

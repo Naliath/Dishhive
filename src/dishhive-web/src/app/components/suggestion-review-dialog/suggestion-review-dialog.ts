@@ -7,8 +7,11 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { TextFieldModule } from '@angular/cdk/text-field';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { CollectionMentionDirective } from '../../directives/collection-mention.directive';
 import { MealSuggestionsService } from '../../services/meal-suggestions.service';
 import { IntegrationsService } from '../../services/integrations.service';
 import { MealSuggestion } from '../../models/meal-suggestion.model';
@@ -39,7 +42,10 @@ type DialogPhase = 'checking' | 'compose' | 'generating' | 'review';
   imports: [
     DatePipe,
     FormsModule,
+    TextFieldModule,
+    CollectionMentionDirective,
     MatDialogModule,
+    MatAutocompleteModule,
     MatButtonModule,
     MatCheckboxModule,
     MatFormFieldModule,

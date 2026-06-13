@@ -41,6 +41,36 @@
         </div>
       }
 
+      @if (memberOfCookbooks().length > 0 || availableCookbooks().length > 0) {
+        <div class="tag-chips collections-row" aria-label="Collections">
+          @for (cookbook of memberOfCookbooks(); track cookbook.id) {
+            <button class="tag-chip collection-chip" type="button"
+                    (click)="toggleCookbook(cookbook)"
+                    [matTooltip]="'Remove from ' + cookbook.name">
+              <mat-icon>bookmark</mat-icon>{{ cookbook.name }}
+            </button>
+          }
+          @if (availableCookbooks().length > 0) {
+            <button class="tag-chip collection-chip add-collection" type="button"
+                    [matMenuTriggerFor]="collectionMenu"
+                    matTooltip="Add this recipe to a collection">
+              <mat-icon>bookmark_add</mat-icon>
+              @if (memberOfCookbooks().length === 0) {
+                Add to collection
+              }
+            </button>
+            <mat-menu #collectionMenu="matMenu">
+              @for (cookbook of availableCookbooks(); track cookbook.id) {
+                <button mat-menu-item (click)="toggleCookbook(cookbook)">
+                  <mat-icon>bookmark_border</mat-icon>
+                  {{ cookbook.name }}
+                </button>
+              }
+            </mat-menu>
+          }
+        </div>
+      }
+
       @if (stats(); as s) {
         <div class="meta-row history-row">
           <span><mat-icon>history</mat-icon> last planned {{ s.lastPlanned | date:'d MMM y' }}</span>

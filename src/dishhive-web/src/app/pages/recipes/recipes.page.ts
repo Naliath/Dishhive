@@ -7,6 +7,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -34,6 +35,7 @@ import { DishStatistic } from '../../models/statistics.model';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatMenuModule,
     MatProgressSpinnerModule,
     MatSelectModule,
     MatSnackBarModule,
@@ -52,7 +54,7 @@ export class RecipesPage implements OnInit {
   searchTerm = '';
   importUrl = '';
 
-  // Library filter (category + tags); a cookbook is a saved copy of this state
+  // Library filter (category + tags), combinable with an active collection
   readonly categories = signal<string[]>([]);
   readonly knownTags = signal<string[]>([]);
   readonly selectedCategory = signal<string | null>(null);
@@ -65,6 +67,12 @@ export class RecipesPage implements OnInit {
 
   readonly hasFilter = computed(() =>
     this.selectedCategory() !== null || this.selectedTags().length > 0 || this.searchTerm.trim().length > 0);
+
+  /** Manual collections a recipe can be added to (auto collections are computed) */
+  readonly manualCookbooks = computed(() => this.cookbooks().filter(c => c.kind === 'manual'));
+
+  readonly activeCookbook = computed(() =>
+    this.cookbooks().find(c => c.id === this.activeCookbookId()) ?? null);
 
   /** Dish statistics by lowercased title and favorite counts by recipe id (card decorations) */
   private readonly statsByTitle = signal<Map<string, DishStatistic>>(new Map());
@@ -102,7 +110,8 @@ export class RecipesPage implements OnInit {
     this.recipesService.getRecipes(
       this.searchTerm.trim() || undefined,
       this.selectedCategory() ?? undefined,
-      this.selectedTags()
+      this.selectedTags(),
+      this.activeCookbookId() ?? undefined
     ).subscribe({
       next: recipes => {
         this.recipes.set(recipes);
@@ -121,9 +130,8 @@ export class RecipesPage implements OnInit {
     this.searchInput$.next(this.searchTerm);
   }
 
-  /** Filter changes by hand deselect the active cookbook (it no longer matches) */
+  /** Manual filter changes apply within the active collection (when one is selected) */
   onFilterChanged(): void {
-    this.activeCookbookId.set(null);
     this.loadRecipes();
   }
 
@@ -137,15 +145,9 @@ export class RecipesPage implements OnInit {
     this.onFilterChanged();
   }
 
+  /** Tap a collection chip to view its recipes; tap again to deselect */
   applyCookbook(cookbook: Cookbook): void {
-    if (this.activeCookbookId() === cookbook.id) {
-      this.clearFilter();
-      return;
-    }
-    this.searchTerm = cookbook.searchTerm ?? '';
-    this.selectedCategory.set(cookbook.category ?? null);
-    this.selectedTags.set([...cookbook.tags]);
-    this.activeCookbookId.set(cookbook.id);
+    this.activeCookbookId.set(this.activeCookbookId() === cookbook.id ? null : cookbook.id);
     this.loadRecipes();
   }
 
@@ -157,29 +159,26 @@ export class RecipesPage implements OnInit {
     this.loadRecipes();
   }
 
-  saveCookbook(): void {
+  createCookbook(): void {
     const name = this.cookbookName.trim();
-    if (!name || !this.hasFilter()) {
+    if (!name) {
       return;
     }
 
     this.savingCookbook.set(true);
-    this.cookbooksService.createCookbook({
-      name,
-      searchTerm: this.searchTerm.trim() || undefined,
-      category: this.selectedCategory() ?? undefined,
-      tags: this.selectedTags()
-    }).subscribe({
+    this.cookbooksService.createCookbook(name).subscribe({
       next: cookbook => {
         this.savingCookbook.set(false);
         this.cookbookName = '';
         this.activeCookbookId.set(cookbook.id);
         this.loadCookbooks();
-        this.snackBar.open(`Cookbook "${cookbook.name}" saved`, 'Dismiss', { duration: 3000 });
+        this.loadRecipes();
+        this.snackBar.open(
+          `Collection "${cookbook.name}" created — add recipes via the card menus`, 'Dismiss', { duration: 4000 });
       },
       error: (error: HttpErrorResponse) => {
         this.savingCookbook.set(false);
-        const detail = error.error?.detail ?? 'Could not save the cookbook';
+        const detail = error.error?.detail ?? 'Could not create the collection';
         this.snackBar.open(detail, 'Dismiss', { duration: 4000 });
       }
     });
@@ -191,10 +190,38 @@ export class RecipesPage implements OnInit {
       next: () => {
         if (this.activeCookbookId() === cookbook.id) {
           this.activeCookbookId.set(null);
+          this.loadRecipes();
         }
         this.loadCookbooks();
       },
-      error: () => this.snackBar.open('Could not delete the cookbook', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open('Could not delete the collection', 'Dismiss', { duration: 4000 })
+    });
+  }
+
+  addToCookbook(recipe: RecipeListItem, cookbook: Cookbook): void {
+    this.cookbooksService.addRecipes(cookbook.id, [recipe.id]).subscribe({
+      next: () => {
+        this.loadCookbooks();
+        this.snackBar.open(`"${recipe.title}" added to ${cookbook.name}`, 'Dismiss', { duration: 3000 });
+      },
+      error: () => this.snackBar.open('Could not add to the collection', 'Dismiss', { duration: 4000 })
+    });
+  }
+
+  /** Available while viewing a manual collection */
+  removeFromActiveCookbook(recipe: RecipeListItem): void {
+    const cookbook = this.activeCookbook();
+    if (!cookbook || cookbook.kind !== 'manual') {
+      return;
+    }
+
+    this.cookbooksService.removeRecipe(cookbook.id, recipe.id).subscribe({
+      next: () => {
+        this.loadCookbooks();
+        this.loadRecipes();
+        this.snackBar.open(`"${recipe.title}" removed from ${cookbook.name}`, 'Dismiss', { duration: 3000 });
+      },
+      error: () => this.snackBar.open('Could not remove from the collection', 'Dismiss', { duration: 4000 })
     });
   }
 

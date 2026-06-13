@@ -103,6 +103,12 @@ public class LlmMealSuggestionService : IMealSuggestionService
           leftovers for the SAME date (one suggestion entry per dish) to make a full dinner.
         - When a day has a vague instruction (e.g. "something with fish" or "vegetarian"),
           every dish you suggest for that day must satisfy it.
+        - Instructions may reference a recipe collection as #[Collection Name]. When a
+          day's instruction references a collection, the dish for that day MUST be one of
+          the recipes listed under "Referenced collections" for it (copy the exact title
+          into recipeTitle). When the planner's general instructions reference one, prefer
+          its recipes for the matching wish. If a referenced collection has no recipe list
+          below, treat the reference as a plain-text hint.
         - When the planner gives additional instructions, they override the other
           preferences (never the allergies/constraints).
         - Prefer recipes from the known-recipes list; when you use one, copy its exact title
@@ -147,7 +153,8 @@ public class LlmMealSuggestionService : IMealSuggestionService
         }
     }
 
-    private static string BuildUserPrompt(MealSuggestionRequest request)
+    // internal for prompt-content tests (like ParsePayload)
+    internal static string BuildUserPrompt(MealSuggestionRequest request)
     {
         var sb = new StringBuilder();
         var culture = CultureInfo.InvariantCulture;
@@ -225,6 +232,21 @@ public class LlmMealSuggestionService : IMealSuggestionService
             }
         }
 
+        if (request.CollectionConstraints.Count > 0)
+        {
+            sb.AppendLine("Referenced collections:");
+            foreach (var constraint in request.CollectionConstraints)
+            {
+                var scope = constraint.Dates.Count > 0
+                    ? $"for {string.Join(", ", constraint.Dates.Select(d => d.ToString("yyyy-MM-dd")))}"
+                    : "general instructions";
+                var titles = constraint.RecipeTitles.Count > 0
+                    ? string.Join(", ", constraint.RecipeTitles.Select(t => $"\"{t}\""))
+                    : "(no recipes in this collection)";
+                sb.AppendLine($"- \"{constraint.Name}\" ({scope}): {titles}");
+            }
+        }
+
         var existing = request.WeekPlan
             .Where(m => m.DishName != null || m.VagueInstruction != null)
             .OrderBy(m => m.Date)
@@ -249,7 +271,7 @@ public class LlmMealSuggestionService : IMealSuggestionService
         return sb.ToString();
     }
 
-    private static List<MealSuggestion> PostProcess(WeekSuggestionsPayload payload, MealSuggestionRequest request)
+    private List<MealSuggestion> PostProcess(WeekSuggestionsPayload payload, MealSuggestionRequest request)
     {
         var validDates = request.DaysToFill.ToHashSet();
         var recipesByTitle = request.KnownRecipes
@@ -284,6 +306,21 @@ public class LlmMealSuggestionService : IMealSuggestionService
                 DishName = item.DishName.Trim(),
                 Reason = string.IsNullOrWhiteSpace(item.Reason) ? null : item.Reason.Trim()
             });
+        }
+
+        // Collection constraints are enforced softly: an off-list pick is kept (the
+        // review dialog lets the user discard it) but logged for diagnosis —
+        // rejecting it would leave the day empty, which is worse
+        foreach (var constraint in request.CollectionConstraints.Where(c => c.Dates.Count > 0))
+        {
+            var titles = constraint.RecipeTitles.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var offList in suggestions.Where(s =>
+                constraint.Dates.Contains(s.Date) && !titles.Contains(s.DishName!)))
+            {
+                _logger.LogWarning(
+                    "AI suggested \"{Dish}\" for {Date}, which is not in the referenced collection {Collection}",
+                    offList.DishName, offList.Date, constraint.Name);
+            }
         }
 
         // A day may hold several dishes (e.g. two small leftovers making one dinner),

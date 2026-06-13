@@ -84,6 +84,23 @@
     color: var(--mat-sys-primary, #1565c0);
   }
 
+  &.is-auto {
+    border-style: dashed;
+  }
+
+  .cookbook-kind-icon {
+    font-size: 15px;
+    width: 15px;
+    height: 15px;
+    opacity: 0.6;
+  }
+
+  .cookbook-count {
+    font-size: 11px;
+    opacity: 0.6;
+    padding-inline-start: 1px;
+  }
+
   .cookbook-delete {
     font-size: 16px;
     width: 16px;
@@ -125,9 +142,25 @@
 
 .recipe-card {
   cursor: pointer;
+  position: relative;
   // Cards entering the grid (new search results) ease in instead of popping;
   // cards that stay matched are tracked by id and don't re-animate
   animation: card-fade-in 180ms ease-in;
+
+  .card-menu-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 1;
+    background-color: color-mix(in srgb, var(--mat-sys-surface, #fff) 75%, transparent);
+    opacity: 0;
+    transition: opacity 120ms ease-in;
+  }
+
+  &:hover .card-menu-btn,
+  &:focus-within .card-menu-btn {
+    opacity: 1;
+  }
 
   img {
     aspect-ratio: 4 / 3;

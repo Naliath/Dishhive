@@ -88,4 +88,44 @@ public class MealSuggestionsIntegrationTests : TestBase
         stub.LastRequest.Should().NotBeNull();
         stub.LastRequest!.DaysToFill.Should().HaveCount(7);
     }
+
+    [Fact]
+    public async Task SuggestWeek_CollectionMentions_AreResolvedIntoConstraints()
+    {
+        var stub = new StubSuggestionService();
+        using var factory = new StubbedFactory(stub);
+        using var client = factory.CreateClient();
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<Data.DishhiveDbContext>();
+        var recipe = new Models.Recipe { Id = Guid.NewGuid(), Title = "Wrap" };
+        context.Recipes.Add(recipe);
+        var cookbook = new Models.Cookbook { Id = Guid.NewGuid(), Name = "Easy Weekday Dishes" };
+        cookbook.Entries.Add(new Models.CookbookEntry { Cookbook = cookbook, RecipeId = recipe.Id });
+        context.Cookbooks.Add(cookbook);
+        // Friday carries a day-scoped reference in its vague instruction
+        context.PlannedMeals.Add(new Models.PlannedMeal
+        {
+            Id = Guid.NewGuid(),
+            Date = Monday.AddDays(4),
+            MealType = Models.MealType.Dinner,
+            Course = Models.Course.Main,
+            VagueInstruction = "something from #[easy weekday dishes]"
+        });
+        await context.SaveChangesAsync();
+
+        var response = await client.PostAsJsonAsync("/api/plannedmeals/suggestions",
+            new SuggestWeekRequestDto
+            {
+                WeekStart = Monday,
+                Instructions = "prefer #[Easy Weekday Dishes] and ignore #[No Such Collection]"
+            });
+        response.IsSuccessStatusCode.Should().BeTrue();
+
+        var constraints = stub.LastRequest!.CollectionConstraints;
+        var constraint = constraints.Should().ContainSingle().Subject; // the dangling name resolves to nothing
+        constraint.Name.Should().Be("Easy Weekday Dishes");
+        constraint.RecipeTitles.Should().Equal("Wrap");
+        constraint.Dates.Should().Equal(Monday.AddDays(4));
+    }
 }

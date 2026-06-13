@@ -19,6 +19,7 @@ public class DishhiveDbContext : DbContext
     public DbSet<RecipeTag> RecipeTags => Set<RecipeTag>();
     public DbSet<RecipeTagAssignment> RecipeTagAssignments => Set<RecipeTagAssignment>();
     public DbSet<Cookbook> Cookbooks => Set<Cookbook>();
+    public DbSet<CookbookEntry> CookbookEntries => Set<CookbookEntry>();
     public DbSet<PlannedMeal> PlannedMeals => Set<PlannedMeal>();
     public DbSet<PlannedMealAttendee> PlannedMealAttendees => Set<PlannedMealAttendee>();
     public DbSet<MealRating> MealRatings => Set<MealRating>();
@@ -179,18 +180,36 @@ public class DishhiveDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Cookbook configuration (saved filters; tags stored by name, no FK)
+        // Cookbook configuration (collections: explicitly curated recipe sets)
         modelBuilder.Entity<Cookbook>(entity =>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-            entity.Property(e => e.SearchTerm).HasMaxLength(200);
-            entity.Property(e => e.Category).HasMaxLength(100);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasIndex(e => e.Name).IsUnique();
+        });
+
+        // CookbookEntry configuration (composite key join table, like RecipeTagAssignment)
+        modelBuilder.Entity<CookbookEntry>(entity =>
+        {
+            entity.HasKey(e => new { e.CookbookId, e.RecipeId });
+            entity.Property(e => e.AddedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(e => e.Cookbook)
+                  .WithMany(c => c.Entries)
+                  .HasForeignKey(e => e.CookbookId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Recipe)
+                  .WithMany()
+                  .HasForeignKey(e => e.RecipeId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // For the "which collections contain this recipe" lookup
+            entity.HasIndex(e => e.RecipeId);
         });
 
         // PlannedMeal configuration

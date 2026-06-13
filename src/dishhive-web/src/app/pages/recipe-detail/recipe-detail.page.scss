@@ -99,6 +99,25 @@
   }
 }
 
+// Collection chips are interactive tag-chips (button element needs its resets)
+.collection-chip {
+  border: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background-color: color-mix(in srgb, var(--mat-sys-primary, #1976d2) 18%, transparent);
+  }
+
+  &.add-collection {
+    background: none;
+    border: 1px dashed var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.25));
+    color: var(--mat-sys-on-surface-variant, inherit);
+  }
+}
+
 .member-heart {
   display: inline-flex;
   align-items: center;

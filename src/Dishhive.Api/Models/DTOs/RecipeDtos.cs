@@ -58,6 +58,9 @@ public class RecipeDto
 
     /// <summary>Organization tag names (user-curated, see recipe-organization.md)</summary>
     public List<string> Tags { get; set; } = new();
+
+    /// <summary>Ids of the manual collections this recipe belongs to</summary>
+    public List<Guid> CookbookIds { get; set; } = new();
 }
 
 public class RecipeIngredientDto
@@ -177,14 +180,20 @@ public class RecipeTagDto
     public string Name { get; set; } = string.Empty;
 }
 
-/// <summary>A cookbook: a named, saved recipe filter</summary>
+/// <summary>
+/// A collection: a named set of explicitly curated recipes. Manual collections are
+/// user-managed; auto collections are computed (read-only) and use slug ids like
+/// "auto-quick" instead of a Guid.
+/// </summary>
 public class CookbookDto
 {
-    public Guid Id { get; set; }
+    public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public string? SearchTerm { get; set; }
-    public string? Category { get; set; }
-    public List<string> Tags { get; set; } = new();
+
+    /// <summary>"manual" or "auto"</summary>
+    public string Kind { get; set; } = "manual";
+
+    public int RecipeCount { get; set; }
 }
 
 public class CreateCookbookDto
@@ -192,17 +201,36 @@ public class CreateCookbookDto
     [Required]
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
-
-    [MaxLength(200)]
-    public string? SearchTerm { get; set; }
-
-    [MaxLength(100)]
-    public string? Category { get; set; }
-
-    [MaxLength(20)]
-    public List<string> Tags { get; set; } = new();
 }
 
 public class UpdateCookbookDto : CreateCookbookDto
 {
+}
+
+/// <summary>A computed auto collection with its enabled state, for the settings UI</summary>
+public class AutoCollectionDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public int RecipeCount { get; set; }
+    public bool Enabled { get; set; }
+}
+
+public class ToggleAutoCollectionDto
+{
+    public bool Enabled { get; set; }
+}
+
+/// <summary>Bulk add of recipes to a collection</summary>
+public class CookbookRecipesRequestDto
+{
+    [Required]
+    public List<Guid> RecipeIds { get; set; } = new();
+}
+
+/// <summary>Full sync of one recipe's collection memberships (manual collections only)</summary>
+public class RecipeCookbooksRequestDto
+{
+    [Required]
+    public List<Guid> CookbookIds { get; set; } = new();
 }

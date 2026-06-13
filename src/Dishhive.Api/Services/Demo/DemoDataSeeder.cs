@@ -168,6 +168,20 @@ public class DemoDataSeeder : BackgroundService
             }
         }
 
+        foreach (var demoCollection in DemoData.Collections)
+        {
+            var cookbook = new Cookbook { Id = Guid.NewGuid(), Name = demoCollection.Name };
+            foreach (var url in demoCollection.RecipeUrls)
+            {
+                if (recipesByUrl.TryGetValue(url, out var recipe))
+                {
+                    cookbook.Entries.Add(new CookbookEntry { Cookbook = cookbook, RecipeId = recipe.Id });
+                }
+            }
+
+            context.Cookbooks.Add(cookbook);
+        }
+
         SeedPastMeals(context, recipesByUrl.Values.ToList(), familyMembers);
 
         context.UserSettings.Add(new UserSetting { Key = SeededSettingKey, Value = "true" });

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
+using Dishhive.Api.Services.Collections;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dishhive.Api.Services.Import;
@@ -28,8 +29,9 @@ public interface IRecipeExchangeService
 /// Recipe library exchange in schema.org Recipe JSON — the format the import pipeline
 /// already speaks and the one other recipe managers (Mealie, Tandoor, Nextcloud Cookbook)
 /// understand. Exports are self-contained: locally stored images are embedded as data URIs.
-/// Dishhive's organization tags travel in a "dishhive:tags" extension property that other
-/// tools simply ignore. See docs/features/recipe-import-export.md.
+/// Dishhive's organization tags and collection memberships travel in "dishhive:tags" /
+/// "dishhive:collections" extension properties that other tools simply ignore.
+/// See docs/features/recipe-import-export.md.
 /// </summary>
 public partial class RecipeExchangeService : IRecipeExchangeService
 {
@@ -48,15 +50,18 @@ public partial class RecipeExchangeService : IRecipeExchangeService
 
     private readonly HttpClient _httpClient;
     private readonly DishhiveDbContext _context;
+    private readonly AutoCollectionProvider _autoCollections;
     private readonly ILogger<RecipeExchangeService> _logger;
 
     public RecipeExchangeService(
         HttpClient httpClient,
         DishhiveDbContext context,
+        AutoCollectionProvider autoCollections,
         ILogger<RecipeExchangeService> logger)
     {
         _httpClient = httpClient;
         _context = context;
+        _autoCollections = autoCollections;
         _logger = logger;
     }
 
@@ -70,10 +75,17 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             .OrderBy(r => r.Title)
             .ToListAsync(cancellationToken);
 
+        var collectionNamesByRecipe = (await _context.CookbookEntries
+            .AsNoTracking()
+            .Select(e => new { e.RecipeId, e.Cookbook!.Name })
+            .ToListAsync(cancellationToken))
+            .GroupBy(e => e.RecipeId)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.Name).OrderBy(n => n).ToList());
+
         var graph = new JsonArray();
         foreach (var recipe in recipes)
         {
-            graph.Add(ToSchemaOrg(recipe));
+            graph.Add(ToSchemaOrg(recipe, collectionNamesByRecipe.GetValueOrDefault(recipe.Id)));
         }
 
         var document = new JsonObject
@@ -103,6 +115,9 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             .Where(r => r.SourceUrl != null)
             .ToDictionary(r => r.SourceUrl!, r => r.Id);
         var allTags = await _context.RecipeTags.ToListAsync(cancellationToken);
+        var allCookbooks = await _context.Cookbooks
+            .Include(c => c.Entries)
+            .ToListAsync(cancellationToken);
 
         var result = new RecipeFileImportResultDto();
 
@@ -163,6 +178,7 @@ public partial class RecipeExchangeService : IRecipeExchangeService
                 await RecipeImageDownloader.TryDownloadAsync(_httpClient, recipe, _logger, cancellationToken);
             }
             SyncTags(recipe, ReadDishhiveTags(node), allTags);
+            await SyncCollectionsAsync(recipe, ReadDishhiveCollections(node), allCookbooks, cancellationToken);
         }
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -171,7 +187,7 @@ public partial class RecipeExchangeService : IRecipeExchangeService
         return result;
     }
 
-    private static JsonObject ToSchemaOrg(Recipe recipe)
+    private static JsonObject ToSchemaOrg(Recipe recipe, List<string>? collectionNames)
     {
         var node = new JsonObject
         {
@@ -234,6 +250,17 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             }
             // Dishhive extension, ignored by other tools; restored on import
             node["dishhive:tags"] = tagArray;
+        }
+
+        if (collectionNames is { Count: > 0 })
+        {
+            var collectionArray = new JsonArray();
+            foreach (var name in collectionNames)
+            {
+                collectionArray.Add((JsonNode)name);
+            }
+            // Manual collection memberships; auto collections are computed and not exported
+            node["dishhive:collections"] = collectionArray;
         }
 
         return node;
@@ -324,6 +351,57 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             }
 
             recipe.Tags.Add(new RecipeTagAssignment { Recipe = recipe, RecipeTag = tag });
+        }
+    }
+
+    private static List<string> ReadDishhiveCollections(JsonElement node)
+    {
+        if (!node.TryGetProperty("dishhive:collections", out var collections)
+            || collections.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return collections.EnumerateArray()
+            .Where(c => c.ValueKind == JsonValueKind.String)
+            .Select(c => c.GetString()!.Trim())
+            .Where(c => c.Length > 0 && c.Length <= 100)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Restores collection memberships by name, creating missing collections.
+    /// Names that would be invalid to create (brackets delimit the #[Name] mention
+    /// syntax) or that collide with a computed auto collection are skipped.
+    /// </summary>
+    private async Task SyncCollectionsAsync(
+        Recipe recipe, List<string> collectionNames, List<Cookbook> allCookbooks,
+        CancellationToken cancellationToken)
+    {
+        foreach (var name in collectionNames.DistinctBy(n => n.ToLowerInvariant()))
+        {
+            var cookbook = allCookbooks.FirstOrDefault(c =>
+                string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (cookbook == null)
+            {
+                if (name.Contains('[') || name.Contains(']')
+                    || await _autoCollections.IsReservedNameAsync(name, cancellationToken))
+                {
+                    _logger.LogWarning("Skipping imported collection name '{Name}' (invalid or reserved)", name);
+                    continue;
+                }
+
+                cookbook = new Cookbook { Name = name };
+                _context.Cookbooks.Add(cookbook);
+                allCookbooks.Add(cookbook);
+            }
+
+            var alreadyLinked = cookbook.Entries.Any(e =>
+                e.Recipe == recipe || (recipe.Id != Guid.Empty && e.RecipeId == recipe.Id));
+            if (!alreadyLinked)
+            {
+                cookbook.Entries.Add(new CookbookEntry { Cookbook = cookbook, Recipe = recipe });
+            }
         }
     }
 

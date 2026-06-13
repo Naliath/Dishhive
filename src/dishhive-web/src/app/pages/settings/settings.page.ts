@@ -3,18 +3,24 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatRadioModule } from '@angular/material/radio';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { SettingsService } from '../../services/settings.service';
 import { PwaService } from '../../services/pwa.service';
 import { RecipesService } from '../../services/recipes.service';
+import { CookbooksService } from '../../services/cookbooks.service';
 import { IntegrationsStatusComponent } from '../../components/integrations-status/integrations-status';
 import { MeasurementSystem } from '../../models/user-setting.model';
+import { AutoCollectionInfo } from '../../models/recipe.model';
 import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-settings-page',
   standalone: true,
-  imports: [MatButtonModule, MatCardModule, MatIconModule, MatRadioModule, MatSnackBarModule, IntegrationsStatusComponent],
+  imports: [
+    MatButtonModule, MatCardModule, MatIconModule, MatRadioModule,
+    MatSlideToggleModule, MatSnackBarModule, IntegrationsStatusComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings.page.html',
   styleUrl: './settings.page.scss'
@@ -25,15 +31,39 @@ export class SettingsPage implements OnInit {
   readonly importing = signal(false);
   readonly importSkipped = signal<{ title: string; reason: string }[]>([]);
 
+  readonly autoCollections = signal<AutoCollectionInfo[]>([]);
+
   constructor(
     public settingsService: SettingsService,
     public pwaService: PwaService,
     public recipesService: RecipesService,
+    private cookbooksService: CookbooksService,
     private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
     this.settingsService.loadMeasurementSystem().subscribe();
+    this.loadAutoCollections();
+  }
+
+  private loadAutoCollections(): void {
+    this.cookbooksService.getAutoCollections().subscribe({
+      next: collections => this.autoCollections.set(collections),
+      error: () => { /* the section just stays empty */ }
+    });
+  }
+
+  toggleAutoCollection(collection: AutoCollectionInfo, enabled: boolean): void {
+    // optimistic flip; revert on error
+    this.autoCollections.update(list =>
+      list.map(c => c.id === collection.id ? { ...c, enabled } : c));
+    this.cookbooksService.setAutoCollectionEnabled(collection.id, enabled).subscribe({
+      error: () => {
+        this.autoCollections.update(list =>
+          list.map(c => c.id === collection.id ? { ...c, enabled: !enabled } : c));
+        this.snackBar.open('Could not update the collection', 'Dismiss', { duration: 4000 });
+      }
+    });
   }
 
   importRecipes(files: FileList | null): void {

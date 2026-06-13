@@ -15,9 +15,20 @@
       <div class="instructions-row">
         <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
           <mat-label>Instructions (optional)</mat-label>
-          <input matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
-                 placeholder="e.g. 3 days vegetarian, at least one fish dish"
-                 (keydown.enter)="$event.preventDefault(); fetch()">
+          <textarea matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
+                 rows="3" cdkTextareaAutosize cdkAutosizeMinRows="3"
+                 placeholder="e.g. 3 days vegetarian, friday from #[Easy Weekday Dishes]"
+                 appCollectionMention #composeMention="appCollectionMention"
+                 [matAutocomplete]="composeAuto"></textarea>
+          <mat-autocomplete #composeAuto="matAutocomplete">
+            @for (collection of composeMention.suggestions(); track collection.id) {
+              <mat-option [value]="composeMention.valueFor(collection)">
+                <mat-icon>{{ collection.kind === 'auto' ? 'auto_awesome' : 'bookmark' }}</mat-icon>
+                {{ collection.name }}
+                <span class="mention-count">{{ collection.recipeCount }} recipes</span>
+              </mat-option>
+            }
+          </mat-autocomplete>
         </mat-form-field>
       </div>
     }
@@ -67,9 +78,20 @@
       <div class="instructions-row">
         <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
           <mat-label>Instructions (optional)</mat-label>
-          <input matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
-                 placeholder="e.g. 3 days vegetarian, at least one fish dish"
-                 (keydown.enter)="$event.preventDefault(); fetch()">
+          <textarea matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
+                 rows="3" cdkTextareaAutosize cdkAutosizeMinRows="3"
+                 placeholder="e.g. 3 days vegetarian, friday from #[Easy Weekday Dishes]"
+                 appCollectionMention #reviewMention="appCollectionMention"
+                 [matAutocomplete]="reviewAuto"></textarea>
+          <mat-autocomplete #reviewAuto="matAutocomplete">
+            @for (collection of reviewMention.suggestions(); track collection.id) {
+              <mat-option [value]="reviewMention.valueFor(collection)">
+                <mat-icon>{{ collection.kind === 'auto' ? 'auto_awesome' : 'bookmark' }}</mat-icon>
+                {{ collection.name }}
+                <span class="mention-count">{{ collection.recipeCount }} recipes</span>
+              </mat-option>
+            }
+          </mat-autocomplete>
         </mat-form-field>
         <button mat-stroked-button type="button" (click)="fetch()">
           <mat-icon>refresh</mat-icon>

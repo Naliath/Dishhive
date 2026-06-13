@@ -16,14 +16,16 @@ public class RulesMealSuggestionServiceTests
         IReadOnlyList<FavoriteDish>? favorites = null,
         IReadOnlyList<DishHistoryEntry>? recentDishes = null,
         IReadOnlyList<FrozenItem>? frozenItems = null,
-        IReadOnlyList<RecipeOption>? recipes = null) => new()
+        IReadOnlyList<RecipeOption>? recipes = null,
+        IReadOnlyList<CollectionConstraint>? collectionConstraints = null) => new()
     {
         WeekStart = WeekStart,
         DaysToFill = daysToFill ?? [WeekStart, WeekStart.AddDays(1), WeekStart.AddDays(2)],
         Favorites = favorites ?? [],
         RecentDishes = recentDishes ?? [],
         AvailableFrozenItems = frozenItems ?? [],
-        KnownRecipes = recipes ?? []
+        KnownRecipes = recipes ?? [],
+        CollectionConstraints = collectionConstraints ?? []
     };
 
     [Fact]
@@ -151,6 +153,94 @@ public class RulesMealSuggestionServiceTests
         var suggestions = await _service.SuggestAsync(request);
 
         suggestions[0].RecipeId.Should().Be(recipeId);
+    }
+
+    [Fact]
+    public async Task Suggest_CollectionConstrainedDay_PicksFromCollection()
+    {
+        var request = Request(
+            daysToFill: [WeekStart, WeekStart.AddDays(1)],
+            favorites: [new FavoriteDish { MemberName = "Anna", DishName = "Spaghetti" }],
+            collectionConstraints:
+            [
+                new CollectionConstraint
+                {
+                    Name = "Easy Weekday Dishes",
+                    RecipeTitles = ["Wrap", "Pasta pesto"],
+                    Dates = [WeekStart.AddDays(1)]
+                }
+            ]);
+
+        var suggestions = await _service.SuggestAsync(request);
+
+        var constrained = suggestions.Single(s => s.Date == WeekStart.AddDays(1));
+        constrained.DishName.Should().Be("Wrap");
+        constrained.Reason.Should().Contain("#[Easy Weekday Dishes]");
+        // The unconstrained day still rotates favorites
+        suggestions.Single(s => s.Date == WeekStart).DishName.Should().Be("Spaghetti");
+    }
+
+    [Fact]
+    public async Task Suggest_CollectionConstraint_RespectsVarietyWindow()
+    {
+        var request = Request(
+            daysToFill: [WeekStart],
+            collectionConstraints:
+            [
+                new CollectionConstraint
+                {
+                    Name = "Comfort Food",
+                    RecipeTitles = ["Stew", "Lasagne"],
+                    Dates = [WeekStart]
+                }
+            ],
+            recentDishes:
+            [
+                new DishHistoryEntry { DishName = "Stew", TimesPlanned = 1, LastPlanned = Today.AddDays(-3) }
+            ]);
+
+        var suggestions = await _service.SuggestAsync(request);
+
+        suggestions.Should().ContainSingle().Which.DishName.Should().Be("Lasagne");
+    }
+
+    [Fact]
+    public async Task Suggest_ExpiringFreezerItem_OutranksCollectionConstraint()
+    {
+        var request = Request(
+            daysToFill: [WeekStart],
+            frozenItems:
+            [
+                new FrozenItem
+                {
+                    Id = "1", Name = "Frozen lasagna", Quantity = 1,
+                    ExpirationDate = Today.AddDays(3).ToDateTime(TimeOnly.MinValue)
+                }
+            ],
+            collectionConstraints:
+            [
+                new CollectionConstraint { Name = "X", RecipeTitles = ["Wrap"], Dates = [WeekStart] }
+            ]);
+
+        var suggestions = await _service.SuggestAsync(request);
+
+        suggestions.Should().ContainSingle().Which.DishName.Should().Be("Frozen lasagna");
+    }
+
+    [Fact]
+    public async Task Suggest_GlobalCollectionConstraint_IsIgnoredByRules()
+    {
+        // Rules ignore free-text instructions; a global (dateless) reference too
+        var request = Request(
+            daysToFill: [WeekStart],
+            collectionConstraints:
+            [
+                new CollectionConstraint { Name = "X", RecipeTitles = ["Wrap"], Dates = [] }
+            ]);
+
+        var suggestions = await _service.SuggestAsync(request);
+
+        suggestions.Should().BeEmpty();
     }
 
     [Fact]

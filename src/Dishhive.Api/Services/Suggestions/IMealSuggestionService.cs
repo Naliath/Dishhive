@@ -41,6 +41,20 @@ public record RecipeOption
     public string? Category { get; init; }
 }
 
+/// <summary>
+/// A #[Collection Name] reference resolved to its member recipe titles. Dates list
+/// the days whose instruction referenced the collection (a dish for such a day must
+/// come from the titles); an empty list means the global instructions referenced it
+/// (its recipes should be preferred). Titles are least-recently-planned first and
+/// capped, see <see cref="CollectionMentionResolver"/>.
+/// </summary>
+public record CollectionConstraint
+{
+    public required string Name { get; init; }
+    public IReadOnlyList<string> RecipeTitles { get; init; } = [];
+    public IReadOnlyList<DateOnly> Dates { get; init; } = [];
+}
+
 /// <summary>A meal already on the week plan (context for suggestions)</summary>
 public record ExistingMeal
 {
@@ -76,6 +90,12 @@ public record MealSuggestionRequest
     /// Interpreted by the LLM provider; the rules fallback ignores it.
     /// </summary>
     public string? Instructions { get; init; }
+
+    /// <summary>
+    /// Resolved #[Collection Name] references from day instructions and the global
+    /// instructions text (see <see cref="CollectionMentionResolver"/>)
+    /// </summary>
+    public IReadOnlyList<CollectionConstraint> CollectionConstraints { get; init; } = [];
 }
 
 public record MealSuggestion

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, Inject, computed, signal } from '@a
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatChipsModule } from '@angular/material/chips';
@@ -11,9 +12,11 @@ import { MatInputModule } from '@angular/material/input';
 import { MatListModule } from '@angular/material/list';
 import { MatSelectModule } from '@angular/material/select';
 import { RecipesService } from '../../services/recipes.service';
+import { CookbooksService } from '../../services/cookbooks.service';
 import { StatisticsService } from '../../services/statistics.service';
+import { CollectionMentionDirective } from '../../directives/collection-mention.directive';
 import { DishStatistic } from '../../models/statistics.model';
-import { RecipeListItem } from '../../models/recipe.model';
+import { Cookbook, RecipeListItem } from '../../models/recipe.model';
 import { FamilyMember } from '../../models/family-member.model';
 import { FrozenItem } from '../../models/frozen-item.model';
 import {
@@ -33,6 +36,8 @@ export interface MealSlotDialogData {
   members: FamilyMember[];
   freezerEnabled: boolean;
   freezerItems: FrozenItem[];
+  /** Recipe ids already on this week's plan (random picks avoid them) */
+  plannedRecipeIds?: string[];
 }
 
 type PlanMode = 'recipe' | 'dish' | 'idea';
@@ -43,7 +48,9 @@ type PlanMode = 'recipe' | 'dish' | 'idea';
   imports: [
     FormsModule,
     RouterLink,
+    CollectionMentionDirective,
     MatDialogModule,
+    MatAutocompleteModule,
     MatButtonModule,
     MatButtonToggleModule,
     MatChipsModule,
@@ -61,6 +68,9 @@ export class MealSlotDialog {
   readonly mode = signal<PlanMode>('dish');
   readonly selectedRecipe = signal<RecipeListItem | null>(null);
   readonly recipeResults = signal<RecipeListItem[]>([]);
+  /** Manual collections with members, for "surprise me from …" picks */
+  readonly collections = signal<Cookbook[]>([]);
+  readonly picking = signal(false);
   readonly attendeeIds = signal<Set<string>>(new Set());
   readonly freezyItemRef = signal<string | null>(null);
   readonly dishStatistics = signal<DishStatistic[]>([]);
@@ -105,11 +115,18 @@ export class MealSlotDialog {
     @Inject(MAT_DIALOG_DATA) public data: MealSlotDialogData,
     private dialogRef: MatDialogRef<MealSlotDialog, CreatePlannedMeal>,
     private recipesService: RecipesService,
+    private cookbooksService: CookbooksService,
     statisticsService: StatisticsService
   ) {
     statisticsService.getDishStatistics().subscribe({
       next: stats => this.dishStatistics.set(stats.dishes),
       error: () => { /* the hint is a non-critical decoration */ }
+    });
+
+    this.cookbooksService.getCookbooks().subscribe({
+      next: cookbooks => this.collections.set(
+        cookbooks.filter(c => c.kind === 'manual' && c.recipeCount > 0)),
+      error: () => { /* random picks are a non-critical convenience */ }
     });
 
     const meal = data.meal;
@@ -154,6 +171,31 @@ export class MealSlotDialog {
     this.selectedRecipe.set(recipe);
     this.recipeResults.set([]);
     this.recipeSearch = '';
+  }
+
+  /**
+   * Picks a random recipe from a collection, avoiding recipes already on this
+   * week's plan (and the currently selected one) when possible. Needs no AI.
+   */
+  surpriseFrom(collection: Cookbook): void {
+    this.picking.set(true);
+    this.cookbooksService.getCookbookRecipes(collection.id).subscribe({
+      next: recipes => {
+        this.picking.set(false);
+        const avoid = new Set(this.data.plannedRecipeIds ?? []);
+        const current = this.selectedRecipe()?.id;
+        if (current) {
+          avoid.add(current);
+        }
+        const pool = recipes.filter(r => !avoid.has(r.id));
+        const candidates = pool.length > 0 ? pool : recipes;
+        if (candidates.length === 0) {
+          return;
+        }
+        this.selectRecipe(candidates[Math.floor(Math.random() * candidates.length)]);
+      },
+      error: () => this.picking.set(false)
+    });
   }
 
   clearRecipe(): void {

@@ -27,7 +27,6 @@ public class AiOptionsTests
 
     [Theory]
     [InlineData("openai")]
-    [InlineData("anthropic")]
     [InlineData("mistral")]
     public void IsConfigured_CloudProvider_RequiresApiKey(string provider)
     {

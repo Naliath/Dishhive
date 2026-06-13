@@ -116,16 +116,8 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
             var apiKey = options.ResolveApiKey();
             if (!string.IsNullOrEmpty(apiKey))
             {
-                if (options.NormalizedProvider == "anthropic")
-                {
-                    request.Headers.Add("x-api-key", apiKey);
-                    request.Headers.Add("anthropic-version", "2023-06-01");
-                }
-                else
-                {
-                    request.Headers.Authorization =
-                        new AuthenticationHeaderValue("Bearer", apiKey);
-                }
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue("Bearer", apiKey);
             }
 
             using var response = await http.SendAsync(request, cts.Token);
@@ -153,7 +145,6 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
         return options.NormalizedProvider switch
         {
             "openai" => new Uri("https://api.openai.com/v1/"),
-            "anthropic" => new Uri("https://api.anthropic.com/v1/"),
             _ => null
         };
     }

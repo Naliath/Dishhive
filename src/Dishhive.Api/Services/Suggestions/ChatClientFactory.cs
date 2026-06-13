@@ -1,4 +1,3 @@
-using Anthropic;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using System.ClientModel;
@@ -7,11 +6,8 @@ namespace Dishhive.Api.Services.Suggestions;
 
 /// <summary>
 /// Builds a Microsoft.Extensions.AI IChatClient from configuration.
-///
-/// Four of the five supported providers (OpenAI, Mistral, Ollama, LM Studio) speak the
-/// OpenAI-compatible chat API and share the OpenAI SDK with a per-provider endpoint;
-/// Anthropic uses its official SDK, which implements IChatClient directly.
-/// See docs/features/ai-week-planning.md for the research behind this choice.
+/// All supported providers (OpenAI, Mistral, Ollama, LM Studio, openai-compatible)
+/// speak the OpenAI-compatible chat API and share the OpenAI SDK with a per-provider endpoint.
 /// </summary>
 public static class ChatClientFactory
 {
@@ -25,12 +21,11 @@ public static class ChatClientFactory
         var provider = options.NormalizedProvider;
         return provider switch
         {
-            "anthropic" => CreateAnthropic(options),
             "openai" or "mistral" or "ollama" or "lmstudio" or "openai-compatible"
                 => CreateOpenAiCompatible(options),
             _ => throw new InvalidOperationException(
                 $"Unknown AI provider '{options.Provider}'. " +
-                "Supported: openai, anthropic, mistral, ollama, lmstudio, openai-compatible.")
+                "Supported: openai, mistral, ollama, lmstudio, openai-compatible.")
         };
     }
 
@@ -64,20 +59,5 @@ public static class ChatClientFactory
         return new OpenAIClient(new ApiKeyCredential(apiKey), clientOptions)
             .GetChatClient(options.Model)
             .AsIChatClient();
-    }
-
-    private static IChatClient CreateAnthropic(AiOptions options)
-    {
-        IAnthropicClient client = new AnthropicClient
-        {
-            ApiKey = options.ResolveApiKey(),
-            Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds)
-        };
-        if (!string.IsNullOrWhiteSpace(options.BaseUrl))
-        {
-            client = client.WithOptions(o => o with { BaseUrl = options.BaseUrl.TrimEnd('/') });
-        }
-
-        return client.AsIChatClient(options.Model, options.MaxOutputTokens);
     }
 }

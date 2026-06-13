@@ -11,12 +11,12 @@ public class AiOptions
     public const string SectionName = "Ai";
 
     /// <summary>
-    /// openai | anthropic | mistral | ollama | lmstudio | openai-compatible
+    /// openai | mistral | ollama | lmstudio | openai-compatible
     /// </summary>
     public string Provider { get; set; } = "";
 
     /// <summary>
-    /// Falls back to the industry-standard OPENAI_API_KEY / ANTHROPIC_API_KEY
+    /// Falls back to the industry-standard OPENAI_API_KEY / MISTRAL_API_KEY
     /// env vars when empty; local providers (ollama, lmstudio) need no key
     /// </summary>
     public string ApiKey { get; set; } = "";
@@ -27,7 +27,7 @@ public class AiOptions
     /// </summary>
     public string BaseUrl { get; set; } = "";
 
-    /// <summary>Model name, e.g. llama3.1, gpt-4o-mini, claude-opus-4-8</summary>
+    /// <summary>Model name, e.g. llama3.1, gpt-4o-mini, mistral-small-latest</summary>
     public string Model { get; set; } = "";
 
     /// <summary>
@@ -67,7 +67,6 @@ public class AiOptions
         var envVar = NormalizedProvider switch
         {
             "openai" => "OPENAI_API_KEY",
-            "anthropic" => "ANTHROPIC_API_KEY",
             "mistral" => "MISTRAL_API_KEY",
             _ => null
         };

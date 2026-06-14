@@ -7,9 +7,6 @@ not copied blindly. Items graduate from this list into `docs/features/*.md` when
 
 ## Small Scope Features
 
-### Light and dark theme
-Implement a light and dark theme like is already present in freezy. Freezy implementation does have a bug that should be fixed there as well. If you select light and then switch back to auto it will be dark if that is the system color but still show light in the text.
-
 ### Recipe scaling in the UI
 Servings stepper on the recipe detail page that rescales displayed ingredient quantities
 (model already supports it: quantities + servings).

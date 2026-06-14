@@ -61,3 +61,17 @@ h1 {
   color: var(--mat-sys-on-surface-variant);
   font-size: 14px;
 }
+
+.theme-toggle-group {
+  width: 100%;
+
+  mat-button-toggle {
+    flex: 1;
+  }
+}
+
+.theme-hint {
+  margin-block: 12px 0;
+  font-size: 14px;
+  color: var(--mat-sys-on-surface-variant);
+}

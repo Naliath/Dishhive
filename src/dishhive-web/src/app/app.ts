@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { SettingsService } from './services/settings.service';
 import { PwaService } from './services/pwa.service';
+import { ThemeService } from './services/theme.service';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -32,7 +33,9 @@ export class App implements OnInit {
   constructor(
     private settingsService: SettingsService,
     // Instantiated for its side effects: update checks, offline notices, install prompt
-    private pwaService: PwaService
+    private pwaService: PwaService,
+    // Instantiated for its side effects: restores saved theme preference on startup
+    private themeService: ThemeService
   ) {}
 
   ngOnInit(): void {

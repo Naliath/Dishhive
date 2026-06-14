@@ -39,6 +39,34 @@ html {
 }
 
 // ============================================================================
+// Theme Variants — applied by ThemeService via class on <html>
+// ============================================================================
+
+html.light-mode {
+  color-scheme: light;
+
+  @include mat.theme((
+    color: (
+      primary: dh.$amber-palette,
+      tertiary: mat.$cyan-palette,
+      theme-type: light,
+    ),
+  ));
+}
+
+html.dark-mode {
+  color-scheme: dark;
+
+  @include mat.theme((
+    color: (
+      primary: dh.$amber-palette,
+      tertiary: mat.$cyan-palette,
+      theme-type: dark,
+    ),
+  ));
+}
+
+// ============================================================================
 // Global Application Styles
 // ============================================================================
 

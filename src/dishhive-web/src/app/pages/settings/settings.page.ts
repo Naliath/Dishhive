@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatRadioModule } from '@angular/material/radio';
@@ -9,6 +10,7 @@ import { SettingsService } from '../../services/settings.service';
 import { PwaService } from '../../services/pwa.service';
 import { RecipesService } from '../../services/recipes.service';
 import { CookbooksService } from '../../services/cookbooks.service';
+import { ThemeService, ThemeMode } from '../../services/theme.service';
 import { IntegrationsStatusComponent } from '../../components/integrations-status/integrations-status';
 import { MeasurementSystem } from '../../models/user-setting.model';
 import { AutoCollectionInfo } from '../../models/recipe.model';
@@ -18,7 +20,7 @@ import { environment } from '../../../environments/environment';
   selector: 'app-settings-page',
   standalone: true,
   imports: [
-    MatButtonModule, MatCardModule, MatIconModule, MatRadioModule,
+    MatButtonModule, MatButtonToggleModule, MatCardModule, MatIconModule, MatRadioModule,
     MatSlideToggleModule, MatSnackBarModule, IntegrationsStatusComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -37,6 +39,7 @@ export class SettingsPage implements OnInit {
     public settingsService: SettingsService,
     public pwaService: PwaService,
     public recipesService: RecipesService,
+    public themeService: ThemeService,
     private cookbooksService: CookbooksService,
     private snackBar: MatSnackBar
   ) {}
@@ -106,5 +109,9 @@ export class SettingsPage implements OnInit {
       next: () => this.snackBar.open(`Measurement system set to ${system}`, 'Dismiss', { duration: 3000 }),
       error: () => this.snackBar.open('Could not save the setting', 'Dismiss', { duration: 4000 })
     });
+  }
+
+  setTheme(mode: ThemeMode): void {
+    this.themeService.setTheme(mode);
   }
 }

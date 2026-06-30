@@ -16,9 +16,6 @@ Map spelling variants ("ui"/"uien") to one ingredient for cleaner shopping aggre
 
 ## Medium Scope Features
 
-### Rework the recipies grouping solution
-Current cookbook implementation is lacking basing is only on a filter, this allows very little customization or requires long filter names to group different items. More ideas required
-
 ### Persisted shopping list with check-off
 Promote the computed shopping list to a persisted, checkable list with manually added extra
 items, shared across devices. 
@@ -26,10 +23,6 @@ items, shared across devices.
 ### Cooking mode
 Full-screen step-by-step view with kept-awake screen and step timers, like Dagelijkse Kost's
 "kookmodus". (Mealie: recipe step view with timers.)
-
-### Freezy write-back
-When a freezer-sourced meal is marked eaten, decrement/consume the item in Freezy via its
-existing API (Dishhive→Freezy direction preserved).
 
 ### Nutrition information
 Per-recipe nutrition (imported when sources provide it; manual otherwise). (Mealie: nutrition
@@ -39,9 +32,6 @@ fields per recipe.)
 
 ### Meal plan rules & automation
 Recurring rules ("Friday = pizza day", "max 2× meat per week") feeding the suggestion engine.
-
-### Pantry / stock awareness
-Track staples at home and subtract them from shopping lists; integrate Freezy stock as one of several storage locations.
 
 ### External integrations
 Calendar export (iCal) of the week menu; grocery-store or Home Assistant integrations.

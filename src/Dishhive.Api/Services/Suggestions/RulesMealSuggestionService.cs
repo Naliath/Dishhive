@@ -43,6 +43,8 @@ public class RulesMealSuggestionService : IMealSuggestionService
                 Date = date,
                 DishName = item.Name,
                 RecipeId = MatchRecipe(request, item.Name),
+                FreezyItemRef = item.Id,
+                FreezyItemQuantity = 1,
                 Reason = $"From the freezer, expires {item.ExpirationDate:d MMMM}"
             });
         }
@@ -147,7 +149,10 @@ public class RulesMealSuggestionService : IMealSuggestionService
         }
 
         return Task.FromResult<IReadOnlyList<MealSuggestion>>(
-            suggestions.OrderBy(s => s.Date).ToList());
+            suggestions
+                .Select(s => s with { Source = MealSuggestionSource.RulesFallback })
+                .OrderBy(s => s.Date)
+                .ToList());
     }
 
     private static Guid? MatchRecipe(MealSuggestionRequest request, string dishName)

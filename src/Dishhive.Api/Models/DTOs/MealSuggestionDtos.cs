@@ -28,6 +28,21 @@ public class MealSuggestionDto
 
     public string DishName { get; set; } = string.Empty;
     public string? Reason { get; set; }
+
+    /// <summary>True when this day was filled by the deterministic fallback, not the LLM</summary>
+    public bool FromFallback { get; set; }
+
+    /// <summary>
+    /// Heuristic warning that the linked recipe may conflict with a household
+    /// allergy; surfaced in the review dialog (never used to hide the suggestion)
+    /// </summary>
+    public string? AllergyWarning { get; set; }
+
+    /// <summary>Freezy item id when this dish comes from the freezer (reserves stock once accepted)</summary>
+    public string? FreezyItemRef { get; set; }
+
+    /// <summary>Units of the freezer item this dish reserves</summary>
+    public int FreezyItemQuantity { get; set; }
 }
 
 /// <summary>

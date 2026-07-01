@@ -253,7 +253,11 @@ public class PlannedMealsController : ControllerBase
                 RecipeId = s.RecipeId,
                 RecipeTitle = s.RecipeId.HasValue ? recipeTitles.GetValueOrDefault(s.RecipeId.Value) : null,
                 DishName = s.DishName ?? string.Empty,
-                Reason = s.Reason
+                Reason = s.Reason,
+                FromFallback = s.Source == MealSuggestionSource.RulesFallback,
+                AllergyWarning = s.AllergyWarning,
+                FreezyItemRef = s.FreezyItemRef,
+                FreezyItemQuantity = s.FreezyItemQuantity
             }).ToList()
         });
     }
@@ -404,6 +408,8 @@ public class PlannedMealsController : ControllerBase
         meal.RecipeId = dto.RecipeId;
         meal.VagueInstruction = NullIfEmpty(dto.VagueInstruction);
         meal.FreezyItemRef = NullIfEmpty(dto.FreezyItemRef);
+        // A freezer meal reserves at least one unit; a non-freezer meal reserves none
+        meal.FreezyItemQuantity = meal.FreezyItemRef != null ? Math.Max(1, dto.FreezyItemQuantity) : 0;
         meal.Notes = NullIfEmpty(dto.Notes);
 
         // DishName is always denormalized from the recipe title when a recipe is linked,
@@ -447,6 +453,7 @@ public class PlannedMealsController : ControllerBase
         DishName = meal.DishName,
         VagueInstruction = meal.VagueInstruction,
         FreezyItemRef = meal.FreezyItemRef,
+        FreezyItemQuantity = meal.FreezyItemQuantity,
         Notes = meal.Notes,
         Eaten = meal.Eaten,
         AttendeeIds = meal.Attendees.Select(a => a.FamilyMemberId).ToList(),

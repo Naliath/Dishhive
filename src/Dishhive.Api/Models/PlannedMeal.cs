@@ -68,10 +68,17 @@ public class PlannedMeal
     public string? VagueInstruction { get; set; }
 
     /// <summary>
-    /// Opaque reference to a Freezy item when the meal comes from the freezer
+    /// Id of the Freezy item this meal comes from, when sourced from the freezer
     /// </summary>
     [MaxLength(100)]
     public string? FreezyItemRef { get; set; }
+
+    /// <summary>
+    /// Units of <see cref="FreezyItemRef"/> this meal consumes; 0 when not a freezer
+    /// meal. Future un-eaten meals reserve this amount against Freezy stock so the same
+    /// stock is never planned twice (see FreezerAvailabilityService).
+    /// </summary>
+    public int FreezyItemQuantity { get; set; }
 
     [MaxLength(500)]
     public string? Notes { get; set; }

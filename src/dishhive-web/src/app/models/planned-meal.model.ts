@@ -55,6 +55,8 @@ export interface PlannedMeal {
   dishName?: string;
   vagueInstruction?: string;
   freezyItemRef?: string;
+  /** Units of the freezer item this meal reserves */
+  freezyItemQuantity?: number;
   notes?: string;
   /** Whether the meal was actually cooked/eaten; null/undefined = not marked */
   eaten?: EatenStatus | null;
@@ -70,6 +72,8 @@ export interface CreatePlannedMeal {
   dishName?: string;
   vagueInstruction?: string;
   freezyItemRef?: string;
+  /** Units of the freezer item to reserve (default 1 when a freezer item is attached) */
+  freezyItemQuantity?: number;
   notes?: string;
   familyMemberIds: string[];
 }

@@ -1,3 +1,4 @@
+using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Suggestions;
 using FluentAssertions;
 using Microsoft.Extensions.AI;
@@ -242,5 +243,156 @@ public class LlmMealSuggestionServiceTests
         var suggestions = await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
 
         suggestions.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void ParsePayload_StripsThinkBlock_AndIgnoresBracesInside()
+    {
+        var payload = LlmMealSuggestionService.ParsePayload(
+            "<think>I could use {curry} here</think>\n```json\n{\"suggestions\":[{\"date\":\"2026-06-15\",\"dishName\":\"Curry\"}]}\n```");
+
+        payload!.Suggestions.Should().ContainSingle().Which.DishName.Should().Be("Curry");
+    }
+
+    [Fact]
+    public void ParsePayload_AcceptsBareArray()
+    {
+        var payload = LlmMealSuggestionService.ParsePayload(
+            """[{"date":"2026-06-15","dishName":"Soup"}]""");
+
+        payload!.Suggestions.Should().ContainSingle().Which.DishName.Should().Be("Soup");
+    }
+
+    [Fact]
+    public async Task Suggest_UnparseableThenValid_RetriesOnceAndSucceeds()
+    {
+        var responses = new Queue<ChatResponse>(
+        [
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, "sorry, here goes nothing")),
+            new ChatResponse(new ChatMessage(ChatRole.Assistant,
+                """{"suggestions":[{"date":"2026-06-15","dishName":"Second try"}]}"""))
+        ]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        chatClient.Calls.Should().Be(2);
+        suggestions.Should().ContainSingle().Which.DishName.Should().Be("Second try");
+    }
+
+    [Fact]
+    public async Task Suggest_TruncatedResponse_TriggersRetry()
+    {
+        var responses = new Queue<ChatResponse>(
+        [
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, "{\"suggestions\":[{\"date")) { FinishReason = ChatFinishReason.Length },
+            new ChatResponse(new ChatMessage(ChatRole.Assistant,
+                """{"suggestions":[{"date":"2026-06-15","dishName":"Recovered"}]}"""))
+        ]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        chatClient.Calls.Should().Be(2);
+        suggestions.Should().ContainSingle().Which.DishName.Should().Be("Recovered");
+    }
+
+    [Fact]
+    public async Task Suggest_PartialFill_BackfillsMissingDaysFromRules()
+    {
+        // Model answers for the first day only; the second is filled from the rules,
+        // and that backfilled row is marked as fallback-sourced
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"AI dish"}]}""");
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(Request(
+            daysToFill: [WeekStart, WeekStart.AddDays(1)],
+            favorites: [new FavoriteDish { MemberName = "Anna", DishName = "Fallback dish" }]));
+
+        suggestions.Should().HaveCount(2);
+        suggestions.Should().ContainSingle(s =>
+            s.Date == WeekStart && s.DishName == "AI dish" && s.Source == MealSuggestionSource.Ai);
+        suggestions.Should().ContainSingle(s =>
+            s.Date == WeekStart.AddDays(1) && s.Source == MealSuggestionSource.RulesFallback);
+    }
+
+    [Fact]
+    public async Task Suggest_FreezerDishMatchingAvailableItem_IsLinkedAndCappedByQuantity()
+    {
+        // One lasagna in the freezer; the model proposes it on two days. Only the first
+        // links to the freezer item (reserving the single unit); the second must not.
+        var chatClient = new FakeChatClient(
+            """
+            {"suggestions":[
+              {"date":"2026-06-15","dishName":"Frozen lasagna"},
+              {"date":"2026-06-16","dishName":"Frozen lasagna"}
+            ]}
+            """);
+
+        var request = Request(daysToFill: [WeekStart, WeekStart.AddDays(1)]) with
+        {
+            AvailableFrozenItems =
+            [
+                new FrozenItem { Id = "lasagna-1", Name = "Frozen lasagna", Quantity = 1 }
+            ]
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().HaveCount(2);
+        suggestions.Should().ContainSingle(s => s.FreezyItemRef == "lasagna-1" && s.FreezyItemQuantity == 1);
+        suggestions.Count(s => s.FreezyItemRef == "lasagna-1").Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Suggest_FreezerStockReservedByAi_IsNotReusedByBackfill()
+    {
+        // The model fills one day with the only lasagna; the unfilled day is backfilled
+        // from the rules, which must NOT slot the same (now reserved) lasagna again.
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Frozen lasagna"}]}""");
+
+        var request = Request(
+            daysToFill: [WeekStart, WeekStart.AddDays(1)],
+            favorites: [new FavoriteDish { MemberName = "Anna", DishName = "Backup dish" }]) with
+        {
+            AvailableFrozenItems =
+            [
+                new FrozenItem
+                {
+                    Id = "lasagna-1", Name = "Frozen lasagna", Quantity = 1,
+                    ExpirationDate = WeekStart.AddDays(3).ToDateTime(TimeOnly.MinValue)
+                }
+            ]
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().HaveCount(2);
+        suggestions.Count(s => s.FreezyItemRef == "lasagna-1").Should().Be(1);
+        suggestions.Should().ContainSingle(s => s.Date == WeekStart.AddDays(1) && s.DishName == "Backup dish");
+    }
+
+    [Fact]
+    public async Task Suggest_LinkedRecipeWithAllergyIngredient_IsFlaggedNotDropped()
+    {
+        var recipeId = Guid.NewGuid();
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Peanut stew","recipeTitle":"Peanut stew"}]}""");
+
+        var request = Request(daysToFill: [WeekStart],
+            recipes: [new RecipeOption { Id = recipeId, Title = "Peanut stew" }]) with
+        {
+            Members = [new MemberProfile { Name = "Kid", Allergies = ["peanut"] }],
+            RecipeAllergens = new Dictionary<Guid, RecipeAllergenInfo>
+            {
+                [recipeId] = new() { Ingredients = ["peanut butter", "onion"] }
+            }
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().ContainSingle();
+        suggestions[0].AllergyWarning.Should().NotBeNull().And.Subject.Should().Contain("peanut");
     }
 }

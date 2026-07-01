@@ -119,6 +119,12 @@
               <mat-icon>close</mat-icon>
             </button>
           </div>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="freezer-qty">
+            <mat-label>Portions to use</mat-label>
+            <input matInput type="number" name="freezyQty" min="1" [max]="maxFreezerQuantity()"
+                   [(ngModel)]="freezyItemQuantity">
+            <span matTextSuffix>of {{ item.quantity }}{{ item.unit ? ' ' + item.unit : '' }} left</span>
+          </mat-form-field>
         } @else if (data.freezerItems.length === 0) {
           <p class="hint-text">No frozen items available.</p>
         } @else {
@@ -127,6 +133,7 @@
               <button mat-stroked-button class="freezer-chip" (click)="selectFreezerItem(item)">
                 <mat-icon>ac_unit</mat-icon>
                 {{ item.name }}
+                <span class="freezer-qty-badge">×{{ item.quantity }}</span>
                 @if (isExpiringSoon(item)) {
                   <mat-icon class="expiry-warning">schedule</mat-icon>
                 }

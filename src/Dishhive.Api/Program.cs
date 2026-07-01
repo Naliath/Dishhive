@@ -83,6 +83,10 @@ builder.Services.AddHttpClient<IFreezyClient, FreezyHttpClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(2);
 });
 
+// Freezer stock available for planning = Freezy stock minus future reservations
+// (see FreezerAvailabilityService); used by the planner panel and the AI suggestions.
+builder.Services.AddScoped<FreezerAvailabilityService>();
+
 // AI week-plan suggestions (see docs/features/ai-week-planning.md): LLM-backed with
 // a deterministic rules fallback when Ai:Provider is configured, no-op otherwise.
 // Testing always gets the no-op so integration tests stay deterministic.

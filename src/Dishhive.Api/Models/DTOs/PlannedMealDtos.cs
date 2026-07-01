@@ -16,6 +16,7 @@ public class PlannedMealDto
     public string? DishName { get; set; }
     public string? VagueInstruction { get; set; }
     public string? FreezyItemRef { get; set; }
+    public int FreezyItemQuantity { get; set; }
     public string? Notes { get; set; }
     public EatenStatus? Eaten { get; set; }
     public List<Guid> AttendeeIds { get; set; } = new();
@@ -66,6 +67,10 @@ public class CreatePlannedMealDto
 
     [MaxLength(100)]
     public string? FreezyItemRef { get; set; }
+
+    /// <summary>Units of the freezer item this meal consumes; defaults to 1 when a
+    /// freezer item is attached, ignored otherwise</summary>
+    public int FreezyItemQuantity { get; set; } = 1;
 
     [MaxLength(500)]
     public string? Notes { get; set; }

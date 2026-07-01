@@ -65,7 +65,29 @@ network is the cleaner long-term option for Linux hosts — open question in the
 ## Domain Model Considerations
 
 - `FrozenItem` is a **read model only** — never persisted in Dishhive's database.
-- `PlannedMeal.FreezyItemRef` (string, nullable) is the only persistence touchpoint.
+- `PlannedMeal.FreezyItemRef` (Freezy item id, nullable) + `PlannedMeal.FreezyItemQuantity`
+  (units reserved) are the only persistence touchpoints.
+
+## Stock accounting (availability)
+
+Dishhive never writes to Freezy, but it must not plan the same frozen stock twice. So the
+freezer quantities offered for planning are **Freezy's current stock minus what already-
+planned meals reserve** (`FreezerAvailabilityService`):
+
+- A **future, not-yet-eaten** meal *reserves* its `FreezyItemQuantity` against the item id —
+  Freezy hasn't been decremented for it yet, so it's committed stock.
+- A **past** meal is *trusted to Freezy*: Freezy's stock is updated on consumption, so a past
+  meal is already reflected (and a past meal that was never actually consumed simply leaves
+  its stock standing in Freezy — we don't second-guess the number).
+- An **already-eaten** meal (even today's) is also reflected in Freezy, so it isn't counted
+  again.
+
+Reservations are summed per item id; items with nothing left are dropped. Both the planner's
+freezer panel (`GET /api/freezer/suggestions`) and the AI/rules suggestions consume this
+*available* view, so neither offers depleted stock. Accepted suggestions carry the item id +
+quantity through to the created meal, so AI-planned freezer dishes reserve stock just like a
+manual pick; within one planning run the LLM linking and the rules backfill share the same
+remaining budget so they can't both grab the last unit.
 
 ## Backend Requirements
 

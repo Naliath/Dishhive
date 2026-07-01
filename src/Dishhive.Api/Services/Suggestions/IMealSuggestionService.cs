@@ -42,6 +42,17 @@ public record RecipeOption
 }
 
 /// <summary>
+/// Ingredient names of a recipe, for the post-hoc allergy check only. Never written
+/// into the prompt (it would bloat context); populated for the ranked candidate
+/// recipes by <see cref="MealSuggestionRequestBuilder"/>. Only ingredient names are
+/// used — recipe organization tags would false-positive (e.g. "nut-free" → "nut").
+/// </summary>
+public record RecipeAllergenInfo
+{
+    public IReadOnlyList<string> Ingredients { get; init; } = [];
+}
+
+/// <summary>
 /// A #[Collection Name] reference resolved to its member recipe titles. Dates list
 /// the days whose instruction referenced the collection (a dish for such a day must
 /// come from the titles); an empty list means the global instructions referenced it
@@ -96,6 +107,20 @@ public record MealSuggestionRequest
     /// instructions text (see <see cref="CollectionMentionResolver"/>)
     /// </summary>
     public IReadOnlyList<CollectionConstraint> CollectionConstraints { get; init; } = [];
+
+    /// <summary>
+    /// Allergen data (ingredients + tags) per known recipe id, for the post-hoc
+    /// allergy check only — not prompted. Populated for the ranked candidates.
+    /// </summary>
+    public IReadOnlyDictionary<Guid, RecipeAllergenInfo> RecipeAllergens { get; init; }
+        = new Dictionary<Guid, RecipeAllergenInfo>();
+}
+
+/// <summary>Which provider produced a suggestion; drives a small UI marker</summary>
+public enum MealSuggestionSource
+{
+    Ai,
+    RulesFallback
 }
 
 public record MealSuggestion
@@ -104,6 +129,22 @@ public record MealSuggestion
     public Guid? RecipeId { get; init; }
     public string? DishName { get; init; }
     public string? Reason { get; init; }
+
+    /// <summary>Whether this came from the LLM or the deterministic fallback</summary>
+    public MealSuggestionSource Source { get; init; } = MealSuggestionSource.Ai;
+
+    /// <summary>
+    /// Set when the post-hoc allergy check found the linked recipe conflicts with a
+    /// household allergy. Heuristic (ingredient-name substring match) so it only
+    /// warns — the suggestion is kept, never silently dropped.
+    /// </summary>
+    public string? AllergyWarning { get; init; }
+
+    /// <summary>Freezy item id when this dish comes from the freezer; reserves stock once accepted</summary>
+    public string? FreezyItemRef { get; init; }
+
+    /// <summary>Units of the freezer item this dish reserves (≥1 when FreezyItemRef is set)</summary>
+    public int FreezyItemQuantity { get; init; }
 }
 
 /// <summary>

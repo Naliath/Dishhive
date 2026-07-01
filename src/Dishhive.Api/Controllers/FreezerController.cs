@@ -11,27 +11,28 @@ namespace Dishhive.Api.Controllers;
 [Route("api/[controller]")]
 public class FreezerController : ControllerBase
 {
-    private readonly IFreezyClient _freezyClient;
+    private readonly FreezerAvailabilityService _availability;
 
-    public FreezerController(IFreezyClient freezyClient)
+    public FreezerController(FreezerAvailabilityService availability)
     {
-        _freezyClient = freezyClient;
+        _availability = availability;
     }
 
     /// <summary>
-    /// Frozen items available for planning, soonest-expiring first.
-    /// Returns enabled=false with an empty list when Freezy is not configured.
+    /// Frozen items still available for planning (Freezy stock minus what future meals
+    /// already reserve), soonest-expiring first. Returns enabled=false with an empty
+    /// list when Freezy is not configured.
     /// </summary>
     [HttpGet("suggestions")]
     [ProducesResponseType(typeof(FreezerSuggestionsDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<FreezerSuggestionsDto>> GetSuggestions()
     {
-        if (!_freezyClient.IsConfigured)
+        if (!_availability.IsConfigured)
         {
             return Ok(new FreezerSuggestionsDto { Enabled = false, Items = [] });
         }
 
-        var items = await _freezyClient.GetFrozenItemsAsync();
+        var items = await _availability.GetAvailableAsync();
         return Ok(new FreezerSuggestionsDto { Enabled = true, Items = items });
     }
 }

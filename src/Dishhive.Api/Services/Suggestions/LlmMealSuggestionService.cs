@@ -2,6 +2,7 @@ using Microsoft.Extensions.AI;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Dishhive.Api.Services.Suggestions;
 
@@ -12,7 +13,7 @@ namespace Dishhive.Api.Services.Suggestions;
 /// Any failure — timeout, HTTP error, malformed response — falls back to the
 /// deterministic rules provider: suggestions must never break planning.
 /// </summary>
-public class LlmMealSuggestionService : IMealSuggestionService
+public partial class LlmMealSuggestionService : IMealSuggestionService
 {
     private readonly IChatClient _chatClient;
     private readonly RulesMealSuggestionService _fallback;
@@ -50,7 +51,7 @@ public class LlmMealSuggestionService : IMealSuggestionService
             var messages = new List<ChatMessage>
             {
                 new(ChatRole.System, systemPrompt),
-                new(ChatRole.User, BuildUserPrompt(request))
+                new(ChatRole.User, BuildUserPrompt(request, _options.MaxPromptTokens))
             };
 
             // Plain text completion with the JSON shape described in the prompt, parsed
@@ -59,22 +60,55 @@ public class LlmMealSuggestionService : IMealSuggestionService
             // emit their answer into the reasoning channel, leaving content empty.
             // Prompted JSON works across all five providers; ParsePayload tolerates
             // fences/think-tags and the rules fallback absorbs anything malformed.
-            var response = await _chatClient.GetResponseAsync(
-                messages,
-                new ChatOptions { MaxOutputTokens = _options.MaxOutputTokens },
-                cancellationToken: timeout.Token);
+            var chatOptions = new ChatOptions
+            {
+                MaxOutputTokens = _options.MaxOutputTokens,
+                Temperature = (float)_options.Temperature
+            };
 
-            var payload = ParsePayload(response.Text);
+            // One model can stumble on the JSON once; a corrective reprompt (the bad
+            // reply quoted back) recovers far more often than dropping straight to the
+            // rules fallback. All attempts share the single TimeoutSeconds budget.
+            WeekSuggestionsPayload? payload = null;
+            for (var attempt = 0; attempt <= Math.Max(0, _options.MaxRetries); attempt++)
+            {
+                var response = await _chatClient.GetResponseAsync(
+                    messages, chatOptions, cancellationToken: timeout.Token);
+                LogUsage(response, attempt);
+
+                payload = ParsePayload(response.Text);
+                if (payload?.Suggestions is not null)
+                {
+                    break;
+                }
+
+                var text = response.Text ?? "";
+                var truncated = response.FinishReason == ChatFinishReason.Length;
+                _logger.LogWarning(
+                    "AI reply unparseable (attempt {Attempt}/{Max}, truncated={Truncated}). Length={Length}, start: {Snippet}",
+                    attempt + 1, _options.MaxRetries + 1, truncated, text.Length,
+                    text.Length > 300 ? text[..300] : text);
+
+                if (attempt < _options.MaxRetries)
+                {
+                    messages.Add(new ChatMessage(ChatRole.Assistant, text));
+                    messages.Add(new ChatMessage(ChatRole.User, truncated
+                        ? "Your reply was cut off before the JSON was complete. Reply again with ONLY the JSON object and keep every reason to a few words."
+                        : "That was not valid JSON. Reply with ONLY the JSON object in the required shape, no other text."));
+                }
+            }
+
             if (payload?.Suggestions is null)
             {
-                var text = response.Text ?? "";
-                _logger.LogWarning(
-                    "AI suggestion response could not be parsed; using rules fallback. Length={Length}, start: {Snippet}",
-                    text.Length, text.Length > 300 ? text[..300] : text);
+                _logger.LogWarning("AI suggestions unparseable after {Attempts} attempt(s); using rules fallback",
+                    _options.MaxRetries + 1);
                 return await _fallback.SuggestAsync(request, cancellationToken);
             }
 
             var suggestions = PostProcess(payload, request);
+            // Weak models sometimes return fewer days than asked; fill the holes from
+            // the deterministic rules rather than leaving the planner with empty days.
+            suggestions = await BackfillMissingDaysAsync(suggestions, request, cancellationToken);
             _logger.LogInformation("AI proposed {Count} meal suggestions via {Provider}/{Model}",
                 suggestions.Count, _options.Provider, _options.Model);
             return suggestions;
@@ -91,6 +125,48 @@ public class LlmMealSuggestionService : IMealSuggestionService
         }
     }
 
+    private void LogUsage(ChatResponse response, int attempt)
+    {
+        if (response.Usage is { } usage)
+        {
+            _logger.LogInformation(
+                "AI usage (attempt {Attempt}): input={Input}, output={Output}, total={Total} tokens; finish={Finish}",
+                attempt + 1, usage.InputTokenCount, usage.OutputTokenCount, usage.TotalTokenCount,
+                response.FinishReason);
+        }
+    }
+
+    /// <summary>
+    /// Fills any DaysToFill the model left empty from the deterministic rules
+    /// provider (marked as fallback-sourced), so the planner never gets a partial week.
+    /// </summary>
+    private async Task<List<MealSuggestion>> BackfillMissingDaysAsync(
+        List<MealSuggestion> suggestions, MealSuggestionRequest request, CancellationToken cancellationToken)
+    {
+        var filled = suggestions.Select(s => s.Date).ToHashSet();
+        var missing = request.DaysToFill.Where(d => !filled.Contains(d)).ToList();
+        if (missing.Count == 0)
+        {
+            return suggestions;
+        }
+
+        _logger.LogInformation("AI left {Count} day(s) unfilled; backfilling from rules", missing.Count);
+
+        // Don't let the rules backfill reuse freezer stock the AI suggestions already reserved
+        var usedByItem = suggestions
+            .Where(s => s.FreezyItemRef != null)
+            .GroupBy(s => s.FreezyItemRef!)
+            .ToDictionary(g => g.Key, g => g.Sum(s => s.FreezyItemQuantity));
+        var remainingFrozen = request.AvailableFrozenItems
+            .Select(i => usedByItem.TryGetValue(i.Id, out var used) ? i with { Quantity = i.Quantity - used } : i)
+            .Where(i => i.Quantity > 0)
+            .ToList();
+
+        var fallbackRequest = request with { DaysToFill = missing, AvailableFrozenItems = remainingFrozen };
+        var filler = await _fallback.SuggestAsync(fallbackRequest, cancellationToken);
+        return suggestions.Concat(filler).OrderBy(s => s.Date).ToList();
+    }
+
     private const string SystemPrompt =
         """
         You are a meal planner for a family household. Propose a dinner for each
@@ -101,6 +177,8 @@ public class LlmMealSuggestionService : IMealSuggestionService
         - Use expiring freezer items where sensible. Freezer leftovers may not feed the whole
           household — check their notes for portion hints; you may propose two or three small
           leftovers for the SAME date (one suggestion entry per dish) to make a full dinner.
+          Each freezer item lists the quantity available; never use an item more times across
+          the week than that quantity (the stock is already reserved for what you plan).
         - When a day has a vague instruction (e.g. "something with fish" or "vegetarian"),
           every dish you suggest for that day must satisfy it.
         - Instructions may reference a recipe collection as #[Collection Name]. When a
@@ -124,9 +202,16 @@ public class LlmMealSuggestionService : IMealSuggestionService
         PropertyNameCaseInsensitive = true
     };
 
+    /// <summary>Strips &lt;think&gt;/&lt;reasoning&gt; channels (closed or truncated) some
+    /// models emit, so the JSON slice below can't pick up a brace from inside them.</summary>
+    [GeneratedRegex(@"<(?:think|reasoning)>.*?(?:</(?:think|reasoning)>|$)",
+        RegexOptions.Singleline | RegexOptions.IgnoreCase)]
+    private static partial Regex ReasoningBlockRegex();
+
     /// <summary>
-    /// Extracts the payload from the model's text: tolerates markdown fences,
-    /// reasoning preambles and trailing prose by slicing the outermost JSON object.
+    /// Extracts the payload from the model's text. Tolerates reasoning channels,
+    /// markdown fences and trailing prose by stripping &lt;think&gt; blocks and slicing
+    /// the outermost JSON; accepts both the wrapping object and a bare suggestions array.
     /// </summary>
     internal static WeekSuggestionsPayload? ParsePayload(string? text)
     {
@@ -135,30 +220,59 @@ public class LlmMealSuggestionService : IMealSuggestionService
             return null;
         }
 
+        text = ReasoningBlockRegex().Replace(text, "");
+
+        // Prefer the documented object form when a parseable suggestions object is present
         var start = text.IndexOf('{');
         var end = text.LastIndexOf('}');
-        if (start < 0 || end <= start)
+        if (start >= 0 && end > start)
         {
-            return null;
+            try
+            {
+                var obj = JsonSerializer.Deserialize<WeekSuggestionsPayload>(
+                    text[start..(end + 1)], PayloadJsonOptions);
+                if (obj?.Suggestions is not null)
+                {
+                    return obj;
+                }
+            }
+            catch (JsonException)
+            {
+                // fall through to the bare-array form
+            }
         }
 
-        try
+        // Some models answer with a bare array ([{...}]) instead of the wrapping object
+        var arrStart = text.IndexOf('[');
+        var arrEnd = text.LastIndexOf(']');
+        if (arrStart >= 0 && arrEnd > arrStart)
         {
-            return JsonSerializer.Deserialize<WeekSuggestionsPayload>(
-                text[start..(end + 1)], PayloadJsonOptions);
+            try
+            {
+                var items = JsonSerializer.Deserialize<List<DaySuggestionPayload>>(
+                    text[arrStart..(arrEnd + 1)], PayloadJsonOptions);
+                if (items is not null)
+                {
+                    return new WeekSuggestionsPayload(items);
+                }
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
         }
-        catch (JsonException)
-        {
-            return null;
-        }
+
+        return null;
     }
 
     // internal for prompt-content tests (like ParsePayload)
-    internal static string BuildUserPrompt(MealSuggestionRequest request)
+    internal static string BuildUserPrompt(MealSuggestionRequest request, int maxPromptTokens = int.MaxValue)
     {
         var sb = new StringBuilder();
         var culture = CultureInfo.InvariantCulture;
 
+        // --- Fixed-size context first, so the variable blocks below can be sized
+        // against whatever budget remains ---
         sb.AppendLine($"Week starting: {request.WeekStart:yyyy-MM-dd}");
 
         sb.AppendLine("Household:");
@@ -186,31 +300,6 @@ public class LlmMealSuggestionService : IMealSuggestionService
             foreach (var group in request.Favorites.GroupBy(f => f.MemberName))
             {
                 sb.AppendLine($"- {group.Key}: {string.Join(", ", group.Select(f => f.DishName))}");
-            }
-        }
-
-        if (request.RecentDishes.Count > 0)
-        {
-            sb.AppendLine("Recent history (last 90 days):");
-            foreach (var dish in request.RecentDishes.Take(40))
-            {
-                sb.Append($"- {dish.DishName}: planned {dish.TimesPlanned}x, eaten {dish.TimesEaten}x");
-                if (dish.AverageRating.HasValue)
-                {
-                    sb.Append($", rated {dish.AverageRating.Value.ToString("0.0", culture)}/5");
-                }
-                sb.AppendLine($", last {dish.LastPlanned:yyyy-MM-dd}");
-            }
-        }
-
-        if (request.KnownRecipes.Count > 0)
-        {
-            sb.AppendLine("Known recipes:");
-            foreach (var recipe in request.KnownRecipes.Take(60))
-            {
-                sb.AppendLine(recipe.Category != null
-                    ? $"- \"{recipe.Title}\" ({recipe.Category})"
-                    : $"- \"{recipe.Title}\"");
             }
         }
 
@@ -267,8 +356,66 @@ public class LlmMealSuggestionService : IMealSuggestionService
             sb.AppendLine($"Additional instructions from the planner: {request.Instructions}");
         }
 
+        // --- Variable-size blocks: history then the ranked recipe list, each
+        // trimmed to the token budget (~4 chars/token). History is split into two
+        // compact lists — what to avoid for variety, and what's liked/disliked —
+        // dropping the verbose per-dish counts the model doesn't use. Recipes are
+        // already relevance-ranked by the request builder, so the budget keeps the
+        // most useful titles. A minimum number of lines is always kept so recipe
+        // linking and variety still work on a tight budget. ---
+        var unlimited = maxPromptTokens >= int.MaxValue / 4;
+        var budgetChars = unlimited ? int.MaxValue : maxPromptTokens * 4;
+
+        var recentLines = request.RecentDishes
+            .Select(d => $"{d.DishName} ({d.LastPlanned:yyyy-MM-dd})")
+            .ToList();
+        var ratedLines = request.RecentDishes
+            .Where(d => d.AverageRating.HasValue)
+            .OrderByDescending(d => d.AverageRating)
+            .Select(d => $"{d.DishName}: {d.AverageRating!.Value.ToString("0.0", culture)}/5")
+            .ToList();
+        var recipeLines = request.KnownRecipes
+            .Select(r => r.Category != null ? $"\"{r.Title}\" ({r.Category})" : $"\"{r.Title}\"")
+            .ToList();
+
+        var historyBudget = unlimited ? int.MaxValue : (int)((budgetChars - sb.Length) * 0.4);
+        var consumed = AppendBudgeted(sb, "Recent dinners (avoid repeating soon):", recentLines, historyBudget, minLines: 5);
+        AppendBudgeted(sb, "Ratings (favor high, avoid low):", ratedLines,
+            unlimited ? int.MaxValue : Math.Max(0, historyBudget - consumed), minLines: 5);
+
+        var recipeBudget = unlimited ? int.MaxValue : Math.Max(0, budgetChars - sb.Length);
+        AppendBudgeted(sb, "Known recipes (prefer these; copy the exact title):", recipeLines, recipeBudget, minLines: 10);
+
         sb.AppendLine($"Propose dinners for: {string.Join(", ", request.DaysToFill.Select(d => d.ToString("yyyy-MM-dd")))}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Appends a header and as many "- {line}" entries as fit in the char budget,
+    /// but never fewer than <paramref name="minLines"/> (so essential context
+    /// survives a tight budget). Returns the characters appended.
+    /// </summary>
+    private static int AppendBudgeted(
+        StringBuilder sb, string header, IReadOnlyList<string> lines, int budgetChars, int minLines)
+    {
+        if (lines.Count == 0)
+        {
+            return 0;
+        }
+
+        var start = sb.Length;
+        sb.AppendLine(header);
+        var taken = 0;
+        foreach (var line in lines)
+        {
+            if (taken >= minLines && sb.Length - start >= budgetChars)
+            {
+                break;
+            }
+            sb.Append("- ").AppendLine(line);
+            taken++;
+        }
+        return sb.Length - start;
     }
 
     private List<MealSuggestion> PostProcess(WeekSuggestionsPayload payload, MealSuggestionRequest request)
@@ -325,13 +472,93 @@ public class LlmMealSuggestionService : IMealSuggestionService
 
         // A day may hold several dishes (e.g. two small leftovers making one dinner),
         // but never duplicates and at most three proposals per date
-        return suggestions
+        var result = suggestions
             .GroupBy(s => (s.Date, Dish: s.DishName!.ToLowerInvariant()))
             .Select(g => g.First())
             .GroupBy(s => s.Date)
             .SelectMany(g => g.Take(3))
             .OrderBy(s => s.Date)
             .ToList();
+
+        LinkFreezerItems(result, request);
+        FlagAllergyConflicts(result, request);
+        return result;
+    }
+
+    /// <summary>
+    /// Links a suggestion to an available freezer item when its dish name matches one,
+    /// so accepting it reserves that stock. Capped per item by its remaining quantity —
+    /// the model is told the available amount, this enforces it so the same stock isn't
+    /// reserved more than it holds within one week.
+    /// </summary>
+    private static void LinkFreezerItems(List<MealSuggestion> suggestions, MealSuggestionRequest request)
+    {
+        if (request.AvailableFrozenItems.Count == 0)
+        {
+            return;
+        }
+
+        var byName = request.AvailableFrozenItems
+            .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var used = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        for (var i = 0; i < suggestions.Count; i++)
+        {
+            var s = suggestions[i];
+            if (s.FreezyItemRef != null || s.DishName is null
+                || !byName.TryGetValue(s.DishName, out var item))
+            {
+                continue;
+            }
+
+            var taken = used.GetValueOrDefault(item.Id);
+            if (taken >= item.Quantity)
+            {
+                continue; // already reserved everything available for this item
+            }
+            used[item.Id] = taken + 1;
+            suggestions[i] = s with { FreezyItemRef = item.Id, FreezyItemQuantity = 1 };
+        }
+    }
+
+    /// <summary>
+    /// Best-effort allergy net: flags (never drops) a suggestion whose linked recipe
+    /// lists an ingredient name containing a household allergy term. Heuristic and
+    /// secondary to the prompt instruction; only verifiable when a recipe is linked.
+    /// </summary>
+    private void FlagAllergyConflicts(List<MealSuggestion> suggestions, MealSuggestionRequest request)
+    {
+        var allergyTerms = request.Members
+            .SelectMany(m => m.Allergies)
+            .Select(a => a.Trim())
+            .Where(a => a.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (allergyTerms.Count == 0)
+        {
+            return;
+        }
+
+        for (var i = 0; i < suggestions.Count; i++)
+        {
+            var s = suggestions[i];
+            if (s.RecipeId is null
+                || !request.RecipeAllergens.TryGetValue(s.RecipeId.Value, out var allergens))
+            {
+                continue;
+            }
+
+            var hit = allergyTerms.FirstOrDefault(term =>
+                allergens.Ingredients.Any(ing => ing.Contains(term, StringComparison.OrdinalIgnoreCase)));
+            if (hit != null)
+            {
+                suggestions[i] = s with { AllergyWarning = $"May contain {hit} (household allergy)" };
+                _logger.LogWarning(
+                    "AI suggested \"{Dish}\" for {Date}; linked recipe has an ingredient matching the {Allergy} allergy",
+                    s.DishName, s.Date, hit);
+            }
+        }
     }
 
     /// <summary>Expected JSON shape of the LLM response</summary>

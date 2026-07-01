@@ -237,6 +237,9 @@ export class WeekPlannerPage implements OnInit {
           course: Course.Main,
           recipeId: suggestion.recipeId,
           dishName: suggestion.dishName,
+          // Carry the freezer reservation through so accepted freezer dishes draw down stock
+          freezyItemRef: suggestion.freezyItemRef,
+          freezyItemQuantity: suggestion.freezyItemQuantity,
           familyMemberIds: householdIds
         }));
 

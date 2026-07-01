@@ -14,15 +14,22 @@ public class MealSuggestionRequestBuilder
 {
     private const int HistoryDays = 90;
 
+    /// <summary>
+    /// Upper bound on recipe titles carried into the request after relevance
+    /// ranking. The prompt trims further to the token budget; this just bounds the
+    /// payload and the per-candidate allergen load for large libraries.
+    /// </summary>
+    private const int RecipeCandidateCap = 100;
+
     private readonly DishhiveDbContext _context;
-    private readonly IFreezyClient _freezyClient;
+    private readonly FreezerAvailabilityService _freezerAvailability;
     private readonly CollectionMentionResolver _mentionResolver;
 
     public MealSuggestionRequestBuilder(
-        DishhiveDbContext context, IFreezyClient freezyClient, CollectionMentionResolver mentionResolver)
+        DishhiveDbContext context, FreezerAvailabilityService freezerAvailability, CollectionMentionResolver mentionResolver)
     {
         _context = context;
-        _freezyClient = freezyClient;
+        _freezerAvailability = freezerAvailability;
         _mentionResolver = mentionResolver;
     }
 
@@ -79,9 +86,8 @@ public class MealSuggestionRequestBuilder
             .OrderByDescending(d => d.LastPlanned)
             .ToList();
 
-        var knownRecipes = await _context.Recipes
+        var allRecipes = await _context.Recipes
             .AsNoTracking()
-            .OrderBy(r => r.Title)
             .Select(r => new RecipeOption { Id = r.Id, Title = r.Title, Category = r.Category })
             .ToListAsync(cancellationToken);
 
@@ -110,7 +116,7 @@ public class MealSuggestionRequestBuilder
                 && (m.RecipeId != null || m.DishName != null)))
             .ToList();
 
-        var frozenItems = await _freezyClient.GetFrozenItemsAsync(cancellationToken);
+        var frozenItems = await _freezerAvailability.GetAvailableAsync(cancellationToken);
 
         // Resolve #[Collection Name] references from the day instructions and the
         // global instructions into recipe-title constraints
@@ -124,6 +130,55 @@ public class MealSuggestionRequestBuilder
             .ToDictionary(g => g.Key, g => g.Max(d => d.LastPlanned), StringComparer.OrdinalIgnoreCase);
         var collectionConstraints = await _mentionResolver.ResolveAsync(
             mentionSources, lastPlannedByTitle, cancellationToken);
+
+        // Rank recipes by planning relevance instead of sending an arbitrary
+        // alphabetical slice: favorites, well-rated and collection-referenced
+        // recipes rank highest; recently-eaten ones are pushed down for variety.
+        // The prompt then trims this ranked list to the token budget.
+        var favoriteTitles = favorites.Select(f => f.DishName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var constraintTitles = collectionConstraints
+            .SelectMany(c => c.RecipeTitles)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ratingByTitle = recentDishes
+            .Where(d => d.AverageRating.HasValue)
+            .GroupBy(d => d.DishName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Max(d => d.AverageRating!.Value), StringComparer.OrdinalIgnoreCase);
+
+        double Score(string title)
+        {
+            double score = 0;
+            if (constraintTitles.Contains(title)) score += 1000; // keep referenced titles linkable
+            if (favoriteTitles.Contains(title)) score += 100;
+            if (ratingByTitle.TryGetValue(title, out var rating)) score += rating * 20;
+            if (lastPlannedByTitle.TryGetValue(title, out var last))
+            {
+                var ageDays = today.DayNumber - last.DayNumber;
+                score += ageDays < 14 ? -20 : ageDays < 30 ? 5 : 20;
+            }
+            else
+            {
+                score += 30; // not planned in the last 90 days → fresh variety candidate
+            }
+            return score;
+        }
+
+        var knownRecipes = allRecipes
+            .OrderByDescending(r => Score(r.Title))
+            .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+            .Take(RecipeCandidateCap)
+            .ToList();
+
+        // Ingredient names for the ranked candidates only, for the post-hoc allergy
+        // check (not prompted). Scoped to the candidates so large libraries stay cheap.
+        var rankedIds = knownRecipes.Select(r => r.Id).ToList();
+        var recipeAllergens = (await _context.Recipes
+                .AsNoTracking()
+                .Where(r => rankedIds.Contains(r.Id))
+                .Select(r => new { r.Id, Ingredients = r.Ingredients.Select(i => i.Name).ToList() })
+                .ToListAsync(cancellationToken))
+            .ToDictionary(
+                x => x.Id,
+                x => new RecipeAllergenInfo { Ingredients = x.Ingredients });
 
         return new MealSuggestionRequest
         {
@@ -142,7 +197,8 @@ public class MealSuggestionRequestBuilder
             DaysToFill = daysToFill,
             AvailableFrozenItems = frozenItems,
             Instructions = string.IsNullOrWhiteSpace(instructions) ? null : instructions.Trim(),
-            CollectionConstraints = collectionConstraints
+            CollectionConstraints = collectionConstraints,
+            RecipeAllergens = recipeAllergens
         };
     }
 

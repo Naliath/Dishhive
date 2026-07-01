@@ -51,6 +51,17 @@
   gap: 8px;
 }
 
+.freezer-qty-badge {
+  margin-inline-start: 6px;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.freezer-qty {
+  margin-block-start: 8px;
+  max-width: 200px;
+}
+
 // "Surprise me" chips: tap to fill the slot with a random collection member
 .collection-pick-row {
   display: flex;

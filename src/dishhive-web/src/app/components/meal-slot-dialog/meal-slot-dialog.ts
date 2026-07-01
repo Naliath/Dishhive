@@ -88,6 +88,8 @@ export class MealSlotDialog {
   vagueInstruction = '';
   notes = '';
   recipeSearch = '';
+  /** Units of the selected freezer item this meal reserves */
+  freezyItemQuantity = 1;
 
   /** Allergy and diet tags of the selected attendees, shown as a planning hint */
   readonly allergyHints = computed(() => {
@@ -140,6 +142,8 @@ export class MealSlotDialog {
       this.notes = meal.notes ?? '';
       this.attendeeIds.set(new Set(meal.attendeeIds));
       this.freezyItemRef.set(meal.freezyItemRef ?? null);
+      this.freezyItemQuantity = meal.freezyItemQuantity && meal.freezyItemQuantity > 0
+        ? meal.freezyItemQuantity : 1;
       if (meal.recipeId && meal.recipeTitle) {
         this.selectedRecipe.set({
           id: meal.recipeId,
@@ -216,11 +220,17 @@ export class MealSlotDialog {
 
   selectFreezerItem(item: FrozenItem): void {
     this.freezyItemRef.set(item.id);
+    this.freezyItemQuantity = 1;
     // A freezer meal is a decided dish; prefill the dish name from the item
     this.mode.set('dish');
     if (!this.dishName.trim()) {
       this.dishName = item.name;
     }
+  }
+
+  /** Upper bound for the portions stepper; keeps an edited value selectable */
+  maxFreezerQuantity(): number {
+    return Math.max(this.selectedFreezerItem()?.quantity ?? 1, this.freezyItemQuantity);
   }
 
   clearFreezerItem(): void {
@@ -253,6 +263,7 @@ export class MealSlotDialog {
       dishName: mode === 'dish' ? this.dishName.trim() : undefined,
       vagueInstruction: mode === 'idea' ? this.vagueInstruction.trim() : undefined,
       freezyItemRef: this.freezyItemRef() ?? undefined,
+      freezyItemQuantity: this.freezyItemRef() ? this.freezyItemQuantity : undefined,
       notes: this.notes.trim() || undefined,
       familyMemberIds: [...this.attendeeIds()]
     };

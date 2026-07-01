@@ -65,7 +65,19 @@
                   @if (suggestion.recipeId) {
                     <mat-icon class="recipe-icon" matTooltip="Matches a recipe in your store">menu_book</mat-icon>
                   }
+                  @if (suggestion.freezyItemRef) {
+                    <mat-icon class="recipe-icon" matTooltip="From the freezer">ac_unit</mat-icon>
+                  }
+                  @if (suggestion.fromFallback) {
+                    <span class="suggestion-tag" matTooltip="Filled from your rules, not the AI">rules</span>
+                  }
                 </span>
+                @if (suggestion.allergyWarning) {
+                  <span class="suggestion-allergy">
+                    <mat-icon>warning</mat-icon>
+                    {{ suggestion.allergyWarning }}
+                  </span>
+                }
                 @if (suggestion.reason) {
                   <span class="suggestion-reason">{{ suggestion.reason }}</span>
                 }

@@ -48,6 +48,28 @@ public class AiOptions
     /// </summary>
     public bool DisableThinking { get; set; } = true;
 
+    /// <summary>
+    /// Sampling temperature for the suggestion call. Low by default: this is a
+    /// structured planning task, so steadier, less "creative" output parses more
+    /// reliably and makes regeneration less random.
+    /// </summary>
+    public double Temperature { get; set; } = 0.3;
+
+    /// <summary>
+    /// Extra reprompt attempts when the first reply can't be parsed (a corrective
+    /// "reply with ONLY JSON" turn is appended before retrying). 0 disables retries;
+    /// every attempt still shares the single <see cref="TimeoutSeconds"/> budget.
+    /// </summary>
+    public int MaxRetries { get; set; } = 1;
+
+    /// <summary>
+    /// Rough token budget for the variable-length prompt blocks (recipe list +
+    /// history). The builder sizes those blocks to fit instead of using fixed
+    /// caps, so the prompt scales with the model's context window. Estimated at
+    /// ~4 chars/token; the actual usage is logged for tuning.
+    /// </summary>
+    public int MaxPromptTokens { get; set; } = 6000;
+
     /// <summary>Providers that run locally and need no API key</summary>
     private static readonly string[] LocalProviders = ["ollama", "lmstudio", "openai-compatible"];
 

@@ -216,6 +216,7 @@ API keys also resolve from the standard `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` /
 | `Ai__ApiKey` | empty | API key (falls back to `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `MISTRAL_API_KEY`) |
 | `Ai__BaseUrl` | per-provider default | Endpoint override (required for `openai-compatible`) |
 | `Ai__Model` | empty | Model name, e.g. `llama3.1`, `gpt-4o-mini`, `claude-opus-4-8` |
+| `Ai__Temperature` / `Ai__MaxRetries` / `Ai__MaxPromptTokens` | `0.3` / `1` / `6000` | Robustness/context tuning: sampling temperature, corrective reprompts, prompt token budget |
 
 ## Documentation
 

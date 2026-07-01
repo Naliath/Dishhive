@@ -46,6 +46,9 @@ public class RulesMealSuggestionServiceTests
 
         suggestions[0].DishName.Should().Be("Frozen lasagna");
         suggestions[0].Reason.Should().Contain("expires");
+        // Carries the reservation so accepting it draws down Freezy stock
+        suggestions[0].FreezyItemRef.Should().Be("1");
+        suggestions[0].FreezyItemQuantity.Should().Be(1);
     }
 
     [Fact]

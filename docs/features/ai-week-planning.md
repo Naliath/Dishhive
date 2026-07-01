@@ -41,6 +41,9 @@ behind the existing `IMealSuggestionService` seam — AI is not bolted on anywhe
 | `Ai__BaseUrl` | Optional endpoint override (required for `openai-compatible`) |
 | `Ai__Model` | e.g. `llama3.1`, `gpt-4o-mini`, `claude-opus-4-8` |
 | `Ai__MaxOutputTokens` / `Ai__TimeoutSeconds` | Defaults 12000 / 60 (generous: reasoning models burn 6-8k thinking tokens on instruction-heavy requests before any JSON appears) |
+| `Ai__Temperature` | Default 0.3 — low, for steadier structured output and less random regeneration |
+| `Ai__MaxRetries` | Default 1 — extra corrective reprompts when a reply can't be parsed before falling back |
+| `Ai__MaxPromptTokens` | Default 6000 — rough budget (~4 chars/token) sizing the recipe + history blocks to the model's context window |
 
 ## Architecture
 
@@ -90,9 +93,34 @@ IMealSuggestionService
   carry their Freezy notes in the prompt (portion hints); the model may propose several
   small leftovers for the same date — post-processing allows up to three distinct dishes
   per day instead of one.
+- **Freezer stock**: the prompt only lists freezer items still *available* (Freezy stock
+  minus what future meals already reserve — see [freezy-integration.md](freezy-integration.md))
+  with their remaining quantity, and the model is told not to exceed it. Post-processing
+  links a proposed dish back to the freezer item by name (capped by remaining quantity), so
+  accepting it reserves the stock and the same item is never planned into two weeks.
 - **Rules fallback**: expiring freezer items (≤10 days past week end) first, then rotate
   favorites — skip dishes planned <14 days ago or rated <3, prefer loved (≥4), round-robin
   across members. Pure function, unit-tested.
+- **Robustness posture**: a single unparseable or truncated reply is recovered, not
+  discarded. `ParsePayload` strips `<think>`/`<reasoning>` blocks and code fences and
+  accepts both the wrapping object and a bare array. On a parse miss the model is
+  reprompted once with its bad reply quoted back (`Ai__MaxRetries`); a truncated reply
+  (`FinishReason == Length`) is detected and reprompted with a "be concise" nudge. If the
+  model still under-delivers — fewer days than asked — the missing days are **backfilled
+  from the rules** (those rows are tagged `RulesFallback` so the UI marks them). Only a
+  total failure (timeout/HTTP error/exhausted retries) drops to a full rules answer. The
+  endpoint never 500s because a model is down (Freezy precedent). Token usage is logged
+  per call for tuning.
+- **Context budgeting**: recipes are **relevance-ranked** by the request builder
+  (favorites, ratings, collection membership; recently-eaten pushed down) rather than sent
+  alphabetically, and history is two compact lists (recent-to-avoid, liked/disliked). The
+  prompt then trims both to `Ai__MaxPromptTokens`, so the prompt scales with the model's
+  context window instead of using fixed caps.
+- **Allergy net**: after parsing, a suggestion linked to a known recipe whose ingredient
+  names contain a household allergy term gets an `AllergyWarning` (surfaced in the review
+  dialog). Heuristic and secondary to the prompt rule — it flags, never drops, and only
+  for recipe-linked dishes. The candidate recipes' ingredient names are loaded for this
+  check only and are **not** sent to the model.
 - **Failure posture**: AI errors are logged and answered by the fallback; the endpoint
   never 500s because a model is down (Freezy precedent).
 
@@ -120,8 +148,9 @@ IMealSuggestionService
 - Small local models may ignore the JSON schema → malformed-output path lands on the rules
   fallback by design.
 - MEAI / Anthropic package APIs still move; versions pinned in the csproj.
-- Suggestion quality depends on the configured model; the prompt caps history at 40 dishes
-  and recipes at 60 titles to stay within small-model context limits.
+- Suggestion quality depends on the configured model; recipes are relevance-ranked and
+  the recipe + history blocks are trimmed to `Ai__MaxPromptTokens` (default 6000) so the
+  prompt scales with the model's context window instead of fixed 40/60 caps.
 
 ## Implementation Checklist
 

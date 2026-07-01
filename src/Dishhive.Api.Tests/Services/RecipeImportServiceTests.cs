@@ -43,6 +43,7 @@ public class RecipeImportServiceTests : IDisposable
             new HttpClient(handler),
             [new DagelijkseKostProvider()],
             _context,
+            new NoOpLlmRecipeExtractor(),
             NullLogger<RecipeImportService>.Instance);
     }
 
@@ -163,6 +164,7 @@ public class RecipeImportServiceTests : IDisposable
             new HttpClient(handler),
             [new DagelijkseKostProvider(), fallback],
             _context,
+            new NoOpLlmRecipeExtractor(),
             NullLogger<RecipeImportService>.Instance);
     }
 
@@ -177,6 +179,48 @@ public class RecipeImportServiceTests : IDisposable
 
         recipe.SourceProvider.Should().Be("dagelijkse-kost");
         handler.Requests.Should().NotContain(r => r.AbsoluteUri.StartsWith(SidecarBaseUrl));
+    }
+
+    // -------------------------------------------------------------------------
+    // LLM extraction fallback: when no structured provider can parse a page and
+    // AI is configured, the page is handed to the LLM extractor
+    // -------------------------------------------------------------------------
+
+    private sealed class FakeLlmRecipeExtractor(ImportedRecipe? result) : ILlmRecipeExtractor
+    {
+        public bool WasCalled { get; private set; }
+        public bool IsAvailable => true;
+
+        public Task<ImportedRecipe?> ExtractAsync(string html, Uri sourceUrl, CancellationToken cancellationToken = default)
+        {
+            WasCalled = true;
+            return Task.FromResult(result);
+        }
+    }
+
+    [Fact]
+    public async Task Import_NoStructuredProviderButAiConfigured_UsesLlmExtraction()
+    {
+        var handler = new MockHttpMessageHandler()
+            .RespondWith("https://blog.example/dish", "<html><body>A tasty dish</body></html>");
+        var extractor = new FakeLlmRecipeExtractor(new ImportedRecipe
+        {
+            Title = "LLM dish",
+            IngredientLines = ["1 onion"],
+            Steps = ["Cook it."]
+        });
+        var service = new RecipeImportService(
+            new HttpClient(handler),
+            [new DagelijkseKostProvider()], // does not handle blog.example
+            _context,
+            extractor,
+            NullLogger<RecipeImportService>.Instance);
+
+        var recipe = await service.ImportAsync("https://blog.example/dish");
+
+        extractor.WasCalled.Should().BeTrue();
+        recipe.Title.Should().Be("LLM dish");
+        recipe.SourceProvider.Should().Be("llm");
     }
 
     [Fact]

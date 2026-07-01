@@ -44,6 +44,21 @@ behind the existing `IMealSuggestionService` seam — AI is not bolted on anywhe
 | `Ai__Temperature` | Default 0.3 — low, for steadier structured output and less random regeneration |
 | `Ai__MaxRetries` | Default 1 — extra corrective reprompts when a reply can't be parsed before falling back |
 | `Ai__MaxPromptTokens` | Default 6000 — rough budget (~4 chars/token) sizing the recipe + history blocks to the model's context window |
+| `Ai__AgentTimeoutSeconds` / `Ai__MaxToolIterations` | Defaults 300 / 8 — timeout and tool-call cap for the agentic (external-recipe) path only; a tool loop is several full model round-trips, so it needs much more headroom than a plain suggestion call |
+
+### Web search (optional, for external-recipe discovery)
+
+`WebSearch` section / `WebSearch__*` env vars. Disabled while `WebSearch__Provider` is empty
+(Freezy pattern: a NoOp client stays registered, the tools are simply not offered) — the
+`appsettings.json` default (bare `dotnet run`, no docker). In `docker-compose`, it defaults
+to **enabled** against the bundled `searxng` service (scraper-sidecar pattern: the container
+is part of the same stack, so it's on unless overridden).
+
+| Key | Meaning |
+|---|---|
+| `WebSearch__Provider` | `searxng` (self-hosted). Seam is provider-agnostic — Brave/Tavily/... can be added |
+| `WebSearch__BaseUrl` | Instance root (e.g. `http://searxng:8080`); JSON output must be enabled on the instance. Host access for local debugging is on `http://localhost:5102` (Dishhive's own `51xx` range, not the collision-prone `8080`/`8888`) |
+| `WebSearch__MaxResults` | Default 5 — results returned to the model per query |
 
 ## Architecture
 
@@ -88,6 +103,30 @@ IMealSuggestionService
   instructions. The inputs get a `#`-triggered autocomplete
   (`directives/collection-mention.directive.ts`): typing `#ea` suggests matching
   collections and inserts the complete token — brackets are never typed by hand.
+- **@[Source] external recipe discovery** (July 2026): instructions may reference an
+  external website as `@[Source]` ("vegetarian under 30 min from @[Dagelijkse Kost]"), or
+  ask to "find" a recipe not in the store. When `WebSearch` is configured and instructions
+  are present, `LlmMealSuggestionService` attaches two read-only tools (Microsoft.Extensions.AI
+  `FunctionInvokingChatClient` + `AIFunctionFactory`) and the model drives a tool loop:
+    - `search_recipes(query, site)` → app-provided web search (`IWebSearchClient`, SearXNG),
+      so models without native search can still browse; the site defaults to the referenced
+      source's host (`SourceMentionResolver` → `SourceConstraint`, grammar `@\[([^\[\]\r\n]{1,100})\]`,
+      resolved via `RecipeSourceCatalog`: dedicated providers + previously-imported hosts, or a
+      bare domain typed by hand).
+    - `get_recipe(url)` → `RecipeImportService.PreviewAsync`: fetch + structured extract (scraper),
+      or the cleaned page text when it can't be parsed, so the model verifies the constraints
+      (time, vegetarian, …) before choosing. SSRF-guarded (`UrlGuard`: http/https only, no
+      private/loopback hosts).
+  An external pick comes back with a `sourceUrl` (and resolved `SourceName`); nothing is imported
+  during suggestion. **Import happens on accept**: the review dialog's "Add selected" imports each
+  external pick via `POST /api/recipes/import` (dedup by source URL) and then plans it by recipe id
+  — proposals-only is preserved. Off-source picks are logged but kept (soft enforcement, like
+  collections). Requires a tool-capable model; otherwise it falls back to known-recipe suggestions.
+  The agentic path uses `Ai__AgentTimeoutSeconds` and skips the `/no_think` nudge (reasoning helps
+  tool use). `ExternalRecipeTools` memoizes `search_recipes`/`get_recipe` per request (keyed by
+  query+site / URL) — some models re-issue an identical call, and re-fetching would waste the
+  shared time budget on a repeat. The autocomplete gains an `@`-trigger alongside `#` (shared
+  directive/util).
 - **Day adherence & leftovers**: dishes proposed for a day with a vague instruction must
   all satisfy it (a "vegetarian" day gets only vegetarian proposals). Freezer leftovers
   carry their Freezy notes in the prompt (portion hints); the model may propose several
@@ -163,3 +202,8 @@ IMealSuggestionService
 - [x] Status + suggestions endpoints + integration tests
 - [x] Planner button + review dialog + accept flow
 - [x] docker-compose `Ai__*` vars + README provider table
+- [x] Web search seam (`IWebSearchClient` + SearXNG) + `WebSearch__*` config + integrations status
+- [x] External-recipe tools (`search_recipes`, `get_recipe`) + `FunctionInvokingChatClient` wiring
+- [x] `@[Source]` mentions (`SourceMentionResolver`, `RecipeSourceCatalog`, `GET /api/recipes/sources`)
+- [x] LLM recipe-extraction fallback for import + `PreviewAsync`; import-on-accept in the review dialog
+- [x] docker-compose `searxng` service + `WebSearch__*` vars + `@` autocomplete

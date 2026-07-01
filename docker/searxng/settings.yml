@@ -1,0 +1,15 @@
+# Minimal SearXNG override for Dishhive's AI web-search tool.
+# Inherits SearXNG's full defaults and only changes what the app needs:
+#   - a secret key (CHANGE THIS for anything beyond local use)
+#   - JSON output enabled, so the app can call /search?format=json
+# See https://docs.searxng.org/admin/settings/ for the full option set.
+use_default_settings: true
+
+server:
+  secret_key: "change-me-dishhive-searxng"
+  limiter: false
+
+search:
+  formats:
+    - html
+    - json

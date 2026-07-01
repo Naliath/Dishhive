@@ -234,3 +234,6 @@ public class RecipeCookbooksRequestDto
     [Required]
     public List<Guid> CookbookIds { get; set; } = new();
 }
+
+/// <summary>A known recipe source for the week-planner's @[Source] picker</summary>
+public record RecipeSourceDto(string Name, string Host);

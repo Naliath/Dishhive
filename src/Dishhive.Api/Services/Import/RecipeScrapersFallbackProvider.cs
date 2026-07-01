@@ -18,6 +18,11 @@ public partial class RecipeScrapersFallbackProvider(
 
     public string Key => "recipe-scrapers";
 
+    // Generic catch-all: not a named source, so it isn't offered in the @[Source] picker
+    public string DisplayName => "Other websites";
+
+    public IReadOnlyList<string> Hosts => [];
+
     public bool CanHandle(Uri url)
     {
         return client.IsConfigured

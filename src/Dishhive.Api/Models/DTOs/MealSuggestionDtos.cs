@@ -43,6 +43,15 @@ public class MealSuggestionDto
 
     /// <summary>Units of the freezer item this dish reserves</summary>
     public int FreezyItemQuantity { get; set; }
+
+    /// <summary>
+    /// URL of an external recipe the AI found; accepting the suggestion imports it from
+    /// here before planning it. Null for known-recipe/plain suggestions.
+    /// </summary>
+    public string? SourceUrl { get; set; }
+
+    /// <summary>Friendly source name for an external suggestion (e.g. "Dagelijkse Kost")</summary>
+    public string? SourceName { get; set; }
 }
 
 /// <summary>

@@ -11,21 +11,26 @@
     @case ('compose') {
       <p class="compose-hint">
         Any wishes for this week? They are passed to the AI before it plans the menu.
+        @if (webSearchAvailable()) {
+          Reference a website with <code>&#64;</code> to have it find and import a new recipe.
+        }
       </p>
       <div class="instructions-row">
         <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
           <mat-label>Instructions (optional)</mat-label>
           <textarea matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
                  rows="3" cdkTextareaAutosize cdkAutosizeMinRows="3"
-                 placeholder="e.g. 3 days vegetarian, friday from #[Easy Weekday Dishes]"
+                 placeholder="e.g. vegetarian under 30 min from @[Dagelijkse Kost]"
                  appCollectionMention #composeMention="appCollectionMention"
                  [matAutocomplete]="composeAuto"></textarea>
           <mat-autocomplete #composeAuto="matAutocomplete">
-            @for (collection of composeMention.suggestions(); track collection.id) {
-              <mat-option [value]="composeMention.valueFor(collection)">
-                <mat-icon>{{ collection.kind === 'auto' ? 'auto_awesome' : 'bookmark' }}</mat-icon>
-                {{ collection.name }}
-                <span class="mention-count">{{ collection.recipeCount }} recipes</span>
+            @for (item of composeMention.suggestions(); track item.id) {
+              <mat-option [value]="composeMention.valueFor(item)">
+                <mat-icon>{{ item.icon }}</mat-icon>
+                {{ item.name }}
+                @if (item.detail) {
+                  <span class="mention-count">{{ item.detail }}</span>
+                }
               </mat-option>
             }
           </mat-autocomplete>
@@ -68,10 +73,19 @@
                   @if (suggestion.freezyItemRef) {
                     <mat-icon class="recipe-icon" matTooltip="From the freezer">ac_unit</mat-icon>
                   }
+                  @if (suggestion.sourceUrl) {
+                    <mat-icon class="recipe-icon" matTooltip="Found online — imported when you add it">travel_explore</mat-icon>
+                  }
                   @if (suggestion.fromFallback) {
                     <span class="suggestion-tag" matTooltip="Filled from your rules, not the AI">rules</span>
                   }
                 </span>
+                @if (suggestion.sourceUrl) {
+                  <a class="suggestion-source" [href]="suggestion.sourceUrl" target="_blank" rel="noopener"
+                     (click)="$event.stopPropagation()">
+                    Will import from {{ suggestion.sourceName || 'the web' }}
+                  </a>
+                }
                 @if (suggestion.allergyWarning) {
                   <span class="suggestion-allergy">
                     <mat-icon>warning</mat-icon>
@@ -92,15 +106,17 @@
           <mat-label>Instructions (optional)</mat-label>
           <textarea matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
                  rows="3" cdkTextareaAutosize cdkAutosizeMinRows="3"
-                 placeholder="e.g. 3 days vegetarian, friday from #[Easy Weekday Dishes]"
+                 placeholder="e.g. vegetarian under 30 min from @[Dagelijkse Kost]"
                  appCollectionMention #reviewMention="appCollectionMention"
                  [matAutocomplete]="reviewAuto"></textarea>
           <mat-autocomplete #reviewAuto="matAutocomplete">
-            @for (collection of reviewMention.suggestions(); track collection.id) {
-              <mat-option [value]="reviewMention.valueFor(collection)">
-                <mat-icon>{{ collection.kind === 'auto' ? 'auto_awesome' : 'bookmark' }}</mat-icon>
-                {{ collection.name }}
-                <span class="mention-count">{{ collection.recipeCount }} recipes</span>
+            @for (item of reviewMention.suggestions(); track item.id) {
+              <mat-option [value]="reviewMention.valueFor(item)">
+                <mat-icon>{{ item.icon }}</mat-icon>
+                {{ item.name }}
+                @if (item.detail) {
+                  <span class="mention-count">{{ item.detail }}</span>
+                }
               </mat-option>
             }
           </mat-autocomplete>

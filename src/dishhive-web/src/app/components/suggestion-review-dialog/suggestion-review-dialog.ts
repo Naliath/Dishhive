@@ -62,6 +62,7 @@ export class SuggestionReviewDialog implements OnInit {
   readonly phase = signal<DialogPhase>('checking');
   readonly failed = signal(false);
   readonly aiAvailable = signal(false);
+  readonly webSearchAvailable = signal(false);
   readonly suggestions = signal<MealSuggestion[]>([]);
   readonly selectedIndexes = signal<Set<number>>(new Set());
 
@@ -82,6 +83,7 @@ export class SuggestionReviewDialog implements OnInit {
     this.integrationsService.getStatus().subscribe(status => {
       const aiUp = status?.ai.reachable ?? false;
       this.aiAvailable.set(aiUp);
+      this.webSearchAvailable.set(status?.webSearch?.reachable ?? false);
       if (aiUp) {
         this.phase.set('compose');
       } else {

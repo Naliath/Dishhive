@@ -1,8 +1,11 @@
 using Dishhive.Api.Services.Freezy;
+using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.Suggestions;
+using Dishhive.Api.Services.WebSearch;
 using FluentAssertions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 
 namespace Dishhive.Api.Tests.Services;
 
@@ -41,6 +44,7 @@ public class LlmMealSuggestionServiceTests
 
     private static LlmMealSuggestionService CreateService(FakeChatClient chatClient)
         => new(chatClient, new RulesMealSuggestionService(), new AiOptions { Provider = "ollama", Model = "test" },
+            new NoOpWebSearchClient(), Substitute.For<IRecipeImportService>(), new WebSearchOptions(),
             NullLogger<LlmMealSuggestionService>.Instance);
 
     private static MealSuggestionRequest Request(
@@ -371,6 +375,46 @@ public class LlmMealSuggestionServiceTests
         suggestions.Should().HaveCount(2);
         suggestions.Count(s => s.FreezyItemRef == "lasagna-1").Should().Be(1);
         suggestions.Should().ContainSingle(s => s.Date == WeekStart.AddDays(1) && s.DishName == "Backup dish");
+    }
+
+    [Fact]
+    public async Task Suggest_ExternalSourceUrl_IsMappedWithSourceName()
+    {
+        var chatClient = new FakeChatClient(
+            """
+            {"suggestions":[
+              {"date":"2026-06-15","dishName":"Vegetarische lasagne","recipeTitle":null,
+               "sourceUrl":"https://dagelijksekost.vrt.be/recepten/lasagne","reason":"From the site"}
+            ]}
+            """);
+
+        var request = Request(daysToFill: [WeekStart]) with
+        {
+            SourceConstraints =
+            [
+                new SourceConstraint { Name = "Dagelijkse Kost", Host = "dagelijksekost.vrt.be", Dates = [WeekStart] }
+            ]
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        var suggestion = suggestions.Should().ContainSingle().Subject;
+        suggestion.SourceUrl.Should().Be("https://dagelijksekost.vrt.be/recepten/lasagne");
+        suggestion.SourceName.Should().Be("Dagelijkse Kost");
+        suggestion.RecipeId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Suggest_InvalidSourceUrl_IsIgnored()
+    {
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Something","sourceUrl":"not-a-url"}]}""");
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        var suggestion = suggestions.Should().ContainSingle().Subject;
+        suggestion.SourceUrl.Should().BeNull();
+        suggestion.DishName.Should().Be("Something");
     }
 
     [Fact]

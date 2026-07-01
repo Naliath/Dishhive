@@ -66,6 +66,19 @@ public record CollectionConstraint
     public IReadOnlyList<DateOnly> Dates { get; init; } = [];
 }
 
+/// <summary>
+/// An @[Source] reference resolved to a website host, so the LLM's search tool can
+/// restrict to that site (e.g. "find something from @[Dagelijkse Kost]"). Dates list
+/// the days whose instruction referenced the source; an empty list means the global
+/// instructions referenced it. See <see cref="SourceMentionResolver"/>.
+/// </summary>
+public record SourceConstraint
+{
+    public required string Name { get; init; }
+    public required string Host { get; init; }
+    public IReadOnlyList<DateOnly> Dates { get; init; } = [];
+}
+
 /// <summary>A meal already on the week plan (context for suggestions)</summary>
 public record ExistingMeal
 {
@@ -109,6 +122,13 @@ public record MealSuggestionRequest
     public IReadOnlyList<CollectionConstraint> CollectionConstraints { get; init; } = [];
 
     /// <summary>
+    /// Resolved @[Source] references (external recipe sites) from the day and global
+    /// instructions (see <see cref="SourceMentionResolver"/>). Empty when web search
+    /// is unconfigured or nothing referenced a source.
+    /// </summary>
+    public IReadOnlyList<SourceConstraint> SourceConstraints { get; init; } = [];
+
+    /// <summary>
     /// Allergen data (ingredients + tags) per known recipe id, for the post-hoc
     /// allergy check only — not prompted. Populated for the ranked candidates.
     /// </summary>
@@ -145,6 +165,15 @@ public record MealSuggestion
 
     /// <summary>Units of the freezer item this dish reserves (≥1 when FreezyItemRef is set)</summary>
     public int FreezyItemQuantity { get; init; }
+
+    /// <summary>
+    /// URL of an external recipe the model found (not yet in the store). Accepting the
+    /// suggestion imports it from here before planning it. Null for known-recipe/plain picks.
+    /// </summary>
+    public string? SourceUrl { get; init; }
+
+    /// <summary>Friendly source name for an external suggestion (e.g. "Dagelijkse Kost" or the host)</summary>
+    public string? SourceName { get; init; }
 }
 
 /// <summary>

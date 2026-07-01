@@ -100,6 +100,16 @@
   font-size: 13px;
 }
 
+.suggestion-source {
+  color: var(--mat-sys-primary);
+  font-size: 12px;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .instructions-row {
   display: flex;
   align-items: center;

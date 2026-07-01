@@ -128,6 +128,12 @@ public class DishhiveDbContext : DbContext
             entity.Property(e => e.Unit).HasMaxLength(50);
             entity.Property(e => e.OriginalText).IsRequired().HasMaxLength(300);
             entity.Property(e => e.OriginalUnit).HasMaxLength(50);
+            // Explicit precision: unconfigured decimal columns otherwise emit an EF Core
+            // startup warning ("no store type specified... values may be silently
+            // truncated"). 10,3 comfortably covers cooking quantities (fractional teaspoons
+            // through thousands of grams) with room to spare.
+            entity.Property(e => e.Quantity).HasPrecision(10, 3);
+            entity.Property(e => e.OriginalQuantity).HasPrecision(10, 3);
 
             entity.HasOne(e => e.Recipe)
                   .WithMany(r => r.Ingredients)

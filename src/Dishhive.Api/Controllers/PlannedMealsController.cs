@@ -257,7 +257,9 @@ public class PlannedMealsController : ControllerBase
                 FromFallback = s.Source == MealSuggestionSource.RulesFallback,
                 AllergyWarning = s.AllergyWarning,
                 FreezyItemRef = s.FreezyItemRef,
-                FreezyItemQuantity = s.FreezyItemQuantity
+                FreezyItemQuantity = s.FreezyItemQuantity,
+                SourceUrl = s.SourceUrl,
+                SourceName = s.SourceName
             }).ToList()
         });
     }

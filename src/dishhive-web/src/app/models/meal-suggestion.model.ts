@@ -13,6 +13,10 @@ export interface MealSuggestion {
   freezyItemRef?: string;
   /** Units of the freezer item this dish reserves */
   freezyItemQuantity?: number;
+  /** URL of an external recipe the AI found; imported from here when the suggestion is accepted */
+  sourceUrl?: string;
+  /** Friendly source name for an external suggestion (e.g. "Dagelijkse Kost") */
+  sourceName?: string;
 }
 
 export interface MealSuggestions {

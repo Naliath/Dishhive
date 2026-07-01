@@ -11,6 +11,15 @@ public interface IRecipeSourceProvider
     /// <summary>Stable provider key stored on imported recipes (e.g. "dagelijkse-kost")</summary>
     string Key { get; }
 
+    /// <summary>Friendly source name for the @[Source] picker (e.g. "Dagelijkse Kost")</summary>
+    string DisplayName { get; }
+
+    /// <summary>
+    /// Hosts this provider is dedicated to (e.g. "dagelijksekost.vrt.be"). Empty for
+    /// generic catch-all providers, which aren't offered as named sources.
+    /// </summary>
+    IReadOnlyList<string> Hosts { get; }
+
     /// <summary>Whether this provider can extract recipes from the given URL</summary>
     bool CanHandle(Uri url);
 

@@ -5,6 +5,7 @@ using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.ShoppingList;
 using Dishhive.Api.Services.Suggestions;
+using Dishhive.Api.Services.WebSearch;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
@@ -26,7 +27,12 @@ var builder = WebApplication.CreateBuilder(args);
 if (!builder.Environment.IsEnvironment("Testing"))
 {
     builder.Services.AddDbContext<DishhiveDbContext>(options =>
-        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+            // Several queries load two collection navigations at once (e.g. PlannedMeal's
+            // Attendees + Ratings, Recipe's Ingredients + Steps) — split-query avoids the
+            // cartesian-product row multiplication of the single-query default (and the
+            // MultipleCollectionIncludeWarning EF logs for every such query shape).
+            npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
     // Health Checks - Include database check only in non-test environments
     builder.Services.AddHealthChecks()
@@ -87,6 +93,26 @@ builder.Services.AddHttpClient<IFreezyClient, FreezyHttpClient>(client =>
 // (see FreezerAvailabilityService); used by the planner panel and the AI suggestions.
 builder.Services.AddScoped<FreezerAvailabilityService>();
 
+// Web search for the AI planner's external-recipe tools (see docs/features/ai-week-planning.md).
+// Optional (disabled while WebSearch__Provider/BaseUrl are empty): a NoOp client stays registered
+// so the suggestion service simply omits the search tool. Config is always registered so
+// IntegrationsController can report its state.
+var webSearchOptions = builder.Configuration.GetSection(WebSearchOptions.SectionName).Get<WebSearchOptions>()
+    ?? new WebSearchOptions();
+builder.Services.AddSingleton(webSearchOptions);
+if (webSearchOptions.IsConfigured)
+{
+    builder.Services.AddHttpClient<IWebSearchClient, SearxngWebSearchClient>(client =>
+    {
+        client.BaseAddress = new Uri(webSearchOptions.BaseUrl.TrimEnd('/') + "/");
+        client.Timeout = TimeSpan.FromSeconds(20);
+    });
+}
+else
+{
+    builder.Services.AddSingleton<IWebSearchClient, NoOpWebSearchClient>();
+}
+
 // AI week-plan suggestions (see docs/features/ai-week-planning.md): LLM-backed with
 // a deterministic rules fallback when Ai:Provider is configured, no-op otherwise.
 // Testing always gets the no-op so integration tests stay deterministic.
@@ -96,14 +122,22 @@ builder.Services.AddSingleton(aiOptions);
 if (!builder.Environment.IsEnvironment("Testing") && aiOptions.IsConfigured)
 {
     builder.Services.AddSingleton(_ => ChatClientFactory.Create(aiOptions));
-    builder.Services.AddSingleton<RulesMealSuggestionService>();
-    builder.Services.AddSingleton<IMealSuggestionService, LlmMealSuggestionService>();
+    // Suggestion services are scoped: the LLM tools (external-recipe discovery) close
+    // over scoped/typed-HttpClient dependencies. The IChatClient stays singleton.
+    builder.Services.AddScoped<RulesMealSuggestionService>();
+    builder.Services.AddScoped<IMealSuggestionService, LlmMealSuggestionService>();
+    // LLM recipe extraction fallback for import (used when the structured scrapers fail);
+    // singleton — it only depends on the singleton IChatClient/AiOptions
+    builder.Services.AddSingleton<ILlmRecipeExtractor, LlmRecipeExtractor>();
 }
 else
 {
     builder.Services.AddSingleton<IMealSuggestionService, NoOpMealSuggestionService>();
+    builder.Services.AddSingleton<ILlmRecipeExtractor, NoOpLlmRecipeExtractor>();
 }
 builder.Services.AddScoped<CollectionMentionResolver>();
+builder.Services.AddScoped<SourceMentionResolver>();
+builder.Services.AddScoped<RecipeSourceCatalog>();
 builder.Services.AddScoped<MealSuggestionRequestBuilder>();
 
 // Demo mode: seed Dagelijkse Kost recipes and a demo household into an empty

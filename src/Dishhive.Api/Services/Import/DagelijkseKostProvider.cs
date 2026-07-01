@@ -37,6 +37,10 @@ public partial class DagelijkseKostProvider : IRecipeSourceProvider
 
     public string Key => "dagelijkse-kost";
 
+    public string DisplayName => "Dagelijkse Kost";
+
+    public IReadOnlyList<string> Hosts => ["dagelijksekost.vrt.be"];
+
     public bool CanHandle(Uri url)
     {
         return url.Host.Equals("dagelijksekost.vrt.be", StringComparison.OrdinalIgnoreCase)

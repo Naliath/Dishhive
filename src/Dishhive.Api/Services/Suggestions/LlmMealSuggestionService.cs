@@ -1,3 +1,5 @@
+using Dishhive.Api.Services.Import;
+using Dishhive.Api.Services.WebSearch;
 using Microsoft.Extensions.AI;
 using System.Globalization;
 using System.Text;
@@ -18,17 +20,26 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
     private readonly IChatClient _chatClient;
     private readonly RulesMealSuggestionService _fallback;
     private readonly AiOptions _options;
+    private readonly IWebSearchClient _webSearch;
+    private readonly IRecipeImportService _importService;
+    private readonly int _webSearchMaxResults;
     private readonly ILogger<LlmMealSuggestionService> _logger;
 
     public LlmMealSuggestionService(
         IChatClient chatClient,
         RulesMealSuggestionService fallback,
         AiOptions options,
+        IWebSearchClient webSearch,
+        IRecipeImportService importService,
+        WebSearchOptions webSearchOptions,
         ILogger<LlmMealSuggestionService> logger)
     {
         _chatClient = chatClient;
         _fallback = fallback;
         _options = options;
+        _webSearch = webSearch;
+        _importService = importService;
+        _webSearchMaxResults = webSearchOptions.MaxResults;
         _logger = logger;
     }
 
@@ -44,15 +55,37 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
 
         try
         {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+            // Attach the external-recipe tools when web search is configured and the user
+            // gave instructions (that's where "@[Source]" / "find something new" live).
+            // A plain regenerate (no instructions) keeps today's fast single-completion path.
+            var useTools = _webSearch.IsConfigured
+                && (request.SourceConstraints.Count > 0 || !string.IsNullOrWhiteSpace(request.Instructions));
 
-            var systemPrompt = _options.DisableThinking ? "/no_think\n" + SystemPrompt : SystemPrompt;
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(useTools ? _options.AgentTimeoutSeconds : _options.TimeoutSeconds));
+
+            // Reasoning models need to think to plan tool calls, so /no_think is skipped
+            // on the agentic path even when DisableThinking is set.
+            var systemPrompt = _options.DisableThinking && !useTools ? "/no_think\n" + SystemPrompt : SystemPrompt;
             var messages = new List<ChatMessage>
             {
                 new(ChatRole.System, systemPrompt),
                 new(ChatRole.User, BuildUserPrompt(request, _options.MaxPromptTokens))
             };
+
+            IChatClient chatClient = _chatClient;
+            IList<AITool>? tools = null;
+            if (useTools)
+            {
+                var hosts = request.SourceConstraints.Select(c => c.Host).Distinct().ToList();
+                var toolset = new ExternalRecipeTools(
+                    _webSearch, _importService, _webSearchMaxResults,
+                    defaultSite: hosts.Count == 1 ? hosts[0] : null, _logger);
+                tools = toolset.Build();
+                chatClient = _chatClient.AsBuilder()
+                    .UseFunctionInvocation(configure: c => c.MaximumIterationsPerRequest = _options.MaxToolIterations)
+                    .Build();
+            }
 
             // Plain text completion with the JSON shape described in the prompt, parsed
             // manually. Native response_format is deliberately avoided: LM Studio rejects
@@ -63,7 +96,8 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             var chatOptions = new ChatOptions
             {
                 MaxOutputTokens = _options.MaxOutputTokens,
-                Temperature = (float)_options.Temperature
+                Temperature = (float)_options.Temperature,
+                Tools = tools
             };
 
             // One model can stumble on the JSON once; a corrective reprompt (the bad
@@ -72,7 +106,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             WeekSuggestionsPayload? payload = null;
             for (var attempt = 0; attempt <= Math.Max(0, _options.MaxRetries); attempt++)
             {
-                var response = await _chatClient.GetResponseAsync(
+                var response = await chatClient.GetResponseAsync(
                     messages, chatOptions, cancellationToken: timeout.Token);
                 LogUsage(response, attempt);
 
@@ -187,14 +221,25 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
           into recipeTitle). When the planner's general instructions reference one, prefer
           its recipes for the matching wish. If a referenced collection has no recipe list
           below, treat the reference as a plain-text hint.
+        - Instructions may reference an EXTERNAL website as @[Source] (listed under
+          "Referenced sources" with its host). To satisfy such a wish — or any request to
+          "find" a NEW recipe not in the known list — use the tools:
+            * search_recipes(query, site) to find candidate pages (pass the source's host
+              as site when a @[Source] was referenced),
+            * get_recipe(url) to read a candidate and CHECK it meets every constraint
+              (time limit, vegetarian, etc.) before choosing it.
+          When you propose such an external recipe, put its page URL in "sourceUrl", use the
+          recipe's real title as dishName, and leave recipeTitle null (it is not in the store
+          yet — it will be imported when accepted). Only propose a sourceUrl you actually
+          fetched with get_recipe and confirmed fits.
         - When the planner gives additional instructions, they override the other
           preferences (never the allergies/constraints).
         - Prefer recipes from the known-recipes list; when you use one, copy its exact title
-          into recipeTitle.
+          into recipeTitle. Only search externally when the wish calls for it.
         - Keep each reason to one short sentence.
 
         Reply with ONLY a JSON object in exactly this shape, no other text:
-        {"suggestions":[{"date":"yyyy-MM-dd","dishName":"...","recipeTitle":"exact title or null","reason":"..."}]}
+        {"suggestions":[{"date":"yyyy-MM-dd","dishName":"...","recipeTitle":"exact title or null","sourceUrl":"external recipe url or null","reason":"..."}]}
         """;
 
     private static readonly JsonSerializerOptions PayloadJsonOptions = new()
@@ -336,6 +381,18 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             }
         }
 
+        if (request.SourceConstraints.Count > 0)
+        {
+            sb.AppendLine("Referenced sources (external websites — use search_recipes with the host, then get_recipe):");
+            foreach (var constraint in request.SourceConstraints)
+            {
+                var scope = constraint.Dates.Count > 0
+                    ? $"for {string.Join(", ", constraint.Dates.Select(d => d.ToString("yyyy-MM-dd")))}"
+                    : "general instructions";
+                sb.AppendLine($"- \"{constraint.Name}\" → {constraint.Host} ({scope})");
+            }
+        }
+
         var existing = request.WeekPlan
             .Where(m => m.DishName != null || m.VagueInstruction != null)
             .OrderBy(m => m.Date)
@@ -446,12 +503,24 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
                 recipeId = byName;
             }
 
+            // An external suggestion (found via the tools) carries a page URL to import on
+            // accept — only honored when it's a valid http(s) URL and not already a known recipe.
+            string? sourceUrl = null;
+            string? sourceName = null;
+            if (recipeId is null && ResolveExternalSource(item.SourceUrl, date, request) is { } resolved)
+            {
+                sourceUrl = resolved.Url;
+                sourceName = resolved.Name;
+            }
+
             suggestions.Add(new MealSuggestion
             {
                 Date = date,
                 RecipeId = recipeId,
                 DishName = item.DishName.Trim(),
-                Reason = string.IsNullOrWhiteSpace(item.Reason) ? null : item.Reason.Trim()
+                Reason = string.IsNullOrWhiteSpace(item.Reason) ? null : item.Reason.Trim(),
+                SourceUrl = sourceUrl,
+                SourceName = sourceName
             });
         }
 
@@ -483,6 +552,42 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         LinkFreezerItems(result, request);
         FlagAllergyConflicts(result, request);
         return result;
+    }
+
+    /// <summary>
+    /// Validates a model-supplied external recipe URL and resolves its display name from
+    /// the referenced sources (falling back to the host). Returns null for a missing or
+    /// non-http(s) URL. Soft-enforces day-scoped @[Source] references: an off-source host
+    /// is logged but kept (the review dialog lets the user discard it).
+    /// </summary>
+    private (string Url, string Name)? ResolveExternalSource(
+        string? sourceUrl, DateOnly date, MealSuggestionRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(sourceUrl)
+            || !Uri.TryCreate(sourceUrl.Trim(), UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return null;
+        }
+
+        var host = uri.Host.ToLowerInvariant();
+        if (host.StartsWith("www."))
+        {
+            host = host[4..];
+        }
+
+        var match = request.SourceConstraints.FirstOrDefault(c =>
+            string.Equals(c.Host, host, StringComparison.OrdinalIgnoreCase));
+
+        var dayConstraint = request.SourceConstraints.FirstOrDefault(c => c.Dates.Contains(date));
+        if (dayConstraint != null && !string.Equals(dayConstraint.Host, host, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "AI proposed {Url} for {Date}, which is not on the referenced source {Source} ({Host})",
+                uri, date, dayConstraint.Name, dayConstraint.Host);
+        }
+
+        return (uri.AbsoluteUri, match?.Name ?? host);
     }
 
     /// <summary>
@@ -564,5 +669,6 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
     /// <summary>Expected JSON shape of the LLM response</summary>
     internal sealed record WeekSuggestionsPayload(List<DaySuggestionPayload>? Suggestions);
 
-    internal sealed record DaySuggestionPayload(string? Date, string? DishName, string? RecipeTitle, string? Reason);
+    internal sealed record DaySuggestionPayload(
+        string? Date, string? DishName, string? RecipeTitle, string? Reason, string? SourceUrl);
 }

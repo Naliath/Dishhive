@@ -29,8 +29,16 @@ export interface ScraperUpdateResponse {
   targetVersion: string | null;
 }
 
+export interface WebSearchIntegrationStatus {
+  configured: boolean;
+  reachable: boolean;
+  provider: string | null;
+  baseUrl: string | null;
+}
+
 export interface IntegrationStatusResponse {
   ai: AiIntegrationStatus;
   freezy: FreezyIntegrationStatus;
   scraper: ScraperIntegrationStatus;
+  webSearch: WebSearchIntegrationStatus;
 }

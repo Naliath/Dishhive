@@ -15,7 +15,17 @@ namespace Dishhive.Api.Tests.Integration;
 /// </summary>
 public class MealSuggestionsIntegrationTests : TestBase
 {
-    private static readonly DateOnly Monday = new(2026, 6, 15);
+    // The builder excludes days before today, so the fixture must be a week that hasn't
+    // started yet (or starts today) regardless of when the suite runs — next Monday,
+    // or today itself when today is already a Monday.
+    private static readonly DateOnly Monday = NextMondayOnOrAfterToday();
+
+    private static DateOnly NextMondayOnOrAfterToday()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var offset = ((int)DayOfWeek.Monday - (int)today.DayOfWeek + 7) % 7;
+        return today.AddDays(offset);
+    }
 
     [Fact]
     public async Task SuggestionStatus_WithoutAiConfigured_ReportsDisabled()
@@ -87,6 +97,26 @@ public class MealSuggestionsIntegrationTests : TestBase
         // The request builder assembled context and asked to fill the whole (empty) week
         stub.LastRequest.Should().NotBeNull();
         stub.LastRequest!.DaysToFill.Should().HaveCount(7);
+    }
+
+    [Fact]
+    public async Task SuggestWeek_WeekContainingPastDays_ExcludesThemFromDaysToFill()
+    {
+        var stub = new StubSuggestionService();
+        using var factory = new StubbedFactory(stub);
+        using var client = factory.CreateClient();
+
+        // A week starting 3 days before today: 3 past days, today, and 3 future days
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var weekStart = today.AddDays(-3);
+
+        var response = await client.PostAsJsonAsync("/api/plannedmeals/suggestions",
+            new SuggestWeekRequestDto { WeekStart = weekStart });
+        response.IsSuccessStatusCode.Should().BeTrue();
+
+        stub.LastRequest!.DaysToFill.Should().HaveCount(4);
+        stub.LastRequest!.DaysToFill.Should().OnlyContain(d => d >= today);
+        stub.LastRequest!.DaysToFill.Should().NotContain(weekStart);
     }
 
     [Fact]

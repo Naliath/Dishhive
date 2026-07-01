@@ -3,7 +3,15 @@ namespace Dishhive.Api.Models.DTOs;
 public record IntegrationStatusResponseDto(
     AiIntegrationStatusDto Ai,
     FreezyIntegrationStatusDto Freezy,
-    ScraperIntegrationStatusDto Scraper
+    ScraperIntegrationStatusDto Scraper,
+    WebSearchIntegrationStatusDto WebSearch
+);
+
+public record WebSearchIntegrationStatusDto(
+    bool Configured,
+    bool Reachable,
+    string? Provider,
+    string? BaseUrl
 );
 
 public record AiIntegrationStatusDto(

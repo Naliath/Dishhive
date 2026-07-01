@@ -24,13 +24,16 @@ public class MealSuggestionRequestBuilder
     private readonly DishhiveDbContext _context;
     private readonly FreezerAvailabilityService _freezerAvailability;
     private readonly CollectionMentionResolver _mentionResolver;
+    private readonly SourceMentionResolver _sourceMentionResolver;
 
     public MealSuggestionRequestBuilder(
-        DishhiveDbContext context, FreezerAvailabilityService freezerAvailability, CollectionMentionResolver mentionResolver)
+        DishhiveDbContext context, FreezerAvailabilityService freezerAvailability,
+        CollectionMentionResolver mentionResolver, SourceMentionResolver sourceMentionResolver)
     {
         _context = context;
         _freezerAvailability = freezerAvailability;
         _mentionResolver = mentionResolver;
+        _sourceMentionResolver = sourceMentionResolver;
     }
 
     public async Task<MealSuggestionRequest> BuildAsync(
@@ -106,9 +109,10 @@ public class MealSuggestionRequestBuilder
             .ToList();
 
         // Fill days without a dinner main, or with a vague-instruction-only dinner;
-        // never propose over a concretely planned dish
+        // never propose over a concretely planned dish or a day that has already passed
         var daysToFill = Enumerable.Range(0, 7)
             .Select(weekStart.AddDays)
+            .Where(date => date >= today)
             .Where(date => !weekMeals.Any(m =>
                 m.Date == date
                 && m.MealType == MealType.Dinner
@@ -130,6 +134,9 @@ public class MealSuggestionRequestBuilder
             .ToDictionary(g => g.Key, g => g.Max(d => d.LastPlanned), StringComparer.OrdinalIgnoreCase);
         var collectionConstraints = await _mentionResolver.ResolveAsync(
             mentionSources, lastPlannedByTitle, cancellationToken);
+
+        // Resolve @[Source] references into website-host constraints for the LLM search tool
+        var sourceConstraints = await _sourceMentionResolver.ResolveAsync(mentionSources, cancellationToken);
 
         // Rank recipes by planning relevance instead of sending an arbitrary
         // alphabetical slice: favorites, well-rated and collection-referenced
@@ -198,6 +205,7 @@ public class MealSuggestionRequestBuilder
             AvailableFrozenItems = frozenItems,
             Instructions = string.IsNullOrWhiteSpace(instructions) ? null : instructions.Trim(),
             CollectionConstraints = collectionConstraints,
+            SourceConstraints = sourceConstraints,
             RecipeAllergens = recipeAllergens
         };
     }

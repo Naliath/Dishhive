@@ -64,9 +64,20 @@ services:
       Ai__Temperature: "${AI_TEMPERATURE:-0.3}"
       Ai__MaxRetries: "${AI_MAX_RETRIES:-1}"
       Ai__MaxPromptTokens: "${AI_MAX_PROMPT_TOKENS:-6000}"
+      # Agentic (external-recipe search) path only: a tool loop is several full model
+      # round-trips, so it needs a much longer budget than a plain suggestion call
+      Ai__AgentTimeoutSeconds: "${AI_AGENT_TIMEOUT_SECONDS:-300}"
+      Ai__MaxToolIterations: "${AI_MAX_TOOL_ITERATIONS:-8}"
       # Recipe-scrapers sidecar: fallback import provider for sites without a
       # dedicated C# provider. Leave empty to disable the fallback.
       RecipeScrapers__BaseUrl: "http://scraper:8000"
+      # Web search for the AI planner's external-recipe tools, letting it find & import
+      # new recipes from the web (e.g. "@[Dagelijkse Kost]"). Enabled by default against
+      # the bundled SearXNG service below (scraper pattern: the sidecar is part of this
+      # compose stack, so it's on unless overridden).
+      WebSearch__Provider: "${WEBSEARCH_PROVIDER:-searxng}"
+      WebSearch__BaseUrl: "${WEBSEARCH_BASE_URL:-http://searxng:8080}"
+      WebSearch__MaxResults: "${WEBSEARCH_MAX_RESULTS:-5}"
     ports:
       - "5100:5100"
     depends_on:
@@ -105,6 +116,28 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # ===========================================================================
+  # SearXNG (web search for the AI planner's external-recipe tools)
+  # ===========================================================================
+  # A self-hosted metasearch engine, enabled by default (see WebSearch__* above).
+  # Set WEBSEARCH_PROVIDER to something else, or stop this service, to opt out.
+  # JSON output must be enabled — docker/searxng/settings.yml does that via
+  # use_default_settings + search.formats: [html, json]. The app reaches it
+  # internally at http://searxng:8080 (container-to-container, no host port
+  # involved); host access for local dev is on http://localhost:5102 — kept in
+  # Dishhive's own 51xx port range (app 5100, scraper 5101) rather than a
+  # commonly-used port like 8080/8888 that's likely already taken.
+  searxng:
+    image: searxng/searxng:latest
+    container_name: dishhive-searxng
+    restart: unless-stopped
+    ports:
+      - "5102:8080"
+    volumes:
+      - ./docker/searxng:/etc/searxng:rw
+    environment:
+      SEARXNG_BASE_URL: "http://localhost:5102/"
 
 # =============================================================================
 # Volumes

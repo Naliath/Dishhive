@@ -389,6 +389,19 @@ public class RecipesController : ControllerBase
     }
 
     /// <summary>
+    /// Lists the recipe sources the app knows about (dedicated providers + hosts
+    /// already imported from), for the week-planner's @[Source] autocomplete.
+    /// </summary>
+    [HttpGet("sources")]
+    [ProducesResponseType(typeof(IEnumerable<RecipeSourceDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<RecipeSourceDto>>> GetSources(
+        [FromServices] RecipeSourceCatalog catalog, CancellationToken cancellationToken)
+    {
+        var sources = await catalog.ListAsync(cancellationToken);
+        return Ok(sources.Select(s => new RecipeSourceDto(s.Name, s.Host)));
+    }
+
+    /// <summary>
     /// Downloads the whole recipe library as a schema.org Recipe JSON file —
     /// the interchange format other recipe managers understand. Locally stored
     /// images are embedded so the file is self-contained.

@@ -42,6 +42,18 @@ public class AiOptions
     public int TimeoutSeconds { get; set; } = 60;
 
     /// <summary>
+    /// Timeout for a suggestion call that uses the external-recipe tools (web search +
+    /// scraping). Much longer than <see cref="TimeoutSeconds"/>: a tool loop makes
+    /// several round-trips — each one a full model completion — and both local models
+    /// and cloud APIs under load can take tens of seconds per turn. Applies only on the
+    /// agentic path.
+    /// </summary>
+    public int AgentTimeoutSeconds { get; set; } = 300;
+
+    /// <summary>Upper bound on tool-call iterations per agentic suggestion request</summary>
+    public int MaxToolIterations { get; set; } = 8;
+
+    /// <summary>
     /// Prepends the /no_think soft switch to the prompt. Local reasoning models
     /// (Qwen3 family and friends) otherwise spend the whole output window thinking
     /// and never emit the JSON; other models ignore the token. Default on.

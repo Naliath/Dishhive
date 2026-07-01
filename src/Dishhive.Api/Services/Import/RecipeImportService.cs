@@ -8,29 +8,50 @@ public interface IRecipeImportService
 {
     /// <summary>
     /// Imports a recipe from an external URL. Re-importing a URL that was imported
-    /// before updates the existing recipe instead of creating a duplicate.
+    /// before updates the existing recipe instead of creating a duplicate. When the
+    /// structured providers can't parse the page and AI is configured, a best-effort
+    /// LLM extraction is tried before giving up.
     /// </summary>
     /// <exception cref="UnsupportedRecipeSourceException">No provider handles the URL</exception>
     /// <exception cref="RecipeExtractionFailedException">Page contains no recipe data</exception>
     Task<Recipe> ImportAsync(string url, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches and extracts a recipe from a URL WITHOUT persisting it, for the AI
+    /// planner's read-only get_recipe tool. On a URL that the structured scrapers
+    /// can't parse, returns the cleaned page text instead so the model can still
+    /// judge it. Applies the SSRF guard (model-chosen URL).
+    /// </summary>
+    Task<RecipePreview> PreviewAsync(string url, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Read-only extraction result for the get_recipe tool. Either a structured recipe
+/// (<see cref="Scrapable"/> = true) or, when no scraper could parse the page, the
+/// cleaned <see cref="Text"/> for the model to read. <see cref="Error"/> is set when
+/// the page could not even be fetched (blocked URL / network).
+/// </summary>
+public record RecipePreview(bool Scrapable, ImportedRecipe? Recipe, string? Text, string? Error);
 
 public class RecipeImportService : IRecipeImportService
 {
     private readonly HttpClient _httpClient;
     private readonly IEnumerable<IRecipeSourceProvider> _providers;
     private readonly DishhiveDbContext _context;
+    private readonly ILlmRecipeExtractor _llmExtractor;
     private readonly ILogger<RecipeImportService> _logger;
 
     public RecipeImportService(
         HttpClient httpClient,
         IEnumerable<IRecipeSourceProvider> providers,
         DishhiveDbContext context,
+        ILlmRecipeExtractor llmExtractor,
         ILogger<RecipeImportService> logger)
     {
         _httpClient = httpClient;
         _providers = providers;
         _context = context;
+        _llmExtractor = llmExtractor;
         _logger = logger;
     }
 
@@ -42,13 +63,36 @@ public class RecipeImportService : IRecipeImportService
             throw new UnsupportedRecipeSourceException(url);
         }
 
-        var provider = _providers.FirstOrDefault(p => p.CanHandle(uri))
-            ?? throw new UnsupportedRecipeSourceException(url);
-
-        _logger.LogInformation("Importing recipe from {Url} via provider {Provider}", uri, provider.Key);
+        var provider = _providers.FirstOrDefault(p => p.CanHandle(uri));
+        if (provider == null && !_llmExtractor.IsAvailable)
+        {
+            throw new UnsupportedRecipeSourceException(url);
+        }
 
         var html = await _httpClient.GetStringAsync(uri, cancellationToken);
-        var imported = await provider.ExtractAsync(html, uri, cancellationToken);
+
+        ImportedRecipe imported;
+        string providerKey;
+        if (provider != null)
+        {
+            _logger.LogInformation("Importing recipe from {Url} via provider {Provider}", uri, provider.Key);
+            try
+            {
+                imported = await provider.ExtractAsync(html, uri, cancellationToken);
+                providerKey = provider.Key;
+            }
+            catch (RecipeExtractionFailedException) when (_llmExtractor.IsAvailable)
+            {
+                imported = await ExtractWithLlmAsync(html, uri, cancellationToken);
+                providerKey = "llm";
+            }
+        }
+        else
+        {
+            // No structured provider handles this site, but AI is configured — let the LLM read it
+            imported = await ExtractWithLlmAsync(html, uri, cancellationToken);
+            providerKey = "llm";
+        }
 
         var sourceUrl = imported.SourceUrl ?? uri.AbsoluteUri;
 
@@ -71,11 +115,65 @@ public class RecipeImportService : IRecipeImportService
             recipe.Steps.Clear();
         }
 
-        ApplyImportedRecipe(recipe, imported, sourceUrl, provider.Key);
+        ApplyImportedRecipe(recipe, imported, sourceUrl, providerKey);
         await RecipeImageDownloader.TryDownloadAsync(_httpClient, recipe, _logger, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
         return recipe;
+    }
+
+    /// <summary>Runs the LLM extractor, mapping a no-recipe result to the standard failure</summary>
+    private async Task<ImportedRecipe> ExtractWithLlmAsync(string html, Uri uri, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Structured extraction unavailable for {Url}; trying LLM extraction", uri);
+        return await _llmExtractor.ExtractAsync(html, uri, cancellationToken)
+            ?? throw new RecipeExtractionFailedException(
+                $"No recipe data found at '{uri}'. The page may not be a recipe, or the site is not supported.");
+    }
+
+    public async Task<RecipePreview> PreviewAsync(string url, CancellationToken cancellationToken = default)
+    {
+        var (ok, uri, error) = await UrlGuard.ValidateAsync(url, cancellationToken);
+        if (!ok || uri == null)
+        {
+            return new RecipePreview(false, null, null, error);
+        }
+
+        string html;
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(15));
+            html = await _httpClient.GetStringAsync(uri, cts.Token);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogInformation(ex, "Recipe preview could not fetch {Url}", uri);
+            return new RecipePreview(false, null, null, $"Could not fetch '{uri}'.");
+        }
+
+        // Try the structured providers (no persistence); on failure, hand back the page
+        // text so the model can still read the page itself.
+        var provider = _providers.FirstOrDefault(p => p.CanHandle(uri));
+        if (provider != null)
+        {
+            try
+            {
+                var imported = await provider.ExtractAsync(html, uri, cancellationToken);
+                return new RecipePreview(true, imported, null, null);
+            }
+            catch (RecipeExtractionFailedException)
+            {
+                // fall through to text
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                // sidecar unreachable etc. — fall through to text
+                _logger.LogInformation(ex, "Recipe preview extraction failed for {Url}", uri);
+            }
+        }
+
+        return new RecipePreview(false, null, HtmlText.ToPlainText(html), null);
     }
 
     /// <summary>Maps an extracted recipe onto the entity (shared with file import)</summary>

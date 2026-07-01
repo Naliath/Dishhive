@@ -203,6 +203,19 @@ API keys also resolve from the standard `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` /
 > 4k context the model's thinking exhausts the window before the answer appears and every
 > request falls back to the deterministic rules suggestions.
 
+### Web search (external recipe discovery)
+
+Planner instructions can reference a website with `@` — e.g. *"vegetarian under 30 min
+from @[Dagelijkse Kost]"* — and a **tool-capable** model will search the site, verify
+candidates with the internal scraper, and import the chosen recipe when you accept it.
+In `docker-compose`, this is **enabled by default** against the bundled `searxng`
+service (its web UI is at `http://localhost:5102` for local debugging); override
+`WEBSEARCH_PROVIDER`/`WEBSEARCH_BASE_URL` in `.env` to point elsewhere (see
+[.env.example](.env.example)). Running the API directly (`dotnet run`, no docker-compose)
+has web search off by default — set `WebSearch:Provider`/`WebSearch:BaseUrl` in
+`appsettings.Development.json` to point at your own SearXNG instance. Either way, when
+unconfigured the tools are simply not offered and suggestions behave as before.
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -217,6 +230,8 @@ API keys also resolve from the standard `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` /
 | `Ai__BaseUrl` | per-provider default | Endpoint override (required for `openai-compatible`) |
 | `Ai__Model` | empty | Model name, e.g. `llama3.1`, `gpt-4o-mini`, `claude-opus-4-8` |
 | `Ai__Temperature` / `Ai__MaxRetries` / `Ai__MaxPromptTokens` | `0.3` / `1` / `6000` | Robustness/context tuning: sampling temperature, corrective reprompts, prompt token budget |
+| `WebSearch__Provider` | empty (`searxng` in docker-compose) | Web-search backend for external-recipe discovery: `searxng` |
+| `WebSearch__BaseUrl` | `http://searxng:8080` in docker-compose | Search backend URL (JSON output must be enabled on the SearXNG instance) |
 
 ## Documentation
 

@@ -84,16 +84,18 @@
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Vague instruction</mat-label>
           <input matInput name="vagueInstruction" [(ngModel)]="vagueInstruction" maxlength="500"
-                 placeholder="e.g. something quick, or # to reference a collection"
+                 placeholder="e.g. something quick, # for a collection, @ for a website"
                  appCollectionMention #mention="appCollectionMention"
                  [matAutocomplete]="collectionAuto">
-          <mat-hint>Type # to reference a collection, e.g. #[Easy Weekday Dishes]</mat-hint>
+          <mat-hint>Type # for a collection or @ for a source, e.g. #[Easy Weekday Dishes]</mat-hint>
           <mat-autocomplete #collectionAuto="matAutocomplete">
-            @for (collection of mention.suggestions(); track collection.id) {
-              <mat-option [value]="mention.valueFor(collection)">
-                <mat-icon>{{ collection.kind === 'auto' ? 'auto_awesome' : 'bookmark' }}</mat-icon>
-                {{ collection.name }}
-                <span class="mention-count">{{ collection.recipeCount }} recipes</span>
+            @for (item of mention.suggestions(); track item.id) {
+              <mat-option [value]="mention.valueFor(item)">
+                <mat-icon>{{ item.icon }}</mat-icon>
+                {{ item.name }}
+                @if (item.detail) {
+                  <span class="mention-count">{{ item.detail }}</span>
+                }
               </mat-option>
             }
           </mat-autocomplete>

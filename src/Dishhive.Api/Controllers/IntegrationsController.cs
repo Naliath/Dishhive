@@ -2,6 +2,7 @@ using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.Suggestions;
+using Dishhive.Api.Services.WebSearch;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Headers;
 
@@ -16,6 +17,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
         [FromServices] AiOptions aiOptions,
         [FromServices] IFreezyClient freezyClient,
         [FromServices] IRecipeScrapersClient scrapersClient,
+        [FromServices] WebSearchOptions webSearchOptions,
         CancellationToken cancellationToken)
     {
         var aiReachable = aiOptions.IsConfigured
@@ -24,6 +26,9 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
         var freezyReachable = await freezyClient.IsReachableAsync(cancellationToken);
 
         var scraperVersion = await scrapersClient.GetInstalledVersionAsync(cancellationToken);
+
+        var webSearchReachable = webSearchOptions.IsConfigured
+            && await CheckWebSearchReachableAsync(webSearchOptions, cancellationToken);
 
         return new IntegrationStatusResponseDto(
             Ai: new AiIntegrationStatusDto(
@@ -44,8 +49,34 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
                 Reachable: scraperVersion != null,
                 BaseUrl: scrapersClient.BaseUrl,
                 PackageVersion: scraperVersion
+            ),
+            WebSearch: new WebSearchIntegrationStatusDto(
+                Configured: webSearchOptions.IsConfigured,
+                Reachable: webSearchReachable,
+                Provider: webSearchOptions.IsConfigured ? webSearchOptions.Provider : null,
+                BaseUrl: webSearchOptions.IsConfigured && !string.IsNullOrEmpty(webSearchOptions.BaseUrl)
+                    ? webSearchOptions.BaseUrl : null
             )
         );
+    }
+
+    /// <summary>Probes the SearXNG instance's /healthz endpoint (returns "OK" when up)</summary>
+    private async Task<bool> CheckWebSearchReachableAsync(WebSearchOptions options, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(5));
+
+            var baseUrl = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+            using var http = httpClientFactory.CreateClient();
+            using var response = await http.GetAsync(new Uri(baseUrl, "healthz"), cts.Token);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>

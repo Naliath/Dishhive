@@ -85,6 +85,18 @@ IngredientLineParser (quantity/unit/name, locale-aware: "0,5" decimal comma)
 mapped to Recipe + RecipeIngredient + RecipeStep, SourceRawData = raw JSON-LD
 ```
 
+**LLM extraction fallback** (July 2026): when the selected provider (dedicated or the
+recipe-scrapers sidecar) can't parse a page **and** AI is configured, `RecipeImportService`
+hands the page to `ILlmRecipeExtractor` (`LlmRecipeExtractor` → the configured `IChatClient`)
+as a last resort before failing; imported recipes are tagged `SourceProvider = "llm"`. This
+also lets the AI planner import from arbitrary sites it finds via web search. Best-effort and
+model-dependent — the structured scrapers always win when they succeed. `PreviewAsync` performs
+the same fetch+extract **without persisting** (returning the page text when unparseable) for the
+planner's read-only `get_recipe` tool.
+
+`GET /api/recipes/sources` lists the known sources (dedicated providers ∪ hosts already imported
+from, via `RecipeSourceCatalog`) for the week-planner's `@[Source]` autocomplete.
+
 Sites with a dedicated provider never reach the fallback; the sidecar only handles
 sites Dishhive has no own implementation for (see
 [RECIPE_SCRAPERS_ADOPTION_PLAN.md](../plans/RECIPE_SCRAPERS_ADOPTION_PLAN.md)).

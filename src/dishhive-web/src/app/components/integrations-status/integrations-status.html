@@ -97,6 +97,30 @@
           </span>
         </div>
 
+        <div class="integration-row">
+          <mat-icon class="integration-icon">search</mat-icon>
+          <div class="integration-info">
+            <div class="integration-name">Web Search</div>
+            @if (status.webSearch.configured) {
+              <div class="integration-detail">
+                {{ status.webSearch.provider }} &middot; lets the AI find &amp; import new recipes from the web
+              </div>
+              @if (status.webSearch.baseUrl) {
+                <div class="integration-detail muted">{{ status.webSearch.baseUrl }}</div>
+              }
+              @if (!status.webSearch.reachable) {
+                <div class="integration-detail warn">Could not reach the search service — check the URL and that it is running</div>
+              }
+            } @else {
+              <div class="integration-detail muted">Set WebSearch__Provider and WebSearch__BaseUrl (e.g. a SearXNG instance) to let the AI search the web</div>
+            }
+          </div>
+          <span class="status-chip" [class]="chipClass(status.webSearch)">
+            <mat-icon>{{ chipIcon(status.webSearch) }}</mat-icon>
+            {{ chipLabel(status.webSearch) }}
+          </span>
+        </div>
+
       </div>
     } @else {
       <p class="integration-loading">Loading…</p>

@@ -21,6 +21,12 @@ export interface SuggestionReviewDialogData {
   weekStart: string;
 }
 
+/** One day's suggestions, grouped for display; indexes point back into suggestions() */
+interface SuggestionDayGroup {
+  date: string;
+  items: { index: number; suggestion: MealSuggestion }[];
+}
+
 /**
  * Dialog phases: a quick live AI check decides whether the user first gets to
  * enter instructions ("3 days vegetarian, one fish dish") before generating.
@@ -67,6 +73,22 @@ export class SuggestionReviewDialog implements OnInit {
   readonly selectedIndexes = signal<Set<number>>(new Set());
 
   readonly selectedCount = computed(() => this.selectedIndexes().size);
+
+  /** Suggestions grouped by date so the date renders once per day, not once per dish */
+  readonly groupedSuggestions = computed<SuggestionDayGroup[]>(() => {
+    const groups: SuggestionDayGroup[] = [];
+    const byDate = new Map<string, SuggestionDayGroup>();
+    this.suggestions().forEach((suggestion, index) => {
+      let group = byDate.get(suggestion.date);
+      if (!group) {
+        group = { date: suggestion.date, items: [] };
+        byDate.set(suggestion.date, group);
+        groups.push(group);
+      }
+      group.items.push({ index, suggestion });
+    });
+    return groups;
+  });
 
   instructions = '';
 

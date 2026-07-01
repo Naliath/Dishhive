@@ -26,6 +26,23 @@
   min-width: min(420px, 80vw);
 }
 
+.suggestion-day {
+  & + & {
+    margin-block-start: 12px;
+    border-block-start: 1px solid var(--mat-sys-outline-variant);
+    padding-block-start: 12px;
+  }
+}
+
+.suggestion-day-header {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mat-sys-on-surface-variant);
+  padding: 4px 4px 6px;
+}
+
 .suggestion-row {
   display: flex;
   align-items: flex-start;
@@ -37,10 +54,6 @@
   &:hover {
     background: var(--mat-sys-surface-container-high);
   }
-
-  & + & {
-    border-block-start: 1px solid var(--mat-sys-outline-variant);
-  }
 }
 
 .suggestion-body {
@@ -48,13 +61,6 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-}
-
-.suggestion-date {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--mat-sys-on-surface-variant);
 }
 
 .suggestion-dish {

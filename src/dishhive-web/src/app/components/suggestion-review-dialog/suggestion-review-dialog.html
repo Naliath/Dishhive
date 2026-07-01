@@ -56,46 +56,50 @@
         </div>
       } @else {
         <div class="suggestion-list">
-          @for (suggestion of suggestions(); track $index) {
-            <div class="suggestion-row" (click)="toggle($index)">
-              <mat-checkbox
-                [checked]="isSelected($index)"
-                (click)="$event.stopPropagation()"
-                (change)="toggle($index)">
-              </mat-checkbox>
-              <div class="suggestion-body">
-                <span class="suggestion-date">{{ suggestion.date | date:'EEEE d MMM' }}</span>
-                <span class="suggestion-dish">
-                  {{ suggestion.dishName }}
-                  @if (suggestion.recipeId) {
-                    <mat-icon class="recipe-icon" matTooltip="Matches a recipe in your store">menu_book</mat-icon>
-                  }
-                  @if (suggestion.freezyItemRef) {
-                    <mat-icon class="recipe-icon" matTooltip="From the freezer">ac_unit</mat-icon>
-                  }
-                  @if (suggestion.sourceUrl) {
-                    <mat-icon class="recipe-icon" matTooltip="Found online — imported when you add it">travel_explore</mat-icon>
-                  }
-                  @if (suggestion.fromFallback) {
-                    <span class="suggestion-tag" matTooltip="Filled from your rules, not the AI">rules</span>
-                  }
-                </span>
-                @if (suggestion.sourceUrl) {
-                  <a class="suggestion-source" [href]="suggestion.sourceUrl" target="_blank" rel="noopener"
-                     (click)="$event.stopPropagation()">
-                    Will import from {{ suggestion.sourceName || 'the web' }}
-                  </a>
-                }
-                @if (suggestion.allergyWarning) {
-                  <span class="suggestion-allergy">
-                    <mat-icon>warning</mat-icon>
-                    {{ suggestion.allergyWarning }}
-                  </span>
-                }
-                @if (suggestion.reason) {
-                  <span class="suggestion-reason">{{ suggestion.reason }}</span>
-                }
-              </div>
+          @for (group of groupedSuggestions(); track group.date) {
+            <div class="suggestion-day">
+              <div class="suggestion-day-header">{{ group.date | date:'EEEE d MMM' }}</div>
+              @for (item of group.items; track item.index) {
+                <div class="suggestion-row" (click)="toggle(item.index)">
+                  <mat-checkbox
+                    [checked]="isSelected(item.index)"
+                    (click)="$event.stopPropagation()"
+                    (change)="toggle(item.index)">
+                  </mat-checkbox>
+                  <div class="suggestion-body">
+                    <span class="suggestion-dish">
+                      {{ item.suggestion.dishName }}
+                      @if (item.suggestion.recipeId) {
+                        <mat-icon class="recipe-icon" matTooltip="Matches a recipe in your store">menu_book</mat-icon>
+                      }
+                      @if (item.suggestion.freezyItemRef) {
+                        <mat-icon class="recipe-icon" matTooltip="From the freezer">ac_unit</mat-icon>
+                      }
+                      @if (item.suggestion.sourceUrl) {
+                        <mat-icon class="recipe-icon" matTooltip="Found online — imported when you add it">travel_explore</mat-icon>
+                      }
+                      @if (item.suggestion.fromFallback) {
+                        <span class="suggestion-tag" matTooltip="Filled from your rules, not the AI">rules</span>
+                      }
+                    </span>
+                    @if (item.suggestion.sourceUrl) {
+                      <a class="suggestion-source" [href]="item.suggestion.sourceUrl" target="_blank" rel="noopener"
+                         (click)="$event.stopPropagation()">
+                        Will import from {{ item.suggestion.sourceName || 'the web' }}
+                      </a>
+                    }
+                    @if (item.suggestion.allergyWarning) {
+                      <span class="suggestion-allergy">
+                        <mat-icon>warning</mat-icon>
+                        {{ item.suggestion.allergyWarning }}
+                      </span>
+                    }
+                    @if (item.suggestion.reason) {
+                      <span class="suggestion-reason">{{ item.suggestion.reason }}</span>
+                    }
+                  </div>
+                </div>
+              }
             </div>
           }
         </div>

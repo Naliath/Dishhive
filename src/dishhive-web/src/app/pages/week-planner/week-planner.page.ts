@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -78,6 +78,12 @@ function mondayOf(date: Date): Date {
   styleUrl: './week-planner.page.scss'
 })
 export class WeekPlannerPage implements OnInit {
+  /** Below this, a load doesn't show the spinner at all — avoids a flash for fast responses */
+  private static readonly LOADING_INDICATOR_DELAY_MS = 100;
+
+  private readonly destroyRef = inject(DestroyRef);
+  private loadingTimer: ReturnType<typeof setTimeout> | undefined;
+
   readonly weekStart = signal<Date>(mondayOf(new Date()));
   readonly meals = signal<PlannedMeal[]>([]);
   readonly members = signal<FamilyMember[]>([]);
@@ -123,7 +129,9 @@ export class WeekPlannerPage implements OnInit {
     private recipesService: RecipesService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar
-  ) {}
+  ) {
+    this.destroyRef.onDestroy(() => this.clearLoadingTimer());
+  }
 
   ngOnInit(): void {
     forkJoin({
@@ -142,17 +150,40 @@ export class WeekPlannerPage implements OnInit {
   }
 
   loadWeek(): void {
-    this.loading.set(true);
+    this.beginLoading();
     this.plannedMealsService.getMeals(toIso(this.weekStart()), toIso(this.weekEnd())).subscribe({
       next: meals => {
         this.meals.set(meals);
-        this.loading.set(false);
+        this.endLoading();
       },
       error: () => {
-        this.loading.set(false);
+        this.endLoading();
         this.snackBar.open('Could not load the week plan', 'Dismiss', { duration: 4000 });
       }
     });
+  }
+
+  /**
+   * Starts a load without flashing the spinner for a fast response: `loading` only
+   * flips true if the request is still in flight after LOADING_INDICATOR_DELAY_MS.
+   * A slow request still gets the spinner, so the page never looks stuck.
+   */
+  private beginLoading(): void {
+    this.clearLoadingTimer();
+    this.loadingTimer = setTimeout(
+      () => this.loading.set(true), WeekPlannerPage.LOADING_INDICATOR_DELAY_MS);
+  }
+
+  private endLoading(): void {
+    this.clearLoadingTimer();
+    this.loading.set(false);
+  }
+
+  private clearLoadingTimer(): void {
+    if (this.loadingTimer !== undefined) {
+      clearTimeout(this.loadingTimer);
+      this.loadingTimer = undefined;
+    }
   }
 
   previousWeek(): void {
@@ -196,7 +227,12 @@ export class WeekPlannerPage implements OnInit {
           ? this.plannedMealsService.updateMeal(meal.id, result)
           : this.plannedMealsService.createMeal(result);
         request.subscribe({
-          next: () => this.loadWeek(),
+          // Update the affected slot in place instead of reloading the whole week —
+          // a full loadWeek() would flash the grid to a spinner and back for a
+          // single-slot change
+          next: saved => this.meals.update(meals => meal
+            ? meals.map(m => m.id === saved.id ? saved : m)
+            : [...meals, saved]),
           error: (error: HttpErrorResponse) => {
             const detail = error.error?.title ?? 'Could not save the meal';
             this.snackBar.open(detail, 'Dismiss', { duration: 4000 });
@@ -280,7 +316,9 @@ export class WeekPlannerPage implements OnInit {
 
   clearSlot(meal: PlannedMeal): void {
     this.plannedMealsService.deleteMeal(meal.id).subscribe({
-      next: () => this.loadWeek(),
+      // Remove the slot locally instead of reloading the whole week — a full
+      // loadWeek() would flash the grid to a spinner and back for one removed dish
+      next: () => this.meals.update(meals => meals.filter(m => m.id !== meal.id)),
       error: () => this.snackBar.open('Could not clear the slot', 'Dismiss', { duration: 4000 })
     });
   }

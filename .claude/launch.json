@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dishhive-web-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "cwd": "src/dishhive-web",
+      "port": 4300
+    }
+  ]
+}

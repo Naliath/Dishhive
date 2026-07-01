@@ -3,6 +3,7 @@ using Dishhive.Api.Services.WebSearch;
 using Microsoft.Extensions.AI;
 using System.Collections.Concurrent;
 using System.ComponentModel;
+using System.Diagnostics;
 
 namespace Dishhive.Api.Services.Suggestions;
 
@@ -20,6 +21,7 @@ public class ExternalRecipeTools
     private readonly IRecipeImportService _importService;
     private readonly int _maxResults;
     private readonly string? _defaultSite;
+    private readonly string _requestId;
     private readonly ILogger _logger;
 
     // Models sometimes re-issue an identical tool call (e.g. get_recipe on the same URL
@@ -35,12 +37,14 @@ public class ExternalRecipeTools
         IRecipeImportService importService,
         int maxResults,
         string? defaultSite,
+        string requestId,
         ILogger logger)
     {
         _webSearch = webSearch;
         _importService = importService;
         _maxResults = maxResults;
         _defaultSite = defaultSite;
+        _requestId = requestId;
         _logger = logger;
     }
 
@@ -67,9 +71,11 @@ public class ExternalRecipeTools
     private async Task<IReadOnlyList<SearchHit>> SearchRecipesCoreAsync(
         string query, string? effectiveSite, CancellationToken cancellationToken)
     {
+        var stopwatch = Stopwatch.StartNew();
         var results = await _webSearch.SearchAsync(query, effectiveSite, _maxResults, cancellationToken);
-        _logger.LogInformation("Tool search_recipes(\"{Query}\", site={Site}) → {Count} results",
-            query, effectiveSite, results.Count);
+        _logger.LogInformation(
+            "[{RequestId}] Tool search_recipes(\"{Query}\", site={Site}) → {Count} results in {ElapsedMs}ms",
+            _requestId, query, effectiveSite, results.Count, stopwatch.ElapsedMilliseconds);
         return results.Select(r => new SearchHit(r.Title, r.Url, r.Snippet)).ToList();
     }
 
@@ -87,9 +93,11 @@ public class ExternalRecipeTools
 
     private async Task<GetRecipeResult> GetRecipeCoreAsync(string url, CancellationToken cancellationToken)
     {
+        var stopwatch = Stopwatch.StartNew();
         var preview = await _importService.PreviewAsync(url, cancellationToken);
-        _logger.LogInformation("Tool get_recipe(\"{Url}\") → scrapable={Scrapable}, error={Error}",
-            url, preview.Scrapable, preview.Error);
+        _logger.LogInformation(
+            "[{RequestId}] Tool get_recipe(\"{Url}\") → scrapable={Scrapable}, error={Error} in {ElapsedMs}ms",
+            _requestId, url, preview.Scrapable, preview.Error, stopwatch.ElapsedMilliseconds);
 
         if (preview.Error != null)
         {

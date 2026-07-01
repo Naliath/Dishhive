@@ -104,10 +104,19 @@ IMealSuggestionService
   (`directives/collection-mention.directive.ts`): typing `#ea` suggests matching
   collections and inserts the complete token — brackets are never typed by hand.
 - **@[Source] external recipe discovery** (July 2026): instructions may reference an
-  external website as `@[Source]` ("vegetarian under 30 min from @[Dagelijkse Kost]"), or
-  ask to "find" a recipe not in the store. When `WebSearch` is configured and instructions
-  are present, `LlmMealSuggestionService` attaches two read-only tools (Microsoft.Extensions.AI
-  `FunctionInvokingChatClient` + `AIFunctionFactory`) and the model drives a tool loop:
+  external website as `@[Source]` ("vegetarian under 30 min from @[Dagelijkse Kost]"). The
+  external-recipe tools are gated **exclusively** on this explicit signal —
+  `useTools = WebSearch configured && SourceConstraints.Count > 0` — never on instructions
+  text alone. An earlier version also triggered on any non-empty instructions ("3 days
+  vegetarian" was enough to start a live web search); that's a strictly worse trade for the
+  common case, since a tool loop is several full model round-trips (slower, and far more
+  tokens — a single observed agentic call ran ~80k tokens vs. a few thousand for a plain
+  completion) for something the planner never asked for. The system prompt reinforces the
+  same boundary: only the day(s)/wish tied to a `@[Source]` reference may use the tools;
+  every other day must come from the known-recipes list or a plain dish name. When
+  `useTools` is true, `LlmMealSuggestionService` attaches two read-only tools
+  (Microsoft.Extensions.AI `FunctionInvokingChatClient` + `AIFunctionFactory`) and the model
+  drives a tool loop:
     - `search_recipes(query, site)` → app-provided web search (`IWebSearchClient`, SearXNG),
       so models without native search can still browse; the site defaults to the referenced
       source's host (`SourceMentionResolver` → `SourceConstraint`, grammar `@\[([^\[\]\r\n]{1,100})\]`,
@@ -150,11 +159,31 @@ IMealSuggestionService
   total failure (timeout/HTTP error/exhausted retries) drops to a full rules answer. The
   endpoint never 500s because a model is down (Freezy precedent). Token usage is logged
   per call for tuning.
+- **Timing/monitoring** (July 2026): every `SuggestAsync` call gets a short correlation id
+  (`[abcd1234]` prefix) logged at start, on each completion attempt (with elapsed ms and
+  token usage), on each `search_recipes`/`get_recipe` tool call (with elapsed ms), and at
+  every exit (success/malformed/exception/cancelled, each with total elapsed ms) — the tool
+  loop interleaves with its own `HttpClient` request logging, so the id is what makes one
+  suggestion's full back-and-forth traceable in the merged log stream. `LlmRecipeExtractor`
+  and `RecipeImportService.PreviewAsync` (fetch vs. extract broken out separately) log their
+  own timings the same way, since they're reachable both from `get_recipe` and from a normal
+  import.
 - **Context budgeting**: recipes are **relevance-ranked** by the request builder
   (favorites, ratings, collection membership; recently-eaten pushed down) rather than sent
   alphabetically, and history is two compact lists (recent-to-avoid, liked/disliked). The
   prompt then trims both to `Ai__MaxPromptTokens`, so the prompt scales with the model's
   context window instead of using fixed caps.
+- **Considered and rejected (July 2026): a `search_known_recipes` tool instead of the
+  prompt-injected "Known recipes" block.** The ranking above is already a server-side
+  retrieval step (cheap, deterministic, no model round-trip) — the prompt block is its
+  *output*, not raw dumped data, and it's capped/trimmed to begin with. Moving it behind a
+  tool call would add a full extra model round-trip to every suggestion request (multi-turn
+  tool loops run far slower and cost far more tokens than one completion — an observed
+  agentic call ran ~80k tokens, dominated by tool-loop history, not the recipe list) and
+  force the model to guess a search query without having seen the actual candidates first,
+  for negligible token savings given the block is already small. Revisit only if the recipe
+  library grows large enough that the ranked/capped list starts meaningfully dropping
+  relevant candidates — that's the actual scaling problem a retrieval tool solves.
 - **Allergy net**: after parsing, a suggestion linked to a known recipe whose ingredient
   names contain a household allergy term gets an `AllergyWarning` (surfaced in the review
   dialog). Heuristic and secondary to the prompt rule — it flags, never drops, and only

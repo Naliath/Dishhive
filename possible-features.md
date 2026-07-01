@@ -28,6 +28,25 @@ Full-screen step-by-step view with kept-awake screen and step timers, like Dagel
 Per-recipe nutrition (imported when sources provide it; manual otherwise). (Mealie: nutrition
 fields per recipe.)
 
+### Multi-course AI suggestions
+AI week-plan suggestions currently only ever propose a dinner main (`Course.Main`) — the
+domain model already supports `Appetizer`/`Side`/`Dessert` (used by manual planning via the
+meal-slot dialog) but the AI path is blind to it. Scope, when planned:
+- JSON contract gains a `course` field per suggestion (default `main`); `PostProcess` groups
+  by `(Date, Course)` instead of just capping at 3 dishes/day per date.
+- Trigger: **free-text only** — no new mention syntax. "Add a dessert for Friday" in the
+  existing Instructions/VagueInstruction field, interpreted by a new system-prompt rule
+  ("if a course is requested, set course in the JSON reply"). Decided against a dedicated
+  `+[Dessert]`-style token: this is an occasional ask, and the system-prompt cost of
+  supporting it is fixed/negligible (~30-50 tokens, doesn't scale with the recipe library)
+  regardless of how often it's used, so there's no efficiency reason to gate it behind a
+  special trigger the way `#[Collection]`/`@[Source]` gate their (much larger, per-request)
+  context blocks.
+- **Needs a result-screen rework**: `suggestion-review-dialog` currently lists suggestions
+  flatly; would need to group rows under course headers per day. The accept flow
+  (`week-planner.page.ts`) hardcodes `course: Course.Main` when creating meals from accepted
+  suggestions — needs to read `suggestion.course` instead.
+
 ## Large Scope Features
 
 ### Meal plan rules & automation

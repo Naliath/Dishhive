@@ -16,7 +16,7 @@ namespace Dishhive.Api.Tests.Services;
 public class ExternalRecipeToolsTests
 {
     private static ExternalRecipeTools CreateTools(IWebSearchClient webSearch, IRecipeImportService importService)
-        => new(webSearch, importService, maxResults: 5, defaultSite: null, NullLogger.Instance);
+        => new(webSearch, importService, maxResults: 5, defaultSite: null, requestId: "test", NullLogger.Instance);
 
     [Fact]
     public async Task GetRecipe_SameUrlTwice_OnlyFetchesOnce()

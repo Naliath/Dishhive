@@ -1,6 +1,7 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 
 namespace Dishhive.Api.Services.Import;
 
@@ -133,6 +134,7 @@ public class RecipeImportService : IRecipeImportService
 
     public async Task<RecipePreview> PreviewAsync(string url, CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
         var (ok, uri, error) = await UrlGuard.ValidateAsync(url, cancellationToken);
         if (!ok || uri == null)
         {
@@ -140,6 +142,7 @@ public class RecipeImportService : IRecipeImportService
         }
 
         string html;
+        var fetchStopwatch = Stopwatch.StartNew();
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -148,18 +151,24 @@ public class RecipeImportService : IRecipeImportService
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            _logger.LogInformation(ex, "Recipe preview could not fetch {Url}", uri);
+            _logger.LogInformation(ex, "Recipe preview could not fetch {Url} after {ElapsedMs}ms",
+                uri, fetchStopwatch.ElapsedMilliseconds);
             return new RecipePreview(false, null, null, $"Could not fetch '{uri}'.");
         }
+        var fetchElapsedMs = fetchStopwatch.ElapsedMilliseconds;
 
         // Try the structured providers (no persistence); on failure, hand back the page
         // text so the model can still read the page itself.
         var provider = _providers.FirstOrDefault(p => p.CanHandle(uri));
         if (provider != null)
         {
+            var extractStopwatch = Stopwatch.StartNew();
             try
             {
                 var imported = await provider.ExtractAsync(html, uri, cancellationToken);
+                _logger.LogInformation(
+                    "Recipe preview for {Url}: fetch={FetchMs}ms, extract={ExtractMs}ms, total={TotalMs}ms",
+                    uri, fetchElapsedMs, extractStopwatch.ElapsedMilliseconds, stopwatch.ElapsedMilliseconds);
                 return new RecipePreview(true, imported, null, null);
             }
             catch (RecipeExtractionFailedException)
@@ -169,10 +178,14 @@ public class RecipeImportService : IRecipeImportService
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
                 // sidecar unreachable etc. — fall through to text
-                _logger.LogInformation(ex, "Recipe preview extraction failed for {Url}", uri);
+                _logger.LogInformation(ex, "Recipe preview extraction failed for {Url} after {ElapsedMs}ms",
+                    uri, extractStopwatch.ElapsedMilliseconds);
             }
         }
 
+        _logger.LogInformation(
+            "Recipe preview for {Url}: not scrapable, returning page text; fetch={FetchMs}ms, total={TotalMs}ms",
+            uri, fetchElapsedMs, stopwatch.ElapsedMilliseconds);
         return new RecipePreview(false, null, HtmlText.ToPlainText(html), null);
     }
 

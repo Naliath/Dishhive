@@ -19,6 +19,7 @@ public class LlmMealSuggestionServiceTests
         private readonly Func<ChatResponse> _respond;
         public int Calls { get; private set; }
         public List<ChatMessage> LastMessages { get; private set; } = [];
+        public ChatOptions? LastOptions { get; private set; }
 
         public FakeChatClient(string responseText)
             : this(() => new ChatResponse(new ChatMessage(ChatRole.Assistant, responseText))) { }
@@ -30,6 +31,7 @@ public class LlmMealSuggestionServiceTests
         {
             Calls++;
             LastMessages = messages.ToList();
+            LastOptions = options;
             return Task.FromResult(_respond());
         }
 
@@ -42,10 +44,19 @@ public class LlmMealSuggestionServiceTests
         public void Dispose() { }
     }
 
-    private static LlmMealSuggestionService CreateService(FakeChatClient chatClient)
+    private static LlmMealSuggestionService CreateService(FakeChatClient chatClient, IWebSearchClient? webSearch = null)
         => new(chatClient, new RulesMealSuggestionService(), new AiOptions { Provider = "ollama", Model = "test" },
-            new NoOpWebSearchClient(), Substitute.For<IRecipeImportService>(), new WebSearchOptions(),
+            webSearch ?? new NoOpWebSearchClient(), Substitute.For<IRecipeImportService>(), new WebSearchOptions(),
             NullLogger<LlmMealSuggestionService>.Instance);
+
+    /// <summary>A web-search client that reports configured (unlike the NoOp default) so
+    /// tests can isolate the SourceConstraints-gating behavior from configuration state</summary>
+    private static IWebSearchClient ConfiguredWebSearch()
+    {
+        var client = Substitute.For<IWebSearchClient>();
+        client.IsConfigured.Returns(true);
+        return client;
+    }
 
     private static MealSuggestionRequest Request(
         IReadOnlyList<DateOnly>? daysToFill = null,
@@ -415,6 +426,36 @@ public class LlmMealSuggestionServiceTests
         var suggestion = suggestions.Should().ContainSingle().Subject;
         suggestion.SourceUrl.Should().BeNull();
         suggestion.DishName.Should().Be("Something");
+    }
+
+    [Fact]
+    public async Task Suggest_PlainInstructionsWithoutSourceMention_DoesNotAttachExternalTools()
+    {
+        // Regression: instructions text alone ("3 days vegetarian") must never trigger the
+        // agentic web-search path — only an explicit @[Source] reference may (SourceConstraints).
+        // A prior version gated on "any non-empty instructions", so the model went searching
+        // the web even when the planner never asked it to.
+        var chatClient = new FakeChatClient("""{"suggestions":[]}""");
+
+        await CreateService(chatClient, ConfiguredWebSearch()).SuggestAsync(
+            Request(instructions: "3 days vegetarian, at least one fish dish"));
+
+        chatClient.LastOptions!.Tools.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task Suggest_SourceMentionPresent_AttachesExternalTools()
+    {
+        var chatClient = new FakeChatClient("""{"suggestions":[]}""");
+
+        var request = Request() with
+        {
+            SourceConstraints = [new SourceConstraint { Name = "Dagelijkse Kost", Host = "dagelijksekost.vrt.be", Dates = [WeekStart] }]
+        };
+
+        await CreateService(chatClient, ConfiguredWebSearch()).SuggestAsync(request);
+
+        chatClient.LastOptions!.Tools.Should().NotBeNullOrEmpty();
     }
 
     [Fact]

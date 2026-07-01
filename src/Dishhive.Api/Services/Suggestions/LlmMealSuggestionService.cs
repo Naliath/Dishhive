@@ -1,6 +1,7 @@
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.WebSearch;
 using Microsoft.Extensions.AI;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -53,13 +54,26 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             return [];
         }
 
+        // Short id correlating every log line this call produces (completion attempts,
+        // tool calls, the final outcome) — the tool loop interleaves with its own HTTP
+        // client logging, so a plain "info: ..." stream is otherwise hard to follow.
+        var requestId = Guid.NewGuid().ToString("N")[..8];
+        var stopwatch = Stopwatch.StartNew();
+
         try
         {
-            // Attach the external-recipe tools when web search is configured and the user
-            // gave instructions (that's where "@[Source]" / "find something new" live).
-            // A plain regenerate (no instructions) keeps today's fast single-completion path.
-            var useTools = _webSearch.IsConfigured
-                && (request.SourceConstraints.Count > 0 || !string.IsNullOrWhiteSpace(request.Instructions));
+            // Attach the external-recipe tools ONLY when the planner explicitly referenced
+            // an external source via @[Source] (SourceConstraints is populated by
+            // SourceMentionResolver) — an unambiguous, discoverable opt-in, mirroring
+            // #[Collection] for known recipes. Plain instructions text ("3 days vegetarian")
+            // must never trigger a live web search on its own: a tool loop is several full
+            // model round-trips (much slower and far more tokens than one completion — see
+            // docs/features/ai-week-planning.md), so that cost is only paid when asked for.
+            var useTools = _webSearch.IsConfigured && request.SourceConstraints.Count > 0;
+
+            _logger.LogInformation(
+                "[{RequestId}] AI suggestion request starting: {DayCount} day(s) to fill, tools={UseTools}, {Provider}/{Model}",
+                requestId, request.DaysToFill.Count, useTools, _options.Provider, _options.Model);
 
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(useTools ? _options.AgentTimeoutSeconds : _options.TimeoutSeconds));
@@ -80,7 +94,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
                 var hosts = request.SourceConstraints.Select(c => c.Host).Distinct().ToList();
                 var toolset = new ExternalRecipeTools(
                     _webSearch, _importService, _webSearchMaxResults,
-                    defaultSite: hosts.Count == 1 ? hosts[0] : null, _logger);
+                    defaultSite: hosts.Count == 1 ? hosts[0] : null, requestId, _logger);
                 tools = toolset.Build();
                 chatClient = _chatClient.AsBuilder()
                     .UseFunctionInvocation(configure: c => c.MaximumIterationsPerRequest = _options.MaxToolIterations)
@@ -106,9 +120,11 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             WeekSuggestionsPayload? payload = null;
             for (var attempt = 0; attempt <= Math.Max(0, _options.MaxRetries); attempt++)
             {
+                var attemptStopwatch = Stopwatch.StartNew();
                 var response = await chatClient.GetResponseAsync(
                     messages, chatOptions, cancellationToken: timeout.Token);
-                LogUsage(response, attempt);
+                attemptStopwatch.Stop();
+                LogUsage(requestId, response, attempt, attemptStopwatch.Elapsed);
 
                 payload = ParsePayload(response.Text);
                 if (payload?.Suggestions is not null)
@@ -119,8 +135,8 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
                 var text = response.Text ?? "";
                 var truncated = response.FinishReason == ChatFinishReason.Length;
                 _logger.LogWarning(
-                    "AI reply unparseable (attempt {Attempt}/{Max}, truncated={Truncated}). Length={Length}, start: {Snippet}",
-                    attempt + 1, _options.MaxRetries + 1, truncated, text.Length,
+                    "[{RequestId}] AI reply unparseable (attempt {Attempt}/{Max}, truncated={Truncated}). Length={Length}, start: {Snippet}",
+                    requestId, attempt + 1, _options.MaxRetries + 1, truncated, text.Length,
                     text.Length > 300 ? text[..300] : text);
 
                 if (attempt < _options.MaxRetries)
@@ -134,39 +150,53 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
 
             if (payload?.Suggestions is null)
             {
-                _logger.LogWarning("AI suggestions unparseable after {Attempts} attempt(s); using rules fallback",
-                    _options.MaxRetries + 1);
+                _logger.LogWarning(
+                    "[{RequestId}] AI suggestions unparseable after {Attempts} attempt(s) in {ElapsedMs}ms; using rules fallback",
+                    requestId, _options.MaxRetries + 1, stopwatch.ElapsedMilliseconds);
                 return await _fallback.SuggestAsync(request, cancellationToken);
             }
 
             var suggestions = PostProcess(payload, request);
             // Weak models sometimes return fewer days than asked; fill the holes from
             // the deterministic rules rather than leaving the planner with empty days.
-            suggestions = await BackfillMissingDaysAsync(suggestions, request, cancellationToken);
-            _logger.LogInformation("AI proposed {Count} meal suggestions via {Provider}/{Model}",
-                suggestions.Count, _options.Provider, _options.Model);
+            suggestions = await BackfillMissingDaysAsync(requestId, suggestions, request, cancellationToken);
+            _logger.LogInformation(
+                "[{RequestId}] AI proposed {Count} meal suggestions via {Provider}/{Model} in {ElapsedMs}ms",
+                requestId, suggestions.Count, _options.Provider, _options.Model, stopwatch.ElapsedMilliseconds);
             return suggestions;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            _logger.LogInformation(
+                "[{RequestId}] AI suggestion request cancelled by caller after {ElapsedMs}ms",
+                requestId, stopwatch.ElapsedMilliseconds);
             throw; // caller cancelled (request aborted); don't mask it
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "AI suggestion call failed ({Provider}/{Model}); using rules fallback",
-                _options.Provider, _options.Model);
+            _logger.LogWarning(ex,
+                "[{RequestId}] AI suggestion call failed ({Provider}/{Model}) after {ElapsedMs}ms; using rules fallback",
+                requestId, _options.Provider, _options.Model, stopwatch.ElapsedMilliseconds);
             return await _fallback.SuggestAsync(request, cancellationToken);
         }
     }
 
-    private void LogUsage(ChatResponse response, int attempt)
+    private void LogUsage(string requestId, ChatResponse response, int attempt, TimeSpan elapsed)
     {
+        // Always logged (even when the provider doesn't report token usage) so a slow
+        // attempt is visible regardless of provider — local models routinely omit usage.
         if (response.Usage is { } usage)
         {
             _logger.LogInformation(
-                "AI usage (attempt {Attempt}): input={Input}, output={Output}, total={Total} tokens; finish={Finish}",
-                attempt + 1, usage.InputTokenCount, usage.OutputTokenCount, usage.TotalTokenCount,
-                response.FinishReason);
+                "[{RequestId}] AI completion (attempt {Attempt}) in {ElapsedMs}ms: input={Input}, output={Output}, total={Total} tokens; finish={Finish}",
+                requestId, attempt + 1, elapsed.TotalMilliseconds, usage.InputTokenCount, usage.OutputTokenCount,
+                usage.TotalTokenCount, response.FinishReason);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "[{RequestId}] AI completion (attempt {Attempt}) in {ElapsedMs}ms; finish={Finish} (no usage reported)",
+                requestId, attempt + 1, elapsed.TotalMilliseconds, response.FinishReason);
         }
     }
 
@@ -175,7 +205,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
     /// provider (marked as fallback-sourced), so the planner never gets a partial week.
     /// </summary>
     private async Task<List<MealSuggestion>> BackfillMissingDaysAsync(
-        List<MealSuggestion> suggestions, MealSuggestionRequest request, CancellationToken cancellationToken)
+        string requestId, List<MealSuggestion> suggestions, MealSuggestionRequest request, CancellationToken cancellationToken)
     {
         var filled = suggestions.Select(s => s.Date).ToHashSet();
         var missing = request.DaysToFill.Where(d => !filled.Contains(d)).ToList();
@@ -184,7 +214,8 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             return suggestions;
         }
 
-        _logger.LogInformation("AI left {Count} day(s) unfilled; backfilling from rules", missing.Count);
+        _logger.LogInformation("[{RequestId}] AI left {Count} day(s) unfilled; backfilling from rules",
+            requestId, missing.Count);
 
         // Don't let the rules backfill reuse freezer stock the AI suggestions already reserved
         var usedByItem = suggestions
@@ -222,20 +253,21 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
           its recipes for the matching wish. If a referenced collection has no recipe list
           below, treat the reference as a plain-text hint.
         - Instructions may reference an EXTERNAL website as @[Source] (listed under
-          "Referenced sources" with its host). To satisfy such a wish — or any request to
-          "find" a NEW recipe not in the known list — use the tools:
-            * search_recipes(query, site) to find candidate pages (pass the source's host
-              as site when a @[Source] was referenced),
-            * get_recipe(url) to read a candidate and CHECK it meets every constraint
+          "Referenced sources" with its host). ONLY for the day(s)/wish tied to such a
+          reference, use the tools to find and verify a real page there:
+            * search_recipes(query, site) — pass the referenced source's host as site,
+            * get_recipe(url) — read a candidate and CHECK it meets every constraint
               (time limit, vegetarian, etc.) before choosing it.
           When you propose such an external recipe, put its page URL in "sourceUrl", use the
           recipe's real title as dishName, and leave recipeTitle null (it is not in the store
           yet — it will be imported when accepted). Only propose a sourceUrl you actually
-          fetched with get_recipe and confirmed fits.
+          fetched with get_recipe and confirmed fits. Do NOT use these tools for any other
+          day or wish — every day without a @[Source] reference must be filled from the
+          known-recipes list below or a plain dish name, never a web search.
         - When the planner gives additional instructions, they override the other
           preferences (never the allergies/constraints).
         - Prefer recipes from the known-recipes list; when you use one, copy its exact title
-          into recipeTitle. Only search externally when the wish calls for it.
+          into recipeTitle.
         - Keep each reason to one short sentence.
 
         Reply with ONLY a JSON object in exactly this shape, no other text:

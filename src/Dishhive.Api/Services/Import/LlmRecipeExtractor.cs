@@ -1,5 +1,6 @@
 using Dishhive.Api.Services.Suggestions;
 using Microsoft.Extensions.AI;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -82,9 +83,23 @@ public partial class LlmRecipeExtractor : ILlmRecipeExtractor
             Temperature = (float)_options.Temperature
         };
 
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             var response = await _chatClient.GetResponseAsync(messages, chatOptions, cancellationToken: timeout.Token);
+            stopwatch.Stop();
+            if (response.Usage is { } usage)
+            {
+                _logger.LogInformation(
+                    "LLM extraction completion for {Url} in {ElapsedMs}ms; input={Input}, output={Output} tokens",
+                    sourceUrl, stopwatch.ElapsedMilliseconds, usage.InputTokenCount, usage.OutputTokenCount);
+            }
+            else
+            {
+                _logger.LogInformation("LLM extraction completion for {Url} in {ElapsedMs}ms",
+                    sourceUrl, stopwatch.ElapsedMilliseconds);
+            }
+
             var payload = ParsePayload(response.Text);
             if (payload is null || string.IsNullOrWhiteSpace(payload.Title))
             {
@@ -111,7 +126,8 @@ public partial class LlmRecipeExtractor : ILlmRecipeExtractor
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning(ex, "LLM recipe extraction failed for {Url}", sourceUrl);
+            _logger.LogWarning(ex, "LLM recipe extraction failed for {Url} after {ElapsedMs}ms",
+                sourceUrl, stopwatch.ElapsedMilliseconds);
             return null;
         }
     }

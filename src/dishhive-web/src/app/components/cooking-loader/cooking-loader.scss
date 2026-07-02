@@ -14,9 +14,6 @@ svg {
 
 .lid {
   fill: var(--mat-sys-primary);
-  // Surface-colored outline keeps the lid readable against the pot rim
-  stroke: var(--mat-sys-surface);
-  stroke-width: 1;
   transform-box: fill-box;
   transform-origin: center bottom;
   animation: lid-rattle 1.15s ease-in-out infinite;

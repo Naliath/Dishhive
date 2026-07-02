@@ -6,17 +6,20 @@
   role="progressbar"
   aria-label="Loading">
   <g aria-hidden="true">
-    <path class="steam steam--1" d="M16 19c-1.8-1.7 1.8-3.3 0-5s1.8-3.3 0-5" />
-    <path class="steam steam--2" d="M24 18c-1.8-1.7 1.8-3.3 0-5s1.8-3.3 0-5" />
-    <path class="steam steam--3" d="M32 19c-1.8-1.7 1.8-3.3 0-5s1.8-3.3 0-5" />
+    <path class="steam steam--1" d="M16 18c-1.8-1.7 1.8-3.3 0-5s1.8-3.3 0-5" />
+    <path class="steam steam--2" d="M24 16.5c-1.8-1.7 1.8-3.3 0-5s1.8-3.3 0-5" />
+    <path class="steam steam--3" d="M32 18c-1.8-1.7 1.8-3.3 0-5s1.8-3.3 0-5" />
     <g class="lid">
-      <ellipse cx="24" cy="26" rx="14.5" ry="3.4" />
-      <circle cx="24" cy="21.2" r="2.4" />
+      <!-- dome, brim (overhangs the pot) and knob -->
+      <path d="M11 26a13 5.8 0 0 1 26 0z" />
+      <rect x="9" y="25.4" width="30" height="2.8" rx="1.4" />
+      <circle cx="24" cy="19.6" r="2.3" />
     </g>
     <g class="pot">
-      <path d="M9 27.5h30v6a7 7 0 0 1-7 7H16a7 7 0 0 1-7-7z" />
-      <rect x="3" y="28" width="6" height="3" rx="1.5" />
-      <rect x="39" y="28" width="6" height="3" rx="1.5" />
+      <!-- side handles, drawn first so the body overlaps them -->
+      <rect x="5" y="29.6" width="6" height="3" rx="1.5" />
+      <rect x="37" y="29.6" width="6" height="3" rx="1.5" />
+      <path d="M11.5 29h25a1.5 1.5 0 0 1 1.5 1.5v3a8 8 0 0 1-8 8H18a8 8 0 0 1-8-8v-3a1.5 1.5 0 0 1 1.5-1.5z" />
     </g>
   </g>
 </svg>

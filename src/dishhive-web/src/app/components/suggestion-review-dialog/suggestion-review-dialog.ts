@@ -9,8 +9,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { TextFieldModule } from '@angular/cdk/text-field';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { CookingLoaderComponent } from '../cooking-loader/cooking-loader';
 import { CollectionMentionDirective } from '../../directives/collection-mention.directive';
 import { MealSuggestionsService } from '../../services/meal-suggestions.service';
 import { IntegrationsService } from '../../services/integrations.service';
@@ -46,6 +46,7 @@ type DialogPhase = 'checking' | 'compose' | 'generating' | 'review';
   selector: 'app-suggestion-review-dialog',
   standalone: true,
   imports: [
+    CookingLoaderComponent,
     DatePipe,
     FormsModule,
     TextFieldModule,
@@ -57,7 +58,6 @@ type DialogPhase = 'checking' | 'compose' | 'generating' | 'review';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatProgressSpinnerModule,
     MatTooltipModule
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,

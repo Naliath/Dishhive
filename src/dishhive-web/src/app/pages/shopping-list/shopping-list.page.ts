@@ -8,9 +8,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatListModule } from '@angular/material/list';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { ShoppingListService } from '../../services/shopping-list.service';
 import { MeasurementService } from '../../services/measurement.service';
 import { RecipesService } from '../../services/recipes.service';
@@ -35,6 +35,7 @@ function mondayOf(date: Date): Date {
   selector: 'app-shopping-list-page',
   standalone: true,
   imports: [
+    CookingLoaderComponent,
     DatePipe,
     FormsModule,
     RouterLink,
@@ -44,7 +45,6 @@ function mondayOf(date: Date): Date {
     MatIconModule,
     MatInputModule,
     MatListModule,
-    MatProgressSpinnerModule,
     MatSnackBarModule,
     MatTooltipModule
   ],

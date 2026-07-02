@@ -138,9 +138,28 @@ IMealSuggestionService
   directive/util).
 - **Day adherence & leftovers**: dishes proposed for a day with a vague instruction must
   all satisfy it (a "vegetarian" day gets only vegetarian proposals). Freezer leftovers
-  carry their Freezy notes in the prompt (portion hints); the model may propose several
-  small leftovers for the same date — post-processing allows up to three distinct dishes
-  per day instead of one.
+  carry their Freezy notes in the prompt (portion hints); the goal is **enough food for
+  the household, not maximum freezer consumption**:
+    - **Meals only, never raw ingredients.** A frozen pizza, lasagna, soup, stew, or a
+      container of home-made leftovers is a valid dinner pick; a raw ingredient or side
+      component (a bag of peas, frozen corn, butter, shredded cheese, flour, …) is not a
+      dish and must never be turned into one just because it's expiring — Freezy's item
+      model has no meal/ingredient category to check mechanically (see `FrozenItem`/
+      `FreezyHttpClient`: name, quantity, unit, expiration, free-text notes only), so this
+      is a judgment call only the LLM path can make; the rules fallback (below) can't.
+    - **Default portion assumption is household-sized, not partial.** When an item's notes
+      give no portion size — the normal case for home-made leftovers in a container — the
+      model assumes it already covers the household and proposes it alone. It only reaches
+      for a second item on the same date when the notes *explicitly* say the first one's
+      portion is smaller than the household (e.g. a frozen pizza noted "for 2" and a
+      frozen lasagna noted "for 2" together cover a household of 4). This flips what an
+      earlier version did (assume partial by default, look for reasons to combine) — that
+      biased toward over-combining; assuming full-size unless told otherwise is the safer
+      default and needs actual evidence before padding out a meal with a second item.
+    - Each combined dish is still its own **separate suggestion entry** with its exact
+      freezer-item name — never merged into one dish name — so `LinkFreezerItems` can
+      match each back to its own stock for correct Freezy tracking. Post-processing allows
+      up to three distinct dishes per day.
 - **Freezer stock**: the prompt only lists freezer items still *available* (Freezy stock
   minus what future meals already reserve — see [freezy-integration.md](freezy-integration.md))
   with their remaining quantity, and the model is told not to exceed it. Post-processing
@@ -148,7 +167,18 @@ IMealSuggestionService
   accepting it reserves the stock and the same item is never planned into two weeks.
 - **Rules fallback**: expiring freezer items (≤10 days past week end) first, then rotate
   favorites — skip dishes planned <14 days ago or rated <3, prefer loved (≥4), round-robin
-  across members. Pure function, unit-tested.
+  across members. Pure function, unit-tested. **Deliberately never combines multiple
+  freezer items onto one day** (one item per day, same as everything else this provider
+  fills): Freezy notes are free text, not a structured portion size, so this deterministic
+  path has no reliable way to judge whether stacking items actually adds up to enough food
+  — guessing would risk under- or over-feeding the household. That judgment call needs
+  the notes-reading + household-size reasoning only the LLM path can do (see "Day
+  adherence & leftovers" above); a July 2026 attempt to have the rules engine pack items
+  whenever there were more expiring items than open days was reverted for exactly this
+  reason — it optimized for using up stock, not for feeding the household correctly. For
+  the same reason it also can't tell a meal-sized freezer item from a raw ingredient
+  (Freezy carries no category to check) — a known, accepted gap in this deterministic
+  path, not something to paper over with a fragile keyword guess.
 - **Robustness posture**: a single unparseable or truncated reply is recovered, not
   discarded. `ParsePayload` strips `<think>`/`<reasoning>` blocks and code fences and
   accepts both the wrapping object and a bare array. On a parse miss the model is

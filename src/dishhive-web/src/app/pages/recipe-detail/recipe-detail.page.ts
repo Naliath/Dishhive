@@ -7,7 +7,6 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -18,6 +17,7 @@ import { MeasurementService } from '../../services/measurement.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { StatisticsService } from '../../services/statistics.service';
+import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { MealRatingDialog, MealRatingDialogData } from '../../components/meal-rating-dialog/meal-rating-dialog';
 import { Cookbook, Recipe } from '../../models/recipe.model';
 import { DishStatistic } from '../../models/statistics.model';
@@ -34,6 +34,7 @@ function toIso(date: Date): string {
   selector: 'app-recipe-detail-page',
   standalone: true,
   imports: [
+    CookingLoaderComponent,
     DatePipe,
     DecimalPipe,
     RouterLink,
@@ -43,7 +44,6 @@ function toIso(date: Date): string {
     MatIconModule,
     MatListModule,
     MatMenuModule,
-    MatProgressSpinnerModule,
     MatSlideToggleModule,
     MatSnackBarModule,
     MatTooltipModule

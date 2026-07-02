@@ -1,6 +1,6 @@
 @if (loading()) {
   <div class="empty-state">
-    <mat-spinner diameter="48"></mat-spinner>
+    <app-cooking-loader diameter="64" />
   </div>
 } @else if (list(); as shoppingList) {
   <div class="page-header">

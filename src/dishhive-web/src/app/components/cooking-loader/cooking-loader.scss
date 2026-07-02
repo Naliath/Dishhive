@@ -1,0 +1,92 @@
+:host {
+  display: inline-block;
+  line-height: 0;
+}
+
+svg {
+  display: block;
+  overflow: visible;
+}
+
+.pot {
+  fill: var(--mat-sys-primary);
+}
+
+.lid {
+  fill: var(--mat-sys-primary);
+  // Surface-colored outline keeps the lid readable against the pot rim
+  stroke: var(--mat-sys-surface);
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: lid-rattle 1.15s ease-in-out infinite;
+}
+
+.steam {
+  fill: none;
+  stroke: var(--mat-sys-on-surface-variant);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0;
+  animation: steam-rise 2s ease-out infinite;
+}
+
+// Negative delays so all three wisps are mid-cycle on first paint
+.steam--2 {
+  animation-delay: -0.66s;
+}
+
+.steam--3 {
+  animation-delay: -1.33s;
+}
+
+@keyframes lid-rattle {
+  0%, 55%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  10% {
+    transform: translateY(-2px) rotate(-3deg);
+  }
+  20% {
+    transform: translateY(-0.5px) rotate(2deg);
+  }
+  32% {
+    transform: translateY(-2.5px) rotate(3deg);
+  }
+  44% {
+    transform: translateY(0) rotate(-1deg);
+  }
+}
+
+@keyframes steam-rise {
+  0% {
+    transform: translateY(5px);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translateY(-7px);
+    opacity: 0;
+  }
+}
+
+@keyframes steam-fade {
+  0%, 100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lid {
+    animation: none;
+  }
+
+  .steam {
+    animation: steam-fade 3s ease-in-out infinite;
+  }
+}

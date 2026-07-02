@@ -66,7 +66,7 @@ services:
       Ai__MaxPromptTokens: "${AI_MAX_PROMPT_TOKENS:-6000}"
       # Agentic (external-recipe search) path only: a tool loop is several full model
       # round-trips, so it needs a much longer budget than a plain suggestion call
-      Ai__AgentTimeoutSeconds: "${AI_AGENT_TIMEOUT_SECONDS:-300}"
+      Ai__AgentTimeoutSeconds: "${AI_AGENT_TIMEOUT_SECONDS:-600}"
       Ai__MaxToolIterations: "${AI_MAX_TOOL_ITERATIONS:-8}"
       # Recipe-scrapers sidecar: fallback import provider for sites without a
       # dedicated C# provider. Leave empty to disable the fallback.

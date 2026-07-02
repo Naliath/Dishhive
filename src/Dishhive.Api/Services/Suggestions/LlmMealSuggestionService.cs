@@ -239,10 +239,22 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         - NEVER suggest dishes that conflict with the listed allergies or dietary constraints.
         - Prefer variety: avoid dishes eaten in the last two weeks.
         - Favor household favorites and dishes with high ratings; avoid low-rated dishes.
-        - Use expiring freezer items where sensible. Freezer leftovers may not feed the whole
-          household — check their notes for portion hints; you may propose two or three small
-          leftovers for the SAME date (one suggestion entry per dish) to make a full dinner.
-          Each freezer item lists the quantity available; never use an item more times across
+        - Use expiring freezer items ONLY when the item is a complete meal by itself —
+          a frozen pizza, lasagna, soup, stew, or a container of home-made leftovers are
+          fine. A raw ingredient or side component (e.g. a bag of peas, frozen corn,
+          butter, shredded cheese, flour) is NOT a dish; never invent a "dinner" around
+          one just because it is expiring — leave it for the rest of the week's cooking
+          instead. The goal is enough food for everyone in "Household" on that date, not
+          maximizing freezer use. Check each item's notes for its portion size; if none is
+          given, ASSUME it is a household-sized portion (the normal case for home-made
+          leftovers in a container) and propose it alone. Only add a second freezer item
+          for the SAME date when the notes explicitly say the first one's portion is
+          smaller than the household — as an ADDITIONAL, SEPARATE suggestion entry, never
+          merged into a single dish name (e.g. a frozen pizza noted "for 2" and a frozen
+          lasagna noted "for 2" together cover a household of 4: two entries, each with
+          its own exact item name, dated the same). Each entry's dishName must exactly
+          match its freezer item's name so it can be linked back to that stock. Each
+          freezer item lists the quantity available; never use an item more times across
           the week than that quantity (the stock is already reserved for what you plan).
         - When a day has a vague instruction (e.g. "something with fish" or "vegetarian"),
           every dish you suggest for that day must satisfy it.

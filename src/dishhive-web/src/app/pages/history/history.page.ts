@@ -5,9 +5,9 @@ import { MatCardModule } from '@angular/material/card';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { MealRatingDialog, MealRatingDialogData } from '../../components/meal-rating-dialog/meal-rating-dialog';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { FamilyMembersService } from '../../services/family-members.service';
@@ -34,13 +34,13 @@ function toIso(date: Date): string {
   selector: 'app-history-page',
   standalone: true,
   imports: [
+    CookingLoaderComponent,
     DatePipe,
     MatButtonModule,
     MatCardModule,
     MatDialogModule,
     MatIconModule,
     MatListModule,
-    MatProgressSpinnerModule,
     MatSnackBarModule,
     MatTooltipModule
   ],

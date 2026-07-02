@@ -11,6 +11,13 @@ namespace Dishhive.Api.Services.Suggestions;
 ///    least-recently-planned; round-robin across members for fairness.
 /// Global-instruction collection references are ignored, consistent with the
 /// rule that this provider ignores free-text instructions.
+///
+/// Deliberately does NOT combine multiple freezer items onto one day: this provider
+/// has no signal at all for portion size (Freezy notes are free text, not structured),
+/// so it can't judge whether stacking items actually adds up to enough food for the
+/// household — guessing would risk under- or over-feeding. That judgment call belongs
+/// to the LLM path (LlmMealSuggestionService), which can read the notes and household
+/// size and combine only when it actually makes sense; see docs/features/ai-week-planning.md.
 /// </summary>
 public class RulesMealSuggestionService : IMealSuggestionService
 {

@@ -7,9 +7,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
+import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { StatisticsService } from '../../services/statistics.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { DishStatistics, DishStatistic } from '../../models/statistics.model';
@@ -19,6 +19,7 @@ import { FamilyMember } from '../../models/family-member.model';
   selector: 'app-statistics-page',
   standalone: true,
   imports: [
+    CookingLoaderComponent,
     DatePipe,
     DecimalPipe,
     FormsModule,
@@ -28,7 +29,6 @@ import { FamilyMember } from '../../models/family-member.model';
     MatIconModule,
     MatInputModule,
     MatMenuModule,
-    MatProgressSpinnerModule,
     MatSnackBarModule,
     MatTableModule
   ],

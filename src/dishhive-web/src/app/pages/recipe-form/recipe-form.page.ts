@@ -9,8 +9,8 @@ import { MatChipInputEvent, MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { RecipesService } from '../../services/recipes.service';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { CreateRecipe } from '../../models/recipe.model';
@@ -33,6 +33,7 @@ interface StepRow {
   selector: 'app-recipe-form-page',
   standalone: true,
   imports: [
+    CookingLoaderComponent,
     RouterLink,
     FormsModule,
     MatAutocompleteModule,
@@ -42,7 +43,6 @@ interface StepRow {
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatProgressSpinnerModule,
     MatSnackBarModule
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,

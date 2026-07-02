@@ -5,7 +5,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -29,6 +28,7 @@ import {
 } from '../../models/planned-meal.model';
 import { FamilyMember } from '../../models/family-member.model';
 import { FreezerSuggestions } from '../../models/frozen-item.model';
+import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { MealSlotDialog, MealSlotDialogData } from '../../components/meal-slot-dialog/meal-slot-dialog';
 import {
   SuggestionReviewDialog,
@@ -63,13 +63,13 @@ function mondayOf(date: Date): Date {
   selector: 'app-week-planner-page',
   standalone: true,
   imports: [
+    CookingLoaderComponent,
     DatePipe,
     RouterLink,
     MatButtonModule,
     MatCardModule,
     MatDialogModule,
     MatIconModule,
-    MatProgressSpinnerModule,
     MatSnackBarModule,
     MatTooltipModule
   ],

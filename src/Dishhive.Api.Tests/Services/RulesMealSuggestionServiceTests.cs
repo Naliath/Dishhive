@@ -52,6 +52,28 @@ public class RulesMealSuggestionServiceTests
     }
 
     [Fact]
+    public async Task Suggest_MoreExpiringItemsThanDays_DoesNotForceCombining()
+    {
+        // The rules engine has no portion-size signal (Freezy notes are free text), so it
+        // must not guess at combining items just because there are more expiring items
+        // than open days — that would risk stacking dishes that don't actually add up to
+        // enough food for the household. One item per day, excess left for another week,
+        // same as before this was ever "fixed" and un-fixed.
+        var request = Request(
+            daysToFill: [WeekStart],
+            frozenItems:
+            [
+                new FrozenItem { Id = "a", Name = "Item A", Quantity = 1, ExpirationDate = Today.AddDays(1).ToDateTime(TimeOnly.MinValue) },
+                new FrozenItem { Id = "b", Name = "Item B", Quantity = 1, ExpirationDate = Today.AddDays(2).ToDateTime(TimeOnly.MinValue) }
+            ]);
+
+        var suggestions = await _service.SuggestAsync(request);
+
+        suggestions.Should().ContainSingle();
+        suggestions[0].DishName.Should().Be("Item A"); // soonest-expiring wins the one open day
+    }
+
+    [Fact]
     public async Task Suggest_FreezerItemFarFromExpiry_IsNotForced()
     {
         var request = Request(

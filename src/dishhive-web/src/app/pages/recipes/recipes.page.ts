@@ -8,7 +8,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -16,6 +15,7 @@ import { DecimalPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, forkJoin } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { RecipesService } from '../../services/recipes.service';
 import { CookbooksService } from '../../services/cookbooks.service';
 import { FamilyMembersService } from '../../services/family-members.service';
@@ -27,6 +27,7 @@ import { DishStatistic } from '../../models/statistics.model';
   selector: 'app-recipes-page',
   standalone: true,
   imports: [
+    CookingLoaderComponent,
     DecimalPipe,
     RouterLink,
     FormsModule,
@@ -36,7 +37,6 @@ import { DishStatistic } from '../../models/statistics.model';
     MatIconModule,
     MatInputModule,
     MatMenuModule,
-    MatProgressSpinnerModule,
     MatSelectModule,
     MatSnackBarModule,
     MatTooltipModule

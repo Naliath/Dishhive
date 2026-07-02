@@ -9,11 +9,11 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatListModule } from '@angular/material/list';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { forkJoin } from 'rxjs';
+import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { RecipesService } from '../../services/recipes.service';
 import { DietaryTagKind, FamilyMember, FamilyMemberFavorite } from '../../models/family-member.model';
@@ -25,6 +25,7 @@ type TagField = 'allergy' | 'diet';
   selector: 'app-family-page',
   standalone: true,
   imports: [
+    CookingLoaderComponent,
     FormsModule,
     MatAutocompleteModule,
     MatButtonModule,
@@ -34,7 +35,6 @@ type TagField = 'allergy' | 'diet';
     MatIconModule,
     MatInputModule,
     MatListModule,
-    MatProgressSpinnerModule,
     MatSlideToggleModule,
     MatSnackBarModule,
     MatTooltipModule

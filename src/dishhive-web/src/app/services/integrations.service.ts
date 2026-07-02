@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import {
+  AiModelTestStatus,
   IntegrationStatusResponse,
   ScraperUpdateResponse,
   ScraperVersionCheck
@@ -14,6 +15,19 @@ export class IntegrationsService {
 
   getStatus(): Observable<IntegrationStatusResponse | null> {
     return this.http.get<IntegrationStatusResponse>('/api/integrations/status').pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  getAiModelTest(): Observable<AiModelTestStatus | null> {
+    return this.http.get<AiModelTestStatus>('/api/integrations/ai/test').pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  /** Starts a fresh AI model capability test; poll getAiModelTest until completed */
+  runAiModelTest(): Observable<AiModelTestStatus | null> {
+    return this.http.post<AiModelTestStatus>('/api/integrations/ai/test', {}).pipe(
       catchError(() => of(null))
     );
   }

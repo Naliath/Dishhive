@@ -55,7 +55,7 @@ services:
       # Optional AI week-plan suggestions (disabled while Ai__Provider is empty).
       # Per-developer config + the API key live in a gitignored .env (copy .env.example);
       # the committed defaults below target a local LM Studio.
-      # Providers: openai | anthropic | mistral | ollama | lmstudio | openai-compatible
+      # Providers (all OpenAI-compatible): openai | mistral | ollama | lmstudio | openai-compatible
       Ai__Provider: "${AI_PROVIDER:-lmstudio}"
       Ai__ApiKey: "${AI_API_KEY:-}"
       Ai__BaseUrl: "${AI_BASE_URL:-http://host.docker.internal:1234/v1}"

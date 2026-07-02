@@ -19,7 +19,8 @@ behind the existing `IMealSuggestionService` seam — AI is not bolted on anywhe
 | Semantic Kernel | ❌ More orchestration machinery than needed; Microsoft steers new projects to MAF/MEAI |
 | Raw per-provider HTTP clients | ❌ Re-implements what MEAI adapters provide (schema generation, parsing, retries) |
 
-**Provider coverage** — 4 of the 5 providers are OpenAI-compatible, so one factory covers all:
+**Provider coverage** — deliberately scoped to OpenAI-compatible APIs only, so one
+factory covers every provider (no per-provider SDK/parsing quirks to maintain):
 
 | Provider | SDK | Default endpoint |
 |---|---|---|
@@ -27,7 +28,7 @@ behind the existing `IMealSuggestionService` seam — AI is not bolted on anywhe
 | Ollama | same | `http://localhost:11434/v1` |
 | LM Studio | same | `http://localhost:1234/v1` |
 | Mistral | same | `https://api.mistral.ai/v1` |
-| Anthropic | official `Anthropic` NuGet (implements `IChatClient`) | SDK default |
+| openai-compatible (OpenRouter, etc.) | same | requires `Ai__BaseUrl` |
 
 ## Configuration
 
@@ -36,8 +37,8 @@ behind the existing `IMealSuggestionService` seam — AI is not bolted on anywhe
 
 | Key | Meaning |
 |---|---|
-| `Ai__Provider` | `openai` \| `anthropic` \| `mistral` \| `ollama` \| `lmstudio` \| `openai-compatible` |
-| `Ai__ApiKey` | Falls back to standard `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `MISTRAL_API_KEY` env vars; local providers need none |
+| `Ai__Provider` | `openai` \| `mistral` \| `ollama` \| `lmstudio` \| `openai-compatible` |
+| `Ai__ApiKey` | Falls back to standard `OPENAI_API_KEY` / `MISTRAL_API_KEY` env vars; local providers need none |
 | `Ai__BaseUrl` | Optional endpoint override (required for `openai-compatible`) |
 | `Ai__Model` | e.g. `llama3.1`, `gpt-4o-mini`, `claude-opus-4-8` |
 | `Ai__MaxOutputTokens` / `Ai__TimeoutSeconds` | Defaults 12000 / 60 (generous: reasoning models burn 6-8k thinking tokens on instruction-heavy requests before any JSON appears) |
@@ -222,19 +223,77 @@ IMealSuggestionService
 - **Failure posture**: AI errors are logged and answered by the fallback; the endpoint
   never 500s because a model is down (Freezy precedent).
 
+## Model capability test (July 2026)
+
+"Reachable" says nothing about "usable": the `/models` ping passes while the loaded
+model may still produce no parseable JSON at all (the 4k-context reasoning-model trap)
+or quietly ignore instructions. Every suggestion against such a model is a known-doomed
+wait ending in silent rules fallback, rediscovered on every click. So the configured
+model gets **one real test per process** (`AiModelTester` + `AiModelCapabilityService`):
+
+- **Startup**: `AiModelStartupTest` (hosted service) resolves the verdict in the
+  background. The application stays fully usable while it runs — only AI work waits:
+  `LlmMealSuggestionService` awaits the shared verdict before its first model call.
+- **Persisted per configuration**: the verdict is stored (`AiModelTestRecord`, unique
+  per `AiOptions.CapabilityFingerprint` — provider, model, base URL and the
+  capability-relevant tuning knobs; operational timeouts excluded). A restart with
+  unchanged AI settings reuses the stored verdict instantly; a fresh test only runs
+  when the fingerprint has no stored row yet, i.e. when the AI config changed.
+  Known trade-off: a server-side change behind identical settings (a different model
+  loaded into LM Studio under the same id, a changed context length) is **not**
+  auto-detected — that is exactly what the re-test button is for.
+- **Re-trigger**: the settings page (integrations card) shows the verdict, the
+  per-check details and a "(Re-)test model" button — `POST /api/integrations/ai/test`,
+  poll the GET until `completed` — for after the user swapped or reconfigured the
+  model (it always runs and overwrites the stored verdict).
+- **What it verifies**:
+  1. `/models` probe — endpoint up and the configured model id actually served
+     (catches "wrong model loaded"). Advisory only: some gateways block the listing
+     while completions work, so this never aborts the real stages.
+  2. A **medium-complexity evaluation request** under the production system prompt and
+     prompt builder, padded with filler recipes to the full `Ai__MaxPromptTokens`
+     budget — a context window too small for real requests fails *here*, visibly,
+     instead of on every planning evening. Sent first with native `json_schema`
+     enforcement, then with prompted JSON; whichever parses becomes the verified
+     response mode.
+  3. The reply is **scored against known-correct answers**: all five days filled, the
+     `#[Quick Pasta]`-constrained Wednesday picks from that collection, "serve Chicken
+     curry on Thursday" is honored, and ≥2 days are vegetarian. The fixture recipes
+     carry Vegetarian/Meat/Fish categories, so this tests instruction-following, not
+     world knowledge.
+- **The verdict drives behavior.** `failed` (no attempt produced parseable JSON): the
+  LLM is never called — suggestions go straight to the rules, and the review dialog
+  skips the compose phase exactly like "AI down", so instructions are never collected
+  just to be silently dropped. `warnings` (JSON works but the evaluation or the
+  model-listing check failed): the AI path stays on; the settings page shows what went
+  wrong so expectations are set. `passed`: business as usual.
+- **Response-format negotiation** rides on stage 2: a blanket format choice is wrong in
+  both directions (LM Studio rejects `json_object`, local reasoning models emit their
+  answer into the reasoning channel under a schema — while capable cloud models offer
+  guaranteed-valid JSON for free). The test decides empirically per configured model:
+  verified `json_schema` → production calls set `ChatOptions.ResponseFormat` and the
+  parse/retry machinery becomes a safety net; otherwise prompted JSON as before.
+
 ## Frontend
 
 - Planner toolbar: `auto_awesome` "Suggest week" button, visible only when the status
   endpoint reports enabled
 - `components/suggestion-review-dialog/`: a live AI check (integrations status) decides
-  the opening phase — AI reachable → instructions are asked **before** generating
-  ("compose" phase with a Generate button); AI down → generation starts immediately,
-  since the rules fallback ignores instructions. Then one row per proposal (date, dish,
-  matched-recipe icon, reason, checkbox default-on); "Add selected" creates the meals
-  (Dinner/Main, household members attending). The instructions field is a 3-row textarea
-  (so `#[Name]` autocomplete and longer wishes fit); Enter selects the active
-  autocomplete option or inserts a newline — it never submits. Generation runs from the
-  explicit Generate/Regenerate buttons.
+  the opening phase — AI reachable **and** the model test not failed → instructions are
+  asked **before** generating ("compose" phase with a Generate button); AI down or model
+  unfit → generation starts immediately, since the rules fallback ignores instructions.
+  Then one row per proposal (date, dish, matched-recipe icon, reason, checkbox
+  default-on); "Add selected" creates the meals (Dinner/Main, household members
+  attending). The instructions field is a 3-row textarea (so `#[Name]` autocomplete and
+  longer wishes fit); Enter selects the active autocomplete option or inserts a newline
+  — it never submits. Generation runs from the explicit Generate/Regenerate buttons.
+  When **every** returned row is fallback-sourced, a banner says so explicitly (and that
+  any typed instructions were not applied) — the per-row "rules" tags alone are easy to
+  miss.
+- `components/integrations-status/` (settings page): under the AI row, the last model
+  test verdict with its per-check list and a "(Re-)test model" button; while a test
+  runs, the cooking-pot loader with a "can take a couple of minutes" note (polls the
+  test endpoint every 2s).
 
 ## Risks / Notes
 
@@ -243,9 +302,13 @@ IMealSuggestionService
   exceed the window before any JSON appears and every call lands on the rules fallback.
   Load the model with ≥16k context (`lms load <model> --context-length 16384`). Verified
   June 2026 with `qwen/qwen3.6-35b-a3b` (4096 → always fallback; 16384 → real suggestions).
-- Small local models may ignore the JSON schema → malformed-output path lands on the rules
-  fallback by design.
-- MEAI / Anthropic package APIs still move; versions pinned in the csproj.
+  The capability test's budget-padded evaluation catches this on the settings page
+  instead of in the logs.
+- Small local models may ignore the JSON shape → malformed-output path lands on the rules
+  fallback by design; a model that never produces JSON fails the capability test and is
+  not called at all. Local models being unfit is an accepted outcome — the point is that
+  it is now communicated (settings verdict, dialog behavior), not discovered per request.
+- MEAI / OpenAI SDK APIs still move; versions pinned in the csproj.
 - Suggestion quality depends on the configured model; recipes are relevance-ranked and
   the recipe + history blocks are trimmed to `Ai__MaxPromptTokens` (default 6000) so the
   prompt scales with the model's context window instead of fixed 40/60 caps.
@@ -266,3 +329,5 @@ IMealSuggestionService
 - [x] `@[Source]` mentions (`SourceMentionResolver`, `RecipeSourceCatalog`, `GET /api/recipes/sources`)
 - [x] LLM recipe-extraction fallback for import + `PreviewAsync`; import-on-accept in the review dialog
 - [x] docker-compose `searxng` service + `WebSearch__*` vars + `@` autocomplete
+- [x] Model capability test: `AiModelTester` (evaluation fixture + scoring) + startup gate + settings-page re-test + response-format negotiation
+- [x] Persisted test verdict (`AiModelTestRecord` keyed by config fingerprint) — no re-test per reboot, only on config change or manual re-test

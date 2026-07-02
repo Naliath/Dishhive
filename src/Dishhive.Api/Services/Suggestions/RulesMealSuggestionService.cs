@@ -10,7 +10,10 @@ namespace Dishhive.Api.Services.Suggestions;
 ///    and dishes the household rated below 3; prefer loved (≥4), then
 ///    least-recently-planned; round-robin across members for fairness.
 /// Global-instruction collection references are ignored, consistent with the
-/// rule that this provider ignores free-text instructions.
+/// rule that this provider ignores free-text instructions. Never re-suggests a dish
+/// name already present in the request's WeekPlan — that covers both concretely
+/// planned days elsewhere in the week and (via LlmMealSuggestionService's backfill)
+/// the AI's own picks on the same call, so a partial-week backfill can't duplicate one.
 ///
 /// Deliberately does NOT combine multiple freezer items onto one day: this provider
 /// has no signal at all for portion size (Freezy notes are free text, not structured),
@@ -57,8 +60,19 @@ public class RulesMealSuggestionService : IMealSuggestionService
         }
 
         var historyByDish = request.RecentDishes.ToDictionary(d => d.DishName, StringComparer.OrdinalIgnoreCase);
+        // Seeded from this call's own freezer picks AND the week's existing plan (concrete
+        // dishes already on other days, and — when this is an AI backfill — the AI's own
+        // picks passed in as WeekPlan entries too) so rules never re-suggests a dish that's
+        // already elsewhere in the same week.
         var usedDishes = new HashSet<string>(
             suggestions.Select(s => s.DishName!), StringComparer.OrdinalIgnoreCase);
+        foreach (var meal in request.WeekPlan)
+        {
+            if (meal.DishName != null)
+            {
+                usedDishes.Add(meal.DishName);
+            }
+        }
 
         // 2. Days constrained to a referenced collection pick from its titles
         // (least-recently-planned first), still honoring the variety window

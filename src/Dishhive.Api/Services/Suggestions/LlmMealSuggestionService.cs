@@ -23,6 +23,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
     private readonly AiOptions _options;
     private readonly IWebSearchClient _webSearch;
     private readonly IRecipeImportService _importService;
+    private readonly IAiModelCapabilityService _capability;
     private readonly int _webSearchMaxResults;
     private readonly ILogger<LlmMealSuggestionService> _logger;
 
@@ -33,6 +34,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         IWebSearchClient webSearch,
         IRecipeImportService importService,
         WebSearchOptions webSearchOptions,
+        IAiModelCapabilityService capability,
         ILogger<LlmMealSuggestionService> logger)
     {
         _chatClient = chatClient;
@@ -40,6 +42,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         _options = options;
         _webSearch = webSearch;
         _importService = importService;
+        _capability = capability;
         _webSearchMaxResults = webSearchOptions.MaxResults;
         _logger = logger;
     }
@@ -62,6 +65,19 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
 
         try
         {
+            // AI work waits for the model capability test (usually already done at
+            // startup): a model that never produced parseable JSON in the test is not
+            // called at all — every such call is a known-doomed 60s wait — and a model
+            // verified for native json_schema gets that hard format guarantee below.
+            var capability = await _capability.EnsureTestedAsync(cancellationToken);
+            if (!capability.Viable)
+            {
+                _logger.LogWarning(
+                    "[{RequestId}] Model {Provider}/{Model} failed its capability test (verdict={Verdict}); using rules fallback without calling it",
+                    requestId, _options.Provider, _options.Model, capability.Verdict);
+                return await _fallback.SuggestAsync(request, cancellationToken);
+            }
+
             // Attach the external-recipe tools ONLY when the planner explicitly referenced
             // an external source via @[Source] (SourceConstraints is populated by
             // SourceMentionResolver) — an unambiguous, discoverable opt-in, mirroring
@@ -101,17 +117,22 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
                     .Build();
             }
 
-            // Plain text completion with the JSON shape described in the prompt, parsed
-            // manually. Native response_format is deliberately avoided: LM Studio rejects
-            // json_object outright, and with json_schema reasoning models (e.g. Qwen3)
-            // emit their answer into the reasoning channel, leaving content empty.
-            // Prompted JSON works across all five providers; ParsePayload tolerates
-            // fences/think-tags and the rules fallback absorbs anything malformed.
+            // Response format follows what the capability test PROVED works for this
+            // model: native json_schema when verified (hard format guarantee — the
+            // parse/retry machinery below becomes a safety net), otherwise prompted
+            // JSON described in the system prompt. A blanket choice is wrong in both
+            // directions: LM Studio rejects json_object outright and reasoning models
+            // (e.g. Qwen3) emit their answer into the reasoning channel under a schema,
+            // while capable cloud models give guaranteed-valid JSON for free.
+            // ParsePayload tolerates fences/think-tags either way.
             var chatOptions = new ChatOptions
             {
                 MaxOutputTokens = _options.MaxOutputTokens,
                 Temperature = (float)_options.Temperature,
-                Tools = tools
+                Tools = tools,
+                ResponseFormat = capability.ResponseMode == AiResponseMode.JsonSchema
+                    ? AiModelTester.JsonSchemaFormat
+                    : null
             };
 
             // One model can stumble on the JSON once; a corrective reprompt (the bad
@@ -141,7 +162,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
 
                 if (attempt < _options.MaxRetries)
                 {
-                    messages.Add(new ChatMessage(ChatRole.Assistant, text));
+                    messages.Add(new ChatMessage(ChatRole.Assistant, BuildRepromptQuote(text)));
                     messages.Add(new ChatMessage(ChatRole.User, truncated
                         ? "Your reply was cut off before the JSON was complete. Reply again with ONLY the JSON object and keep every reason to a few words."
                         : "That was not valid JSON. Reply with ONLY the JSON object in the required shape, no other text."));
@@ -227,12 +248,25 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             .Where(i => i.Quantity > 0)
             .ToList();
 
-        var fallbackRequest = request with { DaysToFill = missing, AvailableFrozenItems = remainingFrozen };
+        // Also don't let the rules backfill re-suggest a dish name the AI already picked
+        // for another day this call — RulesMealSuggestionService excludes anything already
+        // in WeekPlan, so folding the AI's own picks in here (as synthetic entries) is
+        // enough to cover it without any extra dedup logic on this end.
+        var aiPicksAsExisting = suggestions
+            .Where(s => s.DishName != null)
+            .Select(s => new ExistingMeal { Date = s.Date, DishName = s.DishName });
+        var fallbackRequest = request with
+        {
+            DaysToFill = missing,
+            AvailableFrozenItems = remainingFrozen,
+            WeekPlan = request.WeekPlan.Concat(aiPicksAsExisting).ToList()
+        };
         var filler = await _fallback.SuggestAsync(fallbackRequest, cancellationToken);
         return suggestions.Concat(filler).OrderBy(s => s.Date).ToList();
     }
 
-    private const string SystemPrompt =
+    // internal so AiModelTester runs its evaluation under the exact production prompt
+    internal const string SystemPrompt =
         """
         You are a meal planner for a family household. Propose a dinner for each
         requested date. Rules:
@@ -296,6 +330,31 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
     [GeneratedRegex(@"<(?:think|reasoning)>.*?(?:</(?:think|reasoning)>|$)",
         RegexOptions.Singleline | RegexOptions.IgnoreCase)]
     private static partial Regex ReasoningBlockRegex();
+
+    /// <summary>Upper bound on the bad reply quoted back into a corrective reprompt.</summary>
+    private const int MaxRepromptQuoteChars = 2000;
+
+    /// <summary>
+    /// Builds the assistant-turn content for a corrective reprompt after an unparseable
+    /// reply. The dominant local-model failure is burning the whole output budget on
+    /// reasoning before any JSON appears — quoting that back verbatim would roughly
+    /// double an already-overflowing context, making the retry fail for the same reason
+    /// as the original attempt. Strips the reasoning channel and keeps only a tail
+    /// window (where a real, if malformed, answer attempt usually sits) — plenty for
+    /// the model to see what needs fixing without re-spending the budget that broke it.
+    /// </summary>
+    private static string BuildRepromptQuote(string text)
+    {
+        var stripped = ReasoningBlockRegex().Replace(text, "").Trim();
+        if (stripped.Length == 0)
+        {
+            return "(your reply contained only reasoning, no visible answer)";
+        }
+
+        return stripped.Length > MaxRepromptQuoteChars
+            ? stripped[^MaxRepromptQuoteChars..]
+            : stripped;
+    }
 
     /// <summary>
     /// Extracts the payload from the model's text. Tolerates reasoning channels,

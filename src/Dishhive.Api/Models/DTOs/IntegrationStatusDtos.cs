@@ -19,8 +19,27 @@ public record AiIntegrationStatusDto(
     bool Reachable,
     string? Provider,
     string? Model,
-    string? BaseUrl
+    string? BaseUrl,
+    string ModelTestState,
+    string? ModelTestVerdict
 );
+
+public record AiModelTestStatusDto(
+    string State,
+    AiModelTestResultDto? Result
+);
+
+public record AiModelTestResultDto(
+    DateTimeOffset TestedAt,
+    string Verdict,
+    string ResponseMode,
+    bool? EvaluationPassed,
+    double? TokensPerSecond,
+    long ElapsedMs,
+    IReadOnlyList<AiModelTestCheckDto> Checks
+);
+
+public record AiModelTestCheckDto(string Name, bool Passed, string Detail);
 
 public record FreezyIntegrationStatusDto(
     bool Configured,

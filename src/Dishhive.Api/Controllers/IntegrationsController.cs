@@ -18,6 +18,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
         [FromServices] IFreezyClient freezyClient,
         [FromServices] IRecipeScrapersClient scrapersClient,
         [FromServices] WebSearchOptions webSearchOptions,
+        [FromServices] IAiModelCapabilityService aiCapability,
         CancellationToken cancellationToken)
     {
         var aiReachable = aiOptions.IsConfigured
@@ -37,7 +38,9 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
                 Provider: aiOptions.IsConfigured ? aiOptions.Provider : null,
                 Model: aiOptions.IsConfigured ? aiOptions.Model : null,
                 BaseUrl: aiOptions.IsConfigured && !string.IsNullOrEmpty(aiOptions.BaseUrl)
-                    ? aiOptions.BaseUrl : null
+                    ? aiOptions.BaseUrl : null,
+                ModelTestState: StateString(aiCapability.State),
+                ModelTestVerdict: aiCapability.Result?.Verdict
             ),
             Freezy: new FreezyIntegrationStatusDto(
                 Configured: freezyClient.IsConfigured,
@@ -131,6 +134,70 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
         return Accepted(value: new ScraperUpdateResponseDto(result.Version));
     }
 
+    /// <summary>
+    /// Latest model capability test for the configured AI model (see AiModelTester):
+    /// whether the model produces parseable suggestions at all, which response format
+    /// works, and how it scored on the instruction-following evaluation.
+    /// </summary>
+    [HttpGet("ai/test")]
+    [ProducesResponseType(typeof(AiModelTestStatusDto), StatusCodes.Status200OK)]
+    public ActionResult<AiModelTestStatusDto> GetAiModelTest(
+        [FromServices] IAiModelCapabilityService aiCapability)
+    {
+        return Ok(ToDto(aiCapability));
+    }
+
+    /// <summary>
+    /// Starts a fresh model capability test (e.g. after tweaking the model settings or
+    /// loading a different model into LM Studio). Runs in the background — poll
+    /// GET api/integrations/ai/test until State is "completed". When a test is already
+    /// running this joins it (the response reports "running") — a second concurrent
+    /// run can never start.
+    /// </summary>
+    [HttpPost("ai/test")]
+    [ProducesResponseType(typeof(AiModelTestStatusDto), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<AiModelTestStatusDto> RunAiModelTest(
+        [FromServices] IAiModelCapabilityService aiCapability,
+        [FromServices] AiOptions aiOptions)
+    {
+        if (!aiOptions.IsConfigured)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "AI is not configured",
+                Detail = "Set Ai__Provider and Ai__Model before testing a model."
+            });
+        }
+
+        // Fire-and-forget: the capability service owns the (never-throwing) run task
+        _ = aiCapability.RetestAsync();
+        return Accepted(value: ToDto(aiCapability));
+    }
+
+    private static AiModelTestStatusDto ToDto(IAiModelCapabilityService capability)
+    {
+        var result = capability.Result;
+        return new AiModelTestStatusDto(
+            State: StateString(capability.State),
+            Result: result is null ? null : new AiModelTestResultDto(
+                TestedAt: result.TestedAt,
+                Verdict: result.Verdict,
+                ResponseMode: result.ResponseMode.ToString(),
+                EvaluationPassed: result.EvaluationPassed,
+                TokensPerSecond: result.TokensPerSecond,
+                ElapsedMs: result.ElapsedMs,
+                Checks: [.. result.Checks.Select(c => new AiModelTestCheckDto(c.Name, c.Passed, c.Detail))]));
+    }
+
+    private static string StateString(AiModelTestState state) => state switch
+    {
+        AiModelTestState.NotConfigured => "notConfigured",
+        AiModelTestState.NotRun => "notRun",
+        AiModelTestState.Running => "running",
+        _ => "completed"
+    };
+
     private async Task<bool> CheckAiReachableAsync(AiOptions options, CancellationToken cancellationToken)
     {
         try
@@ -138,7 +205,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(5));
 
-            var baseUrl = ResolveBaseUrl(options);
+            var baseUrl = ChatClientFactory.ProbeBaseUrl(options);
             if (baseUrl is null) return false;
 
             using var http = httpClientFactory.CreateClient();
@@ -160,23 +227,4 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
         }
     }
 
-    /// <summary>
-    /// Resolves the base URL for the /models health probe. Explicit BaseUrl wins,
-    /// then the per-provider SDK default, then known cloud-provider fallbacks.
-    /// </summary>
-    private static Uri? ResolveBaseUrl(AiOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.BaseUrl))
-            return new Uri(options.BaseUrl.TrimEnd('/') + "/");
-
-        var defaultEndpoint = ChatClientFactory.DefaultEndpoint(options.NormalizedProvider);
-        if (defaultEndpoint is not null)
-            return new Uri(defaultEndpoint.ToString().TrimEnd('/') + "/");
-
-        return options.NormalizedProvider switch
-        {
-            "openai" => new Uri("https://api.openai.com/v1/"),
-            _ => null
-        };
-    }
 }

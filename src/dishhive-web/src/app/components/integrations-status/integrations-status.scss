@@ -81,6 +81,57 @@
   }
 }
 
+.ai-test {
+  margin-block-start: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+
+  button {
+    font-size: 12px;
+    height: 30px;
+    padding-inline: 12px;
+  }
+}
+
+.ai-test-running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-test-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--mat-sys-on-surface-variant, inherit);
+
+    &.warn {
+      color: var(--mat-sys-error, #b00020);
+    }
+
+    mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+      line-height: 15px;
+      margin-block-start: 1px;
+      flex-shrink: 0;
+    }
+  }
+}
+
 .scraper-actions {
   margin-block-start: 6px;
   display: flex;

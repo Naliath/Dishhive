@@ -44,10 +44,27 @@ public class LlmMealSuggestionServiceTests
         public void Dispose() { }
     }
 
-    private static LlmMealSuggestionService CreateService(FakeChatClient chatClient, IWebSearchClient? webSearch = null)
+    /// <summary>Capability stub: pretends the model test already ran with the given verdict,
+    /// so unit tests never trigger real probe calls against the fake chat client</summary>
+    private sealed class StubCapability(AiResponseMode mode) : IAiModelCapabilityService
+    {
+        public AiModelTestState State => AiModelTestState.Completed;
+        public AiModelTestResult Result { get; } = new()
+        {
+            TestedAt = DateTimeOffset.UtcNow, Provider = "test", Model = "test", ResponseMode = mode
+        };
+        AiModelTestResult? IAiModelCapabilityService.Result => Result;
+        public Task<AiModelTestResult> EnsureTestedAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(Result);
+        public Task<AiModelTestResult> RetestAsync() => Task.FromResult(Result);
+    }
+
+    private static LlmMealSuggestionService CreateService(
+        FakeChatClient chatClient, IWebSearchClient? webSearch = null,
+        AiResponseMode capabilityMode = AiResponseMode.PromptedJson)
         => new(chatClient, new RulesMealSuggestionService(), new AiOptions { Provider = "ollama", Model = "test" },
             webSearch ?? new NoOpWebSearchClient(), Substitute.For<IRecipeImportService>(), new WebSearchOptions(),
-            NullLogger<LlmMealSuggestionService>.Instance);
+            new StubCapability(capabilityMode), NullLogger<LlmMealSuggestionService>.Instance);
 
     /// <summary>A web-search client that reports configured (unlike the NoOp default) so
     /// tests can isolate the SourceConstraints-gating behavior from configuration state</summary>
@@ -158,6 +175,48 @@ public class LlmMealSuggestionServiceTests
 
         suggestions.Should().BeEmpty();
         chatClient.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Suggest_ModelFailedCapabilityTest_UsesRulesWithoutCallingModel()
+    {
+        // A model the capability test proved unfit (no parseable JSON ever) is not
+        // called at all — every such call would be a known-doomed wait
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Should never appear"}]}""");
+
+        var suggestions = await CreateService(chatClient, capabilityMode: AiResponseMode.None)
+            .SuggestAsync(Request(
+                daysToFill: [WeekStart],
+                favorites: [new FavoriteDish { MemberName = "Anna", DishName = "Fallback dish" }]));
+
+        chatClient.Calls.Should().Be(0);
+        suggestions.Should().ContainSingle(s =>
+            s.DishName == "Fallback dish" && s.Source == MealSuggestionSource.RulesFallback);
+    }
+
+    [Fact]
+    public async Task Suggest_SchemaModeVerified_SetsJsonSchemaResponseFormat()
+    {
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Spaghetti"}]}""");
+
+        await CreateService(chatClient, capabilityMode: AiResponseMode.JsonSchema)
+            .SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        chatClient.LastOptions!.ResponseFormat.Should().BeOfType<ChatResponseFormatJson>()
+            .Which.Schema.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Suggest_PromptedMode_LeavesResponseFormatUnset()
+    {
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Spaghetti"}]}""");
+
+        await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        chatClient.LastOptions!.ResponseFormat.Should().BeNull();
     }
 
     [Fact]
@@ -329,6 +388,24 @@ public class LlmMealSuggestionServiceTests
             s.Date == WeekStart && s.DishName == "AI dish" && s.Source == MealSuggestionSource.Ai);
         suggestions.Should().ContainSingle(s =>
             s.Date == WeekStart.AddDays(1) && s.Source == MealSuggestionSource.RulesFallback);
+    }
+
+    [Fact]
+    public async Task Suggest_BackfillDoesNotDuplicateAiPickedDish()
+    {
+        // The model fills day one with the household's only favorite; the rules backfill
+        // for day two must not re-suggest that same dish just because it's the only
+        // candidate — it should come up empty rather than duplicate it within the week.
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Only favorite"}]}""");
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(Request(
+            daysToFill: [WeekStart, WeekStart.AddDays(1)],
+            favorites: [new FavoriteDish { MemberName = "Anna", DishName = "Only favorite" }]));
+
+        suggestions.Should().ContainSingle();
+        suggestions[0].Date.Should().Be(WeekStart);
+        suggestions[0].DishName.Should().Be("Only favorite");
     }
 
     [Fact]

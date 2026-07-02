@@ -20,6 +20,37 @@
               @if (!status.ai.reachable) {
                 <div class="integration-detail warn">Could not reach the AI endpoint — check provider settings and that the service is running</div>
               }
+              <div class="ai-test">
+                @if (aiTestRunning()) {
+                  <div class="integration-detail ai-test-running">
+                    <app-cooking-loader diameter="28" />
+                    Testing the model — this can take a couple of minutes for local models…
+                  </div>
+                } @else if (aiTest()?.result; as result) {
+                  <div class="integration-detail" [class.warn]="result.verdict === 'failed'">
+                    {{ aiVerdictLabel(result.verdict) }}
+                    &middot; tested {{ result.testedAt | date:'d MMM, HH:mm' }}
+                    @if (result.tokensPerSecond) {
+                      &middot; ~{{ result.tokensPerSecond | number:'1.0-0' }} tokens/s
+                    }
+                  </div>
+                  <ul class="ai-test-checks">
+                    @for (check of result.checks; track check.name) {
+                      <li [class.warn]="!check.passed">
+                        <mat-icon>{{ check.passed ? 'check_circle' : 'error_outline' }}</mat-icon>
+                        <span>{{ check.detail }}</span>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <div class="integration-detail muted">The model has not been tested yet — it is tested automatically at startup</div>
+                }
+                @if (!aiTestBusy()) {
+                  <button mat-stroked-button (click)="runAiTest()">
+                    {{ aiTest()?.result ? 'Re-test model' : 'Test model' }}
+                  </button>
+                }
+              </div>
             } @else {
               <div class="integration-detail muted">Set Ai__Provider and Ai__Model to enable</div>
             }

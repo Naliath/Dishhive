@@ -24,6 +24,7 @@ public class DishhiveDbContext : DbContext
     public DbSet<PlannedMealAttendee> PlannedMealAttendees => Set<PlannedMealAttendee>();
     public DbSet<MealRating> MealRatings => Set<MealRating>();
     public DbSet<UserSetting> UserSettings => Set<UserSetting>();
+    public DbSet<AiModelTestRecord> AiModelTestRecords => Set<AiModelTestRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -286,6 +287,21 @@ public class DishhiveDbContext : DbContext
             entity.Property(e => e.Value).IsRequired().HasMaxLength(1000);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        // AiModelTestRecord configuration (persisted model capability test, one row
+        // per AI configuration fingerprint)
+        modelBuilder.Entity<AiModelTestRecord>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.ConfigKey).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.Provider).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Model).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.ResponseMode).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.ChecksJson).HasColumnType("jsonb");
+
+            entity.HasIndex(e => e.ConfigKey).IsUnique();
         });
     }
 

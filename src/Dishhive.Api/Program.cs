@@ -129,11 +129,17 @@ if (!builder.Environment.IsEnvironment("Testing") && aiOptions.IsConfigured)
     // LLM recipe extraction fallback for import (used when the structured scrapers fail);
     // singleton — it only depends on the singleton IChatClient/AiOptions
     builder.Services.AddSingleton<ILlmRecipeExtractor, LlmRecipeExtractor>();
+    // Model capability test: runs once at startup (AiModelStartupTest) and gates every
+    // AI suggestion call on its verdict; re-triggerable from the settings page.
+    builder.Services.AddSingleton<AiModelTester>();
+    builder.Services.AddSingleton<IAiModelCapabilityService, AiModelCapabilityService>();
+    builder.Services.AddHostedService<AiModelStartupTest>();
 }
 else
 {
     builder.Services.AddSingleton<IMealSuggestionService, NoOpMealSuggestionService>();
     builder.Services.AddSingleton<ILlmRecipeExtractor, NoOpLlmRecipeExtractor>();
+    builder.Services.AddSingleton<IAiModelCapabilityService, NoOpAiModelCapabilityService>();
 }
 builder.Services.AddScoped<CollectionMentionResolver>();
 builder.Services.AddScoped<SourceMentionResolver>();

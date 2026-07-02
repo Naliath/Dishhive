@@ -17,7 +17,8 @@ public class RulesMealSuggestionServiceTests
         IReadOnlyList<DishHistoryEntry>? recentDishes = null,
         IReadOnlyList<FrozenItem>? frozenItems = null,
         IReadOnlyList<RecipeOption>? recipes = null,
-        IReadOnlyList<CollectionConstraint>? collectionConstraints = null) => new()
+        IReadOnlyList<CollectionConstraint>? collectionConstraints = null,
+        IReadOnlyList<ExistingMeal>? weekPlan = null) => new()
     {
         WeekStart = WeekStart,
         DaysToFill = daysToFill ?? [WeekStart, WeekStart.AddDays(1), WeekStart.AddDays(2)],
@@ -25,7 +26,8 @@ public class RulesMealSuggestionServiceTests
         RecentDishes = recentDishes ?? [],
         AvailableFrozenItems = frozenItems ?? [],
         KnownRecipes = recipes ?? [],
-        CollectionConstraints = collectionConstraints ?? []
+        CollectionConstraints = collectionConstraints ?? [],
+        WeekPlan = weekPlan ?? []
     };
 
     [Fact]
@@ -262,6 +264,21 @@ public class RulesMealSuggestionServiceTests
             [
                 new CollectionConstraint { Name = "X", RecipeTitles = ["Wrap"], Dates = [] }
             ]);
+
+        var suggestions = await _service.SuggestAsync(request);
+
+        suggestions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Suggest_FavoriteAlreadyOnWeekPlan_IsExcluded()
+    {
+        // "Spaghetti" is already concretely planned on Wednesday (not a day to fill);
+        // it must not also be suggested for Monday just because it's a favorite.
+        var request = Request(
+            daysToFill: [WeekStart],
+            favorites: [new FavoriteDish { MemberName = "Anna", DishName = "Spaghetti" }],
+            weekPlan: [new ExistingMeal { Date = WeekStart.AddDays(2), DishName = "Spaghetti" }]);
 
         var suggestions = await _service.SuggestAsync(request);
 

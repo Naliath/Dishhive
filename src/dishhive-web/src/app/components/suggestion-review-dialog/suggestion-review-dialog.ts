@@ -74,6 +74,11 @@ export class SuggestionReviewDialog implements OnInit {
 
   readonly selectedCount = computed(() => this.selectedIndexes().size);
 
+  /** Every proposal came from the rules fallback: the AI never answered, so any typed
+   *  instructions were ignored — surfaced as a banner, not just the per-row tags */
+  readonly allFromFallback = computed(() =>
+    this.suggestions().length > 0 && this.suggestions().every(s => s.fromFallback));
+
   /** Suggestions grouped by date so the date renders once per day, not once per dish */
   readonly groupedSuggestions = computed<SuggestionDayGroup[]>(() => {
     const groups: SuggestionDayGroup[] = [];
@@ -100,10 +105,12 @@ export class SuggestionReviewDialog implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Live AI check (errors read as "down"): reachable → ask for instructions
-    // first; unreachable → the rules fallback runs, so generate immediately
+    // Live AI check (errors read as "down"): usable → ask for instructions first;
+    // down OR failed its model capability test → the rules fallback runs (and it
+    // ignores instructions by design), so skip straight to generating instead of
+    // collecting wishes that would be silently dropped
     this.integrationsService.getStatus().subscribe(status => {
-      const aiUp = status?.ai.reachable ?? false;
+      const aiUp = (status?.ai.reachable ?? false) && status?.ai.modelTestVerdict !== 'failed';
       this.aiAvailable.set(aiUp);
       this.webSearchAvailable.set(status?.webSearch?.reachable ?? false);
       if (aiUp) {

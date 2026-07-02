@@ -4,6 +4,34 @@ export interface AiIntegrationStatus {
   provider: string | null;
   model: string | null;
   baseUrl: string | null;
+  /** Lifecycle of the model capability test (notConfigured | notRun | running | completed) */
+  modelTestState: AiModelTestState;
+  /** Headline of the last completed test (passed | warnings | failed), null before any run */
+  modelTestVerdict: AiModelTestVerdict | null;
+}
+
+export type AiModelTestState = 'notConfigured' | 'notRun' | 'running' | 'completed';
+export type AiModelTestVerdict = 'passed' | 'warnings' | 'failed';
+
+export interface AiModelTestCheck {
+  name: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface AiModelTestResult {
+  testedAt: string;
+  verdict: AiModelTestVerdict;
+  responseMode: string;
+  evaluationPassed: boolean | null;
+  tokensPerSecond: number | null;
+  elapsedMs: number;
+  checks: AiModelTestCheck[];
+}
+
+export interface AiModelTestStatus {
+  state: AiModelTestState;
+  result: AiModelTestResult | null;
 }
 
 export interface FreezyIntegrationStatus {

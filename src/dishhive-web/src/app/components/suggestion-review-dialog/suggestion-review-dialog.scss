@@ -20,6 +20,28 @@
   }
 }
 
+.fallback-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: min(420px, 80vw);
+  margin-block-end: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-block-start: 1px;
+  }
+}
+
 .suggestion-list {
   display: flex;
   flex-direction: column;

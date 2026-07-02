@@ -14,7 +14,7 @@ and generate shopping lists.
 - 🛒 **Shopping Lists** - Generated from the planned week, scaled by attendance, copy-as-text
 - 📊 **History & Statistics** - Past dishes, frequency stats, favorites from history
 - ⭐ **Meal Feedback** - Mark meals eaten/skipped and rate them per member (1–5 stars); feeds statistics and AI suggestions
-- ✨ **AI Week Suggestions** - Propose dinners for unplanned days from your household's constraints, favorites, ratings and freezer *(optional; Ollama, LM Studio, OpenAI, Mistral or Anthropic)*
+- ✨ **AI Week Suggestions** - Propose dinners for unplanned days from your household's constraints, favorites, ratings and freezer *(optional; any OpenAI-compatible provider — Ollama, LM Studio, OpenAI, Mistral, OpenRouter, ...)*
 - 📏 **Measurement Preferences** - Metric (default) or imperial display
 - 🎬 **Demo Mode** - Seeds an empty database with 20 Dagelijkse Kost recipes and a demo household (on by default in Docker)
 - 🐳 **Self-Hosted** - Run everything in Docker containers
@@ -191,17 +191,27 @@ button is hidden and nothing AI-related runs. See
 | Ollama (local) | `Ai__Provider=ollama` `Ai__Model=llama3.1` `Ai__BaseUrl=http://host.docker.internal:11434/v1` |
 | LM Studio (local) | `Ai__Provider=lmstudio` `Ai__Model=<loaded model>` `Ai__BaseUrl=http://host.docker.internal:1234/v1` |
 | OpenAI | `Ai__Provider=openai` `Ai__Model=gpt-4o-mini` `Ai__ApiKey=sk-...` |
-| Anthropic | `Ai__Provider=anthropic` `Ai__Model=claude-opus-4-8` `Ai__ApiKey=sk-ant-...` |
 | Mistral | `Ai__Provider=mistral` `Ai__Model=mistral-small-latest` `Ai__ApiKey=...` |
-| Other OpenAI-compatible | `Ai__Provider=openai-compatible` `Ai__Model=...` `Ai__BaseUrl=https://.../v1` |
+| Other OpenAI-compatible (OpenRouter, etc.) | `Ai__Provider=openai-compatible` `Ai__Model=...` `Ai__BaseUrl=https://.../v1` |
 
-API keys also resolve from the standard `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` /
-`MISTRAL_API_KEY` environment variables when `Ai__ApiKey` is not set.
+Only OpenAI-compatible APIs are supported — no per-provider SDK to install for a new
+one, just point `Ai__BaseUrl` at it. API keys also resolve from the standard
+`OPENAI_API_KEY` / `MISTRAL_API_KEY` environment variables when `Ai__ApiKey` is not set.
 
 > **Local reasoning models** (Qwen3 family etc.): load them with a context window of at
 > least 16k (e.g. `lms load <model> --context-length 16384` in LM Studio). With the default
 > 4k context the model's thinking exhausts the window before the answer appears and every
 > request falls back to the deterministic rules suggestions.
+
+The configured model is **capability-tested automatically** the first time the app
+starts with a given AI configuration: a realistic planning request checks that it
+produces valid JSON at the full prompt size and actually follows instructions (a
+collection reference, a specific dish on a specific day, "two days vegetarian"). The
+verdict is persisted, so it is not re-tested on every reboot — only when the AI
+settings change, or manually from the settings page (e.g. after loading a different
+model into LM Studio under the same settings). A model that can't produce JSON at all
+is skipped entirely and suggestions fall back to the built-in rules — clearly labelled
+as such in the review dialog.
 
 ### Web search (external recipe discovery)
 
@@ -225,10 +235,10 @@ unconfigured the tools are simply not offered and suggestions behave as before.
 | `Freezy__BaseUrl` | empty (disabled) | Base URL of a Freezy instance |
 | `RecipeImport__UserAgent` | `Dishhive/0.1` | User-Agent for outbound recipe fetches |
 | `Demo__Enabled` | `false` (`true` in docker-compose) | Seed an empty database with demo recipes and household |
-| `Ai__Provider` | empty (disabled) | AI suggestion provider: `openai` \| `anthropic` \| `mistral` \| `ollama` \| `lmstudio` \| `openai-compatible` |
-| `Ai__ApiKey` | empty | API key (falls back to `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `MISTRAL_API_KEY`) |
+| `Ai__Provider` | empty (disabled) | AI suggestion provider (all OpenAI-compatible): `openai` \| `mistral` \| `ollama` \| `lmstudio` \| `openai-compatible` |
+| `Ai__ApiKey` | empty | API key (falls back to `OPENAI_API_KEY` / `MISTRAL_API_KEY`) |
 | `Ai__BaseUrl` | per-provider default | Endpoint override (required for `openai-compatible`) |
-| `Ai__Model` | empty | Model name, e.g. `llama3.1`, `gpt-4o-mini`, `claude-opus-4-8` |
+| `Ai__Model` | empty | Model name, e.g. `llama3.1`, `gpt-4o-mini`, `mistral-small-latest` |
 | `Ai__Temperature` / `Ai__MaxRetries` / `Ai__MaxPromptTokens` | `0.3` / `1` / `6000` | Robustness/context tuning: sampling temperature, corrective reprompts, prompt token budget |
 | `WebSearch__Provider` | empty (`searxng` in docker-compose) | Web-search backend for external-recipe discovery: `searxng` |
 | `WebSearch__BaseUrl` | `http://searxng:8080` in docker-compose | Search backend URL (JSON output must be enabled on the SearXNG instance) |

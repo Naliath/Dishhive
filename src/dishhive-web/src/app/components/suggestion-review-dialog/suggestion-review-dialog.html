@@ -55,6 +55,16 @@
           <p>Nothing to suggest — every day already has a dinner planned.</p>
         </div>
       } @else {
+        @if (allFromFallback()) {
+          <div class="fallback-banner">
+            <mat-icon>info</mat-icon>
+            <span>
+              The AI did not answer, so these are rule-based suggestions (freezer and
+              favorites rotation){{ instructions.trim() ? ' — your instructions were not applied' : '' }}.
+              Check the model on the Settings page.
+            </span>
+          </div>
+        }
         <div class="suggestion-list">
           @for (group of groupedSuggestions(); track group.date) {
             <div class="suggestion-day">

@@ -11,7 +11,7 @@ public class AiOptions
     public const string SectionName = "Ai";
 
     /// <summary>
-    /// openai | mistral | ollama | lmstudio | openai-compatible
+    /// openai | mistral | ollama | lmstudio | openai-compatible (all OpenAI-compatible)
     /// </summary>
     public string Provider { get; set; } = "";
 
@@ -82,6 +82,21 @@ public class AiOptions
     /// </summary>
     public int MaxPromptTokens { get; set; } = 6000;
 
+    /// <summary>
+    /// Fingerprint of every setting that affects the model capability test's outcome —
+    /// the persisted test result is keyed by this, so changing any of these settings
+    /// triggers a fresh test at the next startup. Operational knobs (timeouts, retries)
+    /// are deliberately excluded: tuning them doesn't change what the model can do.
+    /// </summary>
+    public string CapabilityFingerprint => string.Join("|",
+        NormalizedProvider,
+        Model.Trim(),
+        BaseUrl.Trim().TrimEnd('/'),
+        MaxOutputTokens,
+        Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        MaxPromptTokens,
+        DisableThinking);
+
     /// <summary>Providers that run locally and need no API key</summary>
     private static readonly string[] LocalProviders = ["ollama", "lmstudio", "openai-compatible"];
 
@@ -89,7 +104,7 @@ public class AiOptions
 
     /// <summary>
     /// Resolves the API key: explicit Ai:ApiKey wins, then the provider's
-    /// standard environment variable (OPENAI_API_KEY, ANTHROPIC_API_KEY, MISTRAL_API_KEY)
+    /// standard environment variable (OPENAI_API_KEY, MISTRAL_API_KEY)
     /// </summary>
     public string? ResolveApiKey()
     {

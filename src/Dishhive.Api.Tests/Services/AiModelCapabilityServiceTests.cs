@@ -27,7 +27,8 @@ public class AiModelCapabilityServiceTests
                 Substitute.For<IHttpClientFactory>(), NullLogger<AiModelTester>.Instance)
             => _result = result;
 
-        public override Task<AiModelTestResult> RunAsync(CancellationToken cancellationToken = default)
+        public override Task<AiModelTestResult> RunAsync(
+            string effectiveSystemPrompt, CancellationToken cancellationToken = default)
         {
             Runs++;
             return Task.FromResult(_result);
@@ -47,7 +48,8 @@ public class AiModelCapabilityServiceTests
         {
         }
 
-        public override Task<AiModelTestResult> RunAsync(CancellationToken cancellationToken = default)
+        public override Task<AiModelTestResult> RunAsync(
+            string effectiveSystemPrompt, CancellationToken cancellationToken = default)
         {
             Runs++;
             return _completion.Task;
@@ -79,6 +81,8 @@ public class AiModelCapabilityServiceTests
     {
         var services = new ServiceCollection();
         services.AddDbContext<DishhiveDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddScoped<AiPromptService>();
+        services.AddScoped<IAiPromptProvider>(sp => sp.GetRequiredService<AiPromptService>());
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
@@ -107,7 +111,8 @@ public class AiModelCapabilityServiceTests
         using var scope = ScopeFactory(dbName).CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DishhiveDbContext>();
         var record = db.AiModelTestRecords.Single();
-        record.ConfigKey.Should().Be(options.CapabilityFingerprint);
+        // Keyed by the static config fingerprint plus the effective-prompt hash
+        record.ConfigKey.Should().StartWith(options.CapabilityFingerprint).And.Contain("|prompt:");
         record.ResponseMode.Should().Be("PromptedJson");
     }
 
@@ -143,6 +148,27 @@ public class AiModelCapabilityServiceTests
 
         secondTester.Runs.Should().Be(1);
         result.Model.Should().Be("model-b");
+    }
+
+    [Fact]
+    public async Task EnsureTested_PromptEdited_RunsFreshTest()
+    {
+        var dbName = $"cap-{Guid.NewGuid()}";
+        var (first, _) = Create(dbName, Options());
+        await first.EnsureTestedAsync();
+
+        // The user customizes the editable prompt: the effective-prompt hash in the
+        // fingerprint changes, so the persisted verdict no longer applies
+        using (var scope = ScopeFactory(dbName).CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<AiPromptService>()
+                .SetOverrideAsync("You are a strict vegan chef.");
+        }
+
+        var (second, secondTester) = Create(dbName, Options());
+        await second.EnsureTestedAsync();
+
+        secondTester.Runs.Should().Be(1);
     }
 
     [Fact]

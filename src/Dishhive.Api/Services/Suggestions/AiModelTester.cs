@@ -110,10 +110,11 @@ public class AiModelTester
                       "date": { "type": "string", "description": "yyyy-MM-dd" },
                       "dishName": { "type": "string" },
                       "recipeTitle": { "type": ["string", "null"] },
+                      "freezerItemId": { "type": ["string", "null"], "description": "exact id from the freezer items list, or null" },
                       "sourceUrl": { "type": ["string", "null"] },
                       "reason": { "type": "string" }
                     },
-                    "required": ["date", "dishName", "recipeTitle", "sourceUrl", "reason"],
+                    "required": ["date", "dishName", "recipeTitle", "freezerItemId", "sourceUrl", "reason"],
                     "additionalProperties": false
                   }
                 }
@@ -125,8 +126,14 @@ public class AiModelTester
         schemaName: "week_suggestions",
         schemaDescription: "A dinner suggestion per requested date");
 
-    // virtual so the capability service's persistence tests can stub the actual probing
-    public virtual async Task<AiModelTestResult> RunAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Runs the capability test under the given effective system prompt — the same
+    /// composed prompt production uses, including any user override, so the verdict
+    /// describes what actually runs. Virtual so the capability service's persistence
+    /// tests can stub the actual probing.
+    /// </summary>
+    public virtual async Task<AiModelTestResult> RunAsync(
+        string effectiveSystemPrompt, CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
         var checks = new List<AiModelTestCheck>();
@@ -146,8 +153,8 @@ public class AiModelTester
             var fixture = CreateFixture(DateOnly.FromDateTime(DateTime.Today));
             var userPrompt = LlmMealSuggestionService.BuildUserPrompt(fixture.Request, _options.MaxPromptTokens);
             var systemPrompt = _options.DisableThinking
-                ? "/no_think\n" + LlmMealSuggestionService.SystemPrompt
-                : LlmMealSuggestionService.SystemPrompt;
+                ? "/no_think\n" + effectiveSystemPrompt
+                : effectiveSystemPrompt;
 
             // Native schema enforcement first (hard guarantee when it works), prompted
             // JSON second (the broadly-compatible default). Whichever succeeds becomes

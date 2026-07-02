@@ -44,6 +44,13 @@ public class LlmMealSuggestionServiceTests
         public void Dispose() { }
     }
 
+    /// <summary>Prompt stub: no override by default (the shipped editable prompt applies)</summary>
+    private sealed class StubPromptProvider(string? overrideText = null) : IAiPromptProvider
+    {
+        public Task<string?> GetOverrideAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(overrideText);
+    }
+
     /// <summary>Capability stub: pretends the model test already ran with the given verdict,
     /// so unit tests never trigger real probe calls against the fake chat client</summary>
     private sealed class StubCapability(AiResponseMode mode) : IAiModelCapabilityService
@@ -61,10 +68,12 @@ public class LlmMealSuggestionServiceTests
 
     private static LlmMealSuggestionService CreateService(
         FakeChatClient chatClient, IWebSearchClient? webSearch = null,
-        AiResponseMode capabilityMode = AiResponseMode.PromptedJson)
+        AiResponseMode capabilityMode = AiResponseMode.PromptedJson,
+        string? promptOverride = null)
         => new(chatClient, new RulesMealSuggestionService(), new AiOptions { Provider = "ollama", Model = "test" },
             webSearch ?? new NoOpWebSearchClient(), Substitute.For<IRecipeImportService>(), new WebSearchOptions(),
-            new StubCapability(capabilityMode), NullLogger<LlmMealSuggestionService>.Instance);
+            new StubCapability(capabilityMode), new StubPromptProvider(promptOverride),
+            NullLogger<LlmMealSuggestionService>.Instance);
 
     /// <summary>A web-search client that reports configured (unlike the NoOp default) so
     /// tests can isolate the SourceConstraints-gating behavior from configuration state</summary>
@@ -217,6 +226,24 @@ public class LlmMealSuggestionServiceTests
         await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
 
         chatClient.LastOptions!.ResponseFormat.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Suggest_CustomEditablePrompt_ReplacesDefaultButKeepsProtectedRules()
+    {
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Stoofvlees"}]}""");
+        const string custom = "You are a Flemish chef planning hearty weekday dinners.";
+
+        await CreateService(chatClient, promptOverride: custom)
+            .SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        var systemText = chatClient.LastMessages[0].Text!;
+        systemText.Should().Contain(custom);
+        systemText.Should().NotContain("You are a meal planner for a family household");
+        // The machinery is not editable: JSON contract and allergy rule always appended
+        systemText.Should().Contain("Reply with ONLY a JSON object");
+        systemText.Should().Contain("NEVER suggest dishes that conflict");
     }
 
     [Fact]
@@ -434,6 +461,86 @@ public class LlmMealSuggestionServiceTests
         suggestions.Should().HaveCount(2);
         suggestions.Should().ContainSingle(s => s.FreezyItemRef == "lasagna-1" && s.FreezyItemQuantity == 1);
         suggestions.Count(s => s.FreezyItemRef == "lasagna-1").Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Suggest_FreezerItemId_LinksExactlyAndOverridesDishNameToTheItemsRealName()
+    {
+        // The model paraphrases the item in dishName instead of reproducing it verbatim
+        // (the whole point of the id — it no longer has to), but supplies the exact id.
+        // Linking must succeed off the id alone, and the app's real name replaces the
+        // model's paraphrase so it matches what Freezy (and the planner) actually track.
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"leftover lasagna, serves 2","freezerItemId":"lasagna-1"}]}""");
+
+        var request = Request(daysToFill: [WeekStart]) with
+        {
+            AvailableFrozenItems =
+            [
+                new FrozenItem { Id = "lasagna-1", Name = "Frozen lasagna", Quantity = 1 }
+            ]
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().ContainSingle();
+        suggestions[0].FreezyItemRef.Should().Be("lasagna-1");
+        suggestions[0].FreezyItemQuantity.Should().Be(1);
+        suggestions[0].DishName.Should().Be("Frozen lasagna");
+    }
+
+    [Fact]
+    public async Task Suggest_FreezerItemId_CappedByQuantityAcrossDays_UnlinksWithoutDroppingTheDish()
+    {
+        // Same id proposed for two days but only one unit available: the second day
+        // must lose the freezer link (so stock isn't double-reserved) while remaining
+        // a valid suggestion rather than disappearing.
+        var chatClient = new FakeChatClient(
+            """
+            {"suggestions":[
+              {"date":"2026-06-15","dishName":"lasagna","freezerItemId":"lasagna-1"},
+              {"date":"2026-06-16","dishName":"lasagna again","freezerItemId":"lasagna-1"}
+            ]}
+            """);
+
+        var request = Request(daysToFill: [WeekStart, WeekStart.AddDays(1)]) with
+        {
+            AvailableFrozenItems =
+            [
+                new FrozenItem { Id = "lasagna-1", Name = "Frozen lasagna", Quantity = 1 }
+            ]
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().HaveCount(2);
+        suggestions.Should().ContainSingle(s => s.FreezyItemRef == "lasagna-1" && s.FreezyItemQuantity == 1);
+        suggestions.Should().ContainSingle(s => s.FreezyItemRef == null && s.FreezyItemQuantity == 0);
+    }
+
+    [Fact]
+    public async Task Suggest_UnknownFreezerItemId_IsIgnored_DishKeptUnlinked()
+    {
+        // A hallucinated or stale id (e.g. the item got reserved elsewhere between
+        // prompt build and reply) must not crash or silently vanish the dish — it just
+        // stays unlinked, with the model's own dishName since there's no item to
+        // resolve a real name from.
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Mystery freezer meal","freezerItemId":"does-not-exist"}]}""");
+
+        var request = Request(daysToFill: [WeekStart]) with
+        {
+            AvailableFrozenItems =
+            [
+                new FrozenItem { Id = "lasagna-1", Name = "Frozen lasagna", Quantity = 1 }
+            ]
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().ContainSingle();
+        suggestions[0].FreezyItemRef.Should().BeNull();
+        suggestions[0].DishName.Should().Be("Mystery freezer meal");
     }
 
     [Fact]

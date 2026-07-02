@@ -141,6 +141,10 @@ else
     builder.Services.AddSingleton<ILlmRecipeExtractor, NoOpLlmRecipeExtractor>();
     builder.Services.AddSingleton<IAiModelCapabilityService, NoOpAiModelCapabilityService>();
 }
+// Editable AI system prompt (settings-backed); registered regardless of AI state so
+// the settings endpoints work, and the suggestion pipeline reads the effective prompt
+builder.Services.AddScoped<AiPromptService>();
+builder.Services.AddScoped<IAiPromptProvider>(sp => sp.GetRequiredService<AiPromptService>());
 builder.Services.AddScoped<CollectionMentionResolver>();
 builder.Services.AddScoped<SourceMentionResolver>();
 builder.Services.AddScoped<RecipeSourceCatalog>();

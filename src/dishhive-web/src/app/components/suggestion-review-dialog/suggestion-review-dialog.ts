@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, Inject, OnInit, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, Inject, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -97,6 +98,8 @@ export class SuggestionReviewDialog implements OnInit {
 
   instructions = '';
 
+  private readonly destroyRef = inject(DestroyRef);
+
   constructor(
     @Inject(MAT_DIALOG_DATA) private data: SuggestionReviewDialogData,
     private dialogRef: MatDialogRef<SuggestionReviewDialog, MealSuggestion[]>,
@@ -109,33 +112,41 @@ export class SuggestionReviewDialog implements OnInit {
     // down OR failed its model capability test → the rules fallback runs (and it
     // ignores instructions by design), so skip straight to generating instead of
     // collecting wishes that would be silently dropped
-    this.integrationsService.getStatus().subscribe(status => {
-      const aiUp = (status?.ai.reachable ?? false) && status?.ai.modelTestVerdict !== 'failed';
-      this.aiAvailable.set(aiUp);
-      this.webSearchAvailable.set(status?.webSearch?.reachable ?? false);
-      if (aiUp) {
-        this.phase.set('compose');
-      } else {
-        this.fetch();
-      }
-    });
+    this.integrationsService.getStatus()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(status => {
+        const aiUp = (status?.ai.reachable ?? false) && status?.ai.modelTestVerdict !== 'failed';
+        this.aiAvailable.set(aiUp);
+        this.webSearchAvailable.set(status?.webSearch?.reachable ?? false);
+        if (aiUp) {
+          this.phase.set('compose');
+        } else {
+          this.fetch();
+        }
+      });
   }
 
-  /** (Re-)request suggestions, passing along the current instructions */
+  /** (Re-)request suggestions, passing along the current instructions.
+   *  Unsubscribing on dialog destroy (Cancel, backdrop click, ESC) aborts the
+   *  underlying HTTP request, which the backend reads as caller cancellation — so
+   *  closing mid-generation actually stops the model call server-side instead of
+   *  leaving it running for up to five minutes on the agentic path. */
   fetch(): void {
     this.phase.set('generating');
     this.failed.set(false);
-    this.suggestionsService.suggestWeek(this.data.weekStart, this.instructions).subscribe({
-      next: result => {
-        this.suggestions.set(result.suggestions);
-        this.selectedIndexes.set(new Set(result.suggestions.map((_, index) => index)));
-        this.phase.set('review');
-      },
-      error: () => {
-        this.failed.set(true);
-        this.phase.set('review');
-      }
-    });
+    this.suggestionsService.suggestWeek(this.data.weekStart, this.instructions)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.suggestions.set(result.suggestions);
+          this.selectedIndexes.set(new Set(result.suggestions.map((_, index) => index)));
+          this.phase.set('review');
+        },
+        error: () => {
+          this.failed.set(true);
+          this.phase.set('review');
+        }
+      });
   }
 
   isSelected(index: number): boolean {

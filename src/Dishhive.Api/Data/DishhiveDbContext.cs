@@ -284,7 +284,9 @@ public class DishhiveDbContext : DbContext
         {
             entity.HasKey(e => e.Key);
             entity.Property(e => e.Key).IsRequired().HasMaxLength(100);
-            entity.Property(e => e.Value).IsRequired().HasMaxLength(1000);
+            // 4000: room for the editable AI system prompt (AiPromptService), the
+            // largest value stored here; other settings are tiny
+            entity.Property(e => e.Value).IsRequired().HasMaxLength(4000);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
         });

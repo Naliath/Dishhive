@@ -1,0 +1,68 @@
+@if (aiConfigured() && prompt(); as p) {
+  <mat-card appearance="raised" class="settings-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>edit_note</mat-icon>
+      <mat-card-title>
+        AI planner prompt
+        @if (p.isCustomized) {
+          <span class="prompt-tag">customized</span>
+        }
+      </mat-card-title>
+      <mat-card-subtitle>
+        The instructions the AI planner works from. Tune the tone and standing
+        preferences for your household or model; the technical rules below the editor
+        always apply and cannot be changed.
+      </mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      @if (p.defaultChangedSinceCustomized) {
+        <div class="prompt-drift-notice">
+          <mat-icon>update</mat-icon>
+          <span>
+            The built-in prompt has been improved since you customized yours — you are
+            running on an older base. Reset to pick up the improvements, then re-apply
+            your tweaks.
+          </span>
+        </div>
+      }
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="prompt-field">
+        <mat-label>Editable prompt</mat-label>
+        <textarea matInput name="aiPrompt"
+               [ngModel]="draft" (ngModelChange)="onDraftChange($event)"
+               [maxlength]="maxLength" rows="6"
+               cdkTextareaAutosize cdkAutosizeMinRows="6" cdkAutosizeMaxRows="16"></textarea>
+        <mat-hint align="end">{{ draft.length }} / {{ maxLength }}</mat-hint>
+      </mat-form-field>
+
+      <div class="prompt-actions">
+        <button mat-flat-button (click)="save()" [disabled]="!dirty() || saving()">
+          {{ saving() ? 'Saving…' : 'Save' }}
+        </button>
+        @if (p.isCustomized || dirty()) {
+          <button mat-stroked-button (click)="reset()" [disabled]="saving()">
+            Reset to default
+          </button>
+        }
+        <span class="prompt-save-hint">Saving re-tests the model with your prompt (see Integrations above)</span>
+      </div>
+
+      <mat-expansion-panel class="protected-panel">
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <mat-icon>lock</mat-icon>
+            Always-applied rules (not editable)
+          </mat-panel-title>
+        </mat-expansion-panel-header>
+        <p class="protected-explain">
+          Appended after your prompt on every request. The app depends on these —
+          exact recipe titles and freezer-item names link suggestions back to your
+          data, and the JSON shape is how the reply is read. Note that a conflicting
+          editable prompt can still confuse the model into ignoring them; the model
+          test verdict will show it.
+        </p>
+        <pre class="protected-text">{{ p.protectedPrompt }}</pre>
+      </mat-expansion-panel>
+    </mat-card-content>
+  </mat-card>
+}

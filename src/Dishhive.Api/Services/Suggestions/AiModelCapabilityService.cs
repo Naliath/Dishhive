@@ -1,6 +1,8 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace Dishhive.Api.Services.Suggestions;
@@ -18,9 +20,11 @@ public enum AiModelTestState
 /// Holds the capability-test verdict for the configured model and makes AI work wait
 /// for it: a model must have a test result before the first real suggestion call
 /// (see docs/features/ai-week-planning.md). The verdict is persisted (AiModelTestRecord,
-/// keyed by AiOptions.CapabilityFingerprint), so a restart with unchanged AI settings
-/// reuses it instead of re-testing on every boot; a fresh test runs only when the
-/// fingerprint is new or the user re-triggers it from the settings page. Note the
+/// keyed by AiOptions.CapabilityFingerprint + a hash of the effective system prompt),
+/// so a restart with unchanged AI settings reuses it instead of re-testing on every
+/// boot; a fresh test runs only when the fingerprint is new — AI settings changed, the
+/// user edited the prompt, or an app update changed the shipped prompt — or when the
+/// user re-triggers it from the settings page. Note the
 /// trade-off: a server-side change behind the same settings (a different model loaded
 /// into LM Studio under the same id, a changed context length) is NOT auto-detected —
 /// that's what the settings-page re-test button is for.
@@ -104,18 +108,19 @@ public class AiModelCapabilityService : IAiModelCapabilityService
         }
     }
 
-    /// <summary>Reuses the persisted verdict when the AI settings fingerprint matches;
-    /// otherwise runs (and persists) a fresh test.</summary>
+    /// <summary>Reuses the persisted verdict when the AI settings + effective prompt
+    /// fingerprint matches; otherwise runs (and persists) a fresh test.</summary>
     private async Task<AiModelTestResult> LoadOrRunDetachedAsync()
     {
         // Yield so the lock in the caller is released before any real work starts
         await Task.Yield();
         try
         {
+            var (_, key) = await ResolvePromptAndKeyAsync();
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<DishhiveDbContext>();
             var record = await db.AiModelTestRecords.AsNoTracking()
-                .FirstOrDefaultAsync(r => r.ConfigKey == _options.CapabilityFingerprint);
+                .FirstOrDefaultAsync(r => r.ConfigKey == key);
             if (record is not null && ToResult(record) is { } stored)
             {
                 _logger.LogInformation(
@@ -129,41 +134,81 @@ public class AiModelCapabilityService : IAiModelCapabilityService
             _logger.LogWarning(ex, "Could not read the persisted AI model test; running a fresh one");
         }
 
-        return await RunAndStoreAsync();
+        return await RunAndStoreLatestAsync();
     }
 
     private async Task<AiModelTestResult> RetestDetachedAsync()
     {
         await Task.Yield();
-        return await RunAndStoreAsync();
+        return await RunAndStoreLatestAsync();
     }
 
-    private async Task<AiModelTestResult> RunAndStoreAsync()
+    /// <summary>
+    /// Runs the test against the current effective prompt and persists the verdict
+    /// under the prompt-aware key. When the prompt was edited WHILE the test ran (the
+    /// settings page allows it — a local-model test takes minutes), the just-produced
+    /// verdict describes a prompt that no longer runs: loop and test again against the
+    /// new one, so the shared task always completes on the latest state.
+    /// </summary>
+    private async Task<AiModelTestResult> RunAndStoreLatestAsync()
     {
-        // RunAsync never throws (it converts failures into a failed result), so the
-        // shared task always completes successfully and Result above stays simple
-        var result = await _tester.RunAsync(CancellationToken.None);
+        while (true)
+        {
+            var (prompt, key) = await ResolvePromptAndKeyAsync();
+            // RunAsync never throws (it converts failures into a failed result), so the
+            // shared task always completes successfully and Result above stays simple
+            var result = await _tester.RunAsync(prompt, CancellationToken.None);
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<DishhiveDbContext>();
+                var record = await db.AiModelTestRecords.FirstOrDefaultAsync(r => r.ConfigKey == key);
+                if (record is null)
+                {
+                    record = new AiModelTestRecord { ConfigKey = key };
+                    db.AiModelTestRecords.Add(record);
+                }
+                Apply(result, record);
+                await db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "AI model test finished (verdict={Verdict}) but could not be persisted; it will re-run at the next startup",
+                    result.Verdict);
+            }
+
+            var (_, latestKey) = await ResolvePromptAndKeyAsync();
+            if (latestKey == key)
+            {
+                return result;
+            }
+            _logger.LogInformation("The AI prompt changed while its test was running; testing again against the new prompt");
+        }
+    }
+
+    /// <summary>
+    /// The current effective system prompt and the persistence key for its verdict:
+    /// the static config fingerprint plus a hash of the full prompt text, so both a
+    /// user prompt edit AND a shipped-prompt change in an app update invalidate the
+    /// stored verdict. Falls back to the default prompt when the store is unreadable.
+    /// </summary>
+    private async Task<(string Prompt, string Key)> ResolvePromptAndKeyAsync()
+    {
+        string prompt;
         try
         {
             using var scope = _scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<DishhiveDbContext>();
-            var key = _options.CapabilityFingerprint;
-            var record = await db.AiModelTestRecords.FirstOrDefaultAsync(r => r.ConfigKey == key);
-            if (record is null)
-            {
-                record = new AiModelTestRecord { ConfigKey = key };
-                db.AiModelTestRecords.Add(record);
-            }
-            Apply(result, record);
-            await db.SaveChangesAsync();
+            var prompts = scope.ServiceProvider.GetRequiredService<IAiPromptProvider>();
+            prompt = await prompts.GetEffectiveSystemPromptAsync();
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogWarning(ex,
-                "AI model test finished (verdict={Verdict}) but could not be persisted; it will re-run at the next startup",
-                result.Verdict);
+            prompt = LlmMealSuggestionService.ComposeSystemPrompt(null);
         }
-        return result;
+
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(prompt)))[..16];
+        return (prompt, $"{_options.CapabilityFingerprint}|prompt:{hash}");
     }
 
     private static void Apply(AiModelTestResult result, AiModelTestRecord record)

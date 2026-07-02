@@ -57,6 +57,10 @@ public class AiModelTesterTests
             HttpFactory(modelsJson ?? $$"""{"data":[{"id":"{{ModelName}}"}]}"""),
             NullLogger<AiModelTester>.Instance);
 
+    /// <summary>Runs the tester under the default composed production prompt</summary>
+    private static Task<AiModelTestResult> RunAsync(AiModelTester tester)
+        => tester.RunAsync(LlmMealSuggestionService.ComposeSystemPrompt(null));
+
     /// <summary>A reply satisfying every evaluation constraint of the fixture:
     /// Wednesday from the collection, Chicken curry on Thursday, ≥2 vegetarian days.</summary>
     private static string CorrectReply()
@@ -79,7 +83,7 @@ public class AiModelTesterTests
     {
         var tester = CreateTester(_ => new ChatResponse(new ChatMessage(ChatRole.Assistant, CorrectReply())));
 
-        var result = await tester.RunAsync();
+        var result = await RunAsync(tester);
 
         result.Verdict.Should().Be("passed");
         result.ResponseMode.Should().Be(AiResponseMode.JsonSchema); // first attempt already parsed
@@ -96,7 +100,7 @@ public class AiModelTesterTests
             ? throw new InvalidOperationException("response_format not supported")
             : new ChatResponse(new ChatMessage(ChatRole.Assistant, CorrectReply())));
 
-        var result = await tester.RunAsync();
+        var result = await RunAsync(tester);
 
         result.ResponseMode.Should().Be(AiResponseMode.PromptedJson);
         result.Verdict.Should().Be("passed");
@@ -109,7 +113,7 @@ public class AiModelTesterTests
         var tester = CreateTester(_ => new ChatResponse(
             new ChatMessage(ChatRole.Assistant, "I'm sorry, I can only answer in prose.")));
 
-        var result = await tester.RunAsync();
+        var result = await RunAsync(tester);
 
         result.Verdict.Should().Be("failed");
         result.ResponseMode.Should().Be(AiResponseMode.None);
@@ -135,7 +139,7 @@ public class AiModelTesterTests
             """;
         var tester = CreateTester(_ => new ChatResponse(new ChatMessage(ChatRole.Assistant, reply)));
 
-        var result = await tester.RunAsync();
+        var result = await RunAsync(tester);
 
         result.Viable.Should().BeTrue();
         result.EvaluationPassed.Should().BeFalse();
@@ -153,7 +157,7 @@ public class AiModelTesterTests
             _ => new ChatResponse(new ChatMessage(ChatRole.Assistant, CorrectReply())),
             modelsJson: """{"data":[{"id":"some-other-model"}]}""");
 
-        var result = await tester.RunAsync();
+        var result = await RunAsync(tester);
 
         result.ModelListed.Should().BeFalse();
         result.Verdict.Should().Be("warnings"); // works, but probably not the model the user thinks

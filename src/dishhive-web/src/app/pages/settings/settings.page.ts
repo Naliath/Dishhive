@@ -11,6 +11,7 @@ import { PwaService } from '../../services/pwa.service';
 import { RecipesService } from '../../services/recipes.service';
 import { CookbooksService } from '../../services/cookbooks.service';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
+import { AiPromptSettingsComponent } from '../../components/ai-prompt-settings/ai-prompt-settings';
 import { IntegrationsStatusComponent } from '../../components/integrations-status/integrations-status';
 import { MeasurementSystem } from '../../models/user-setting.model';
 import { AutoCollectionInfo } from '../../models/recipe.model';
@@ -21,7 +22,7 @@ import { environment } from '../../../environments/environment';
   standalone: true,
   imports: [
     MatButtonModule, MatButtonToggleModule, MatCardModule, MatIconModule, MatRadioModule,
-    MatSlideToggleModule, MatSnackBarModule, IntegrationsStatusComponent
+    MatSlideToggleModule, MatSnackBarModule, AiPromptSettingsComponent, IntegrationsStatusComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings.page.html',

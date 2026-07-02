@@ -2,7 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
-import { MeasurementSystem, MEASUREMENT_SYSTEM_KEY, UserSetting } from '../models/user-setting.model';
+import { AiPromptSettings, MeasurementSystem, MEASUREMENT_SYSTEM_KEY, UserSetting } from '../models/user-setting.model';
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
@@ -26,6 +26,25 @@ export class SettingsService {
   setMeasurementSystem(system: MeasurementSystem): Observable<UserSetting> {
     return this.http.put<UserSetting>(`${this.apiUrl}/${MEASUREMENT_SYSTEM_KEY}`, { value: system }).pipe(
       tap(() => this.measurementSystem.set(system))
+    );
+  }
+
+  getAiPrompt(): Observable<AiPromptSettings | null> {
+    return this.http.get<AiPromptSettings>(`${this.apiUrl}/ai-prompt`).pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  /** Saving a changed prompt also restarts the model capability test server-side */
+  setAiPrompt(editablePrompt: string): Observable<AiPromptSettings | null> {
+    return this.http.put<AiPromptSettings>(`${this.apiUrl}/ai-prompt`, { editablePrompt }).pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  resetAiPrompt(): Observable<AiPromptSettings | null> {
+    return this.http.delete<AiPromptSettings>(`${this.apiUrl}/ai-prompt`).pipe(
+      catchError(() => of(null))
     );
   }
 }

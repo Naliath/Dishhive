@@ -1,3 +1,4 @@
+using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.WebSearch;
 using Microsoft.Extensions.AI;
@@ -24,6 +25,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
     private readonly IWebSearchClient _webSearch;
     private readonly IRecipeImportService _importService;
     private readonly IAiModelCapabilityService _capability;
+    private readonly IAiPromptProvider _promptProvider;
     private readonly int _webSearchMaxResults;
     private readonly ILogger<LlmMealSuggestionService> _logger;
 
@@ -35,6 +37,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         IRecipeImportService importService,
         WebSearchOptions webSearchOptions,
         IAiModelCapabilityService capability,
+        IAiPromptProvider promptProvider,
         ILogger<LlmMealSuggestionService> logger)
     {
         _chatClient = chatClient;
@@ -43,6 +46,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         _webSearch = webSearch;
         _importService = importService;
         _capability = capability;
+        _promptProvider = promptProvider;
         _webSearchMaxResults = webSearchOptions.MaxResults;
         _logger = logger;
     }
@@ -94,9 +98,11 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(useTools ? _options.AgentTimeoutSeconds : _options.TimeoutSeconds));
 
+            // Editable section (user override or shipped default) + protected machinery.
             // Reasoning models need to think to plan tool calls, so /no_think is skipped
             // on the agentic path even when DisableThinking is set.
-            var systemPrompt = _options.DisableThinking && !useTools ? "/no_think\n" + SystemPrompt : SystemPrompt;
+            var effectivePrompt = await _promptProvider.GetEffectiveSystemPromptAsync(cancellationToken);
+            var systemPrompt = _options.DisableThinking && !useTools ? "/no_think\n" + effectivePrompt : effectivePrompt;
             var messages = new List<ChatMessage>
             {
                 new(ChatRole.System, systemPrompt),
@@ -265,14 +271,32 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         return suggestions.Concat(filler).OrderBy(s => s.Date).ToList();
     }
 
-    // internal so AiModelTester runs its evaluation under the exact production prompt
-    internal const string SystemPrompt =
+    /// <summary>
+    /// The user-tweakable part of the system prompt: persona and soft preferences only.
+    /// A stored override (see AiPromptService) replaces this text verbatim; everything
+    /// mechanical lives in <see cref="ProtectedSystemPrompt"/> and is always appended,
+    /// because post-processing depends on it (exact recipeTitle/freezer-name matching,
+    /// sourceUrl contract, the JSON shape).
+    /// </summary>
+    internal const string EditableSystemPromptDefault =
         """
         You are a meal planner for a family household. Propose a dinner for each
-        requested date. Rules:
-        - NEVER suggest dishes that conflict with the listed allergies or dietary constraints.
+        requested date.
         - Prefer variety: avoid dishes eaten in the last two weeks.
         - Favor household favorites and dishes with high ratings; avoid low-rated dishes.
+        - Keep each reason to one short sentence.
+        """;
+
+    /// <summary>
+    /// The non-negotiable part of the system prompt. Note this is textual protection
+    /// only — a hostile editable section can still talk the model out of these rules;
+    /// what actually guards the app is post-processing, the rules fallback and the
+    /// model capability test (which re-runs whenever the effective prompt changes).
+    /// </summary>
+    internal const string ProtectedSystemPrompt =
+        """
+        Rules that ALWAYS apply, regardless of the guidance above:
+        - NEVER suggest dishes that conflict with the listed allergies or dietary constraints.
         - Use expiring freezer items ONLY when the item is a complete meal by itself —
           a frozen pizza, lasagna, soup, stew, or a container of home-made leftovers are
           fine. A raw ingredient or side component (e.g. a bag of peas, frozen corn,
@@ -284,12 +308,15 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
           leftovers in a container) and propose it alone. Only add a second freezer item
           for the SAME date when the notes explicitly say the first one's portion is
           smaller than the household — as an ADDITIONAL, SEPARATE suggestion entry, never
-          merged into a single dish name (e.g. a frozen pizza noted "for 2" and a frozen
-          lasagna noted "for 2" together cover a household of 4: two entries, each with
-          its own exact item name, dated the same). Each entry's dishName must exactly
-          match its freezer item's name so it can be linked back to that stock. Each
-          freezer item lists the quantity available; never use an item more times across
-          the week than that quantity (the stock is already reserved for what you plan).
+          merged into one (e.g. a frozen pizza noted "for 2" and a frozen lasagna noted
+          "for 2" together cover a household of 4: two separate entries, dated the same).
+          Each freezer item in the list below has an id. When a dish uses one, copy that
+          id EXACTLY into "freezerItemId" — this is how the app links it back to that
+          stock; dishName does not need to match the item's name, a short label is fine
+          (the app fills in the item's real name for tracking). Leave "freezerItemId"
+          null for every dish that is not a freezer item. Never use an item more times
+          across the week than the quantity listed for it (the stock is already reserved
+          for what you plan).
         - When a day has a vague instruction (e.g. "something with fish" or "vegetarian"),
           every dish you suggest for that day must satisfy it.
         - Instructions may reference a recipe collection as #[Collection Name]. When a
@@ -314,11 +341,22 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
           preferences (never the allergies/constraints).
         - Prefer recipes from the known-recipes list; when you use one, copy its exact title
           into recipeTitle.
-        - Keep each reason to one short sentence.
 
         Reply with ONLY a JSON object in exactly this shape, no other text:
-        {"suggestions":[{"date":"yyyy-MM-dd","dishName":"...","recipeTitle":"exact title or null","sourceUrl":"external recipe url or null","reason":"..."}]}
+        {"suggestions":[{"date":"yyyy-MM-dd","dishName":"...","recipeTitle":"exact title or null","freezerItemId":"exact id from the freezer items list or null","sourceUrl":"external recipe url or null","reason":"..."}]}
         """;
+
+    /// <summary>
+    /// The effective system prompt: the stored editable override (or the shipped
+    /// default) with the protected machinery always appended.
+    /// </summary>
+    internal static string ComposeSystemPrompt(string? editableOverride)
+    {
+        var editable = string.IsNullOrWhiteSpace(editableOverride)
+            ? EditableSystemPromptDefault
+            : editableOverride.Trim();
+        return editable + "\n\n" + ProtectedSystemPrompt;
+    }
 
     private static readonly JsonSerializerOptions PayloadJsonOptions = new()
     {
@@ -453,10 +491,10 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
 
         if (request.AvailableFrozenItems.Count > 0)
         {
-            sb.AppendLine("Freezer items (soonest expiring first):");
+            sb.AppendLine("Freezer items (soonest expiring first; copy the id exactly into freezerItemId):");
             foreach (var item in request.AvailableFrozenItems.Take(10))
             {
-                sb.Append($"- {item.Name} ({item.Quantity} {item.Unit ?? "x"})");
+                sb.Append($"- id={item.Id}: {item.Name} ({item.Quantity} {item.Unit ?? "x"})");
                 if (item.ExpirationDate.HasValue)
                 {
                     sb.Append($", expires {item.ExpirationDate:yyyy-MM-dd}");
@@ -584,6 +622,9 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         var recipesByTitle = request.KnownRecipes
             .GroupBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+        var frozenById = request.AvailableFrozenItems
+            .GroupBy(i => i.Id, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
         var suggestions = new List<MealSuggestion>();
         foreach (var item in payload.Suggestions!)
@@ -595,13 +636,36 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
                 continue;
             }
 
+            // An id-confirmed freezer item is authoritative for the dish's display name —
+            // the model only has to copy a short id, not reproduce the (possibly long)
+            // item name verbatim, and the app always shows/links the real item either way.
+            // An id that doesn't match anything available (hallucinated, or the item was
+            // reserved elsewhere between prompt build and reply) is logged and ignored;
+            // the dish falls through to LinkFreezerItems' name-based fallback below.
+            FrozenItem? freezerItem = null;
+            if (!string.IsNullOrWhiteSpace(item.FreezerItemId))
+            {
+                if (frozenById.TryGetValue(item.FreezerItemId.Trim(), out var matched))
+                {
+                    freezerItem = matched;
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "AI proposed freezerItemId \"{Id}\" for {Date}, which is not an available freezer item",
+                        item.FreezerItemId, date);
+                }
+            }
+
+            var dishName = freezerItem?.Name ?? item.DishName.Trim();
+
             Guid? recipeId = null;
             if (!string.IsNullOrWhiteSpace(item.RecipeTitle)
                 && recipesByTitle.TryGetValue(item.RecipeTitle.Trim(), out var byTitle))
             {
                 recipeId = byTitle;
             }
-            else if (recipesByTitle.TryGetValue(item.DishName.Trim(), out var byName))
+            else if (recipesByTitle.TryGetValue(dishName, out var byName))
             {
                 recipeId = byName;
             }
@@ -620,10 +684,11 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             {
                 Date = date,
                 RecipeId = recipeId,
-                DishName = item.DishName.Trim(),
+                DishName = dishName,
                 Reason = string.IsNullOrWhiteSpace(item.Reason) ? null : item.Reason.Trim(),
                 SourceUrl = sourceUrl,
-                SourceName = sourceName
+                SourceName = sourceName,
+                FreezyItemRef = freezerItem?.Id
             });
         }
 
@@ -694,10 +759,17 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
     }
 
     /// <summary>
-    /// Links a suggestion to an available freezer item when its dish name matches one,
-    /// so accepting it reserves that stock. Capped per item by its remaining quantity —
-    /// the model is told the available amount, this enforces it so the same stock isn't
-    /// reserved more than it holds within one week.
+    /// Finalizes freezer-item reservations and enforces the per-item quantity cap across
+    /// the week. Two ways a suggestion gets here already carrying a FreezyItemRef, or not:
+    /// - Confirmed by a validated freezerItemId in PostProcess (the primary path — exact
+    ///   by design, immune to the model paraphrasing the item's name).
+    /// - Not confirmed (older/weaker models that ignore freezerItemId): falls back to
+    ///   matching the dish name against a freezer item's name exactly, same as before
+    ///   freezerItemId existed.
+    /// Either way, quantity is capped by what's actually available — the model is told
+    /// the amount, this enforces it. An id-confirmed suggestion that loses out on a
+    /// cap (the model over-used one item) is unlinked rather than dropped — it stays a
+    /// valid, if unlinked, dish suggestion.
     /// </summary>
     private static void LinkFreezerItems(List<MealSuggestion> suggestions, MealSuggestionRequest request)
     {
@@ -706,6 +778,9 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             return;
         }
 
+        var byId = request.AvailableFrozenItems
+            .GroupBy(i => i.Id, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         var byName = request.AvailableFrozenItems
             .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -714,8 +789,25 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         for (var i = 0; i < suggestions.Count; i++)
         {
             var s = suggestions[i];
-            if (s.FreezyItemRef != null || s.DishName is null
-                || !byName.TryGetValue(s.DishName, out var item))
+
+            if (s.FreezyItemRef != null)
+            {
+                if (!byId.TryGetValue(s.FreezyItemRef, out var confirmed))
+                {
+                    continue; // defensive; PostProcess only ever sets an id it validated
+                }
+                var takenById = used.GetValueOrDefault(confirmed.Id);
+                if (takenById >= confirmed.Quantity)
+                {
+                    suggestions[i] = s with { FreezyItemRef = null, FreezyItemQuantity = 0 };
+                    continue;
+                }
+                used[confirmed.Id] = takenById + 1;
+                suggestions[i] = s with { FreezyItemQuantity = 1 };
+                continue;
+            }
+
+            if (s.DishName is null || !byName.TryGetValue(s.DishName, out var item))
             {
                 continue;
             }
@@ -772,6 +864,12 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
     /// <summary>Expected JSON shape of the LLM response</summary>
     internal sealed record WeekSuggestionsPayload(List<DaySuggestionPayload>? Suggestions);
 
+    /// <param name="FreezerItemId">Exact id (copied from the "Freezer items" prompt block)
+    /// of the freezer item this dish uses, or null. Authoritative over DishName for
+    /// freezer linking — see PostProcess, which resolves the item and overrides DishName
+    /// with its real name, so the model doesn't need to reproduce (potentially long) item
+    /// names verbatim to get a working match.</param>
     internal sealed record DaySuggestionPayload(
-        string? Date, string? DishName, string? RecipeTitle, string? Reason, string? SourceUrl);
+        string? Date, string? DishName, string? RecipeTitle, string? Reason, string? SourceUrl,
+        string? FreezerItemId = null);
 }

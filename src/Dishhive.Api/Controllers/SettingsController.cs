@@ -1,6 +1,7 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
+using Dishhive.Api.Services.Suggestions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +26,80 @@ public class SettingsController : ControllerBase
     {
         _context = context;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// The editable AI system prompt: the user-tweakable section, the shipped default,
+    /// and the protected machinery that is always appended (JSON contract, collection/
+    /// source/freezer rules — post-processing depends on those, so they are not editable).
+    /// </summary>
+    [HttpGet("ai-prompt")]
+    [ProducesResponseType(typeof(AiPromptDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AiPromptDto>> GetAiPrompt(
+        [FromServices] AiPromptService promptService, CancellationToken cancellationToken)
+    {
+        return Ok(await BuildAiPromptDto(promptService, cancellationToken));
+    }
+
+    /// <summary>
+    /// Saves the editable AI prompt section (text equal to the default clears the
+    /// customization). Because the prompt changes model behavior, a model capability
+    /// re-test is started automatically — its verdict tells the user whether their
+    /// prompt still produces working suggestions.
+    /// </summary>
+    [HttpPut("ai-prompt")]
+    [ProducesResponseType(typeof(AiPromptDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AiPromptDto>> SetAiPrompt(
+        UpdateAiPromptDto dto,
+        [FromServices] AiPromptService promptService,
+        [FromServices] IAiModelCapabilityService aiCapability,
+        [FromServices] AiOptions aiOptions,
+        CancellationToken cancellationToken)
+    {
+        var before = await promptService.GetOverrideAsync(cancellationToken);
+        await promptService.SetOverrideAsync(dto.EditablePrompt, cancellationToken);
+        var after = await promptService.GetOverrideAsync(cancellationToken);
+
+        if (before != after && aiOptions.IsConfigured)
+        {
+            _logger.LogInformation("AI prompt changed (customized={Customized}); restarting the model capability test", after != null);
+            _ = aiCapability.RetestAsync();
+        }
+
+        return Ok(await BuildAiPromptDto(promptService, cancellationToken));
+    }
+
+    /// <summary>Resets the AI prompt to the shipped default (also restarts the capability test)</summary>
+    [HttpDelete("ai-prompt")]
+    [ProducesResponseType(typeof(AiPromptDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AiPromptDto>> ResetAiPrompt(
+        [FromServices] AiPromptService promptService,
+        [FromServices] IAiModelCapabilityService aiCapability,
+        [FromServices] AiOptions aiOptions,
+        CancellationToken cancellationToken)
+    {
+        var wasCustomized = await promptService.GetOverrideAsync(cancellationToken) != null;
+        await promptService.ResetAsync(cancellationToken);
+
+        if (wasCustomized && aiOptions.IsConfigured)
+        {
+            _logger.LogInformation("AI prompt reset to the default; restarting the model capability test");
+            _ = aiCapability.RetestAsync();
+        }
+
+        return Ok(await BuildAiPromptDto(promptService, cancellationToken));
+    }
+
+    private static async Task<AiPromptDto> BuildAiPromptDto(
+        AiPromptService promptService, CancellationToken cancellationToken)
+    {
+        var overrideText = await promptService.GetOverrideAsync(cancellationToken);
+        return new AiPromptDto(
+            EditablePrompt: overrideText ?? LlmMealSuggestionService.EditableSystemPromptDefault,
+            DefaultPrompt: LlmMealSuggestionService.EditableSystemPromptDefault,
+            ProtectedPrompt: LlmMealSuggestionService.ProtectedSystemPrompt,
+            IsCustomized: overrideText != null,
+            DefaultChangedSinceCustomized: await promptService.DefaultChangedSinceCustomizedAsync(cancellationToken));
     }
 
     /// <summary>

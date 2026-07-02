@@ -157,15 +157,30 @@ IMealSuggestionService
       earlier version did (assume partial by default, look for reasons to combine) — that
       biased toward over-combining; assuming full-size unless told otherwise is the safer
       default and needs actual evidence before padding out a meal with a second item.
-    - Each combined dish is still its own **separate suggestion entry** with its exact
-      freezer-item name — never merged into one dish name — so `LinkFreezerItems` can
-      match each back to its own stock for correct Freezy tracking. Post-processing allows
-      up to three distinct dishes per day.
+    - Each combined dish is still its own **separate suggestion entry**, linked to its
+      own freezer item, so `LinkFreezerItems` can reserve each one's stock independently
+      for correct Freezy tracking. Post-processing allows up to three distinct dishes per
+      day.
 - **Freezer stock**: the prompt only lists freezer items still *available* (Freezy stock
   minus what future meals already reserve — see [freezy-integration.md](freezy-integration.md))
-  with their remaining quantity, and the model is told not to exceed it. Post-processing
-  links a proposed dish back to the freezer item by name (capped by remaining quantity), so
-  accepting it reserves the stock and the same item is never planned into two weeks.
+  with their remaining quantity, and the model is told not to exceed it.
+- **Freezer linking is id-based, not name-matched** (July 2026): each freezer item in
+  the prompt carries its Freezy id (`- id={Id}: {Name} (...)`, the same id
+  `FreezerAvailabilityService`/`PlannedMeal.FreezyItemRef` already use to track
+  reservations and prevent double-consumption). The model copies that id verbatim into
+  `freezerItemId` on the suggestion; `PostProcess` resolves it and **overrides
+  `dishName` with the item's real name**, so a paraphrase like "leftover lasagna,
+  serves 2" still links correctly and the app no longer depends on the model
+  reproducing a (possibly long) item name character-for-character. This also lowers
+  output tokens: `dishName` for a freezer pick can be a short label since the app
+  supplies the authoritative name. An id the model invents or that's gone stale
+  (reserved elsewhere between prompt build and reply) is logged and ignored, not
+  fatal — the dish falls through to `LinkFreezerItems`' name-exact-match fallback
+  (kept for models that ignore `freezerItemId` entirely, e.g. weaker prompted-JSON
+  models) and, failing that, is kept as a valid but unlinked suggestion rather than
+  dropped. Quantity capping (never reserve more than remains) applies the same way
+  regardless of which path confirmed the link; an id-confirmed suggestion that loses
+  a cap race is unlinked, not discarded.
 - **Rules fallback**: expiring freezer items (≤10 days past week end) first, then rotate
   favorites — skip dishes planned <14 days ago or rated <3, prefer loved (≥4), round-robin
   across members. Pure function, unit-tested. **Deliberately never combines multiple
@@ -274,6 +289,39 @@ model gets **one real test per process** (`AiModelTester` + `AiModelCapabilitySe
   verified `json_schema` → production calls set `ChatOptions.ResponseFormat` and the
   parse/retry machinery becomes a safety net; otherwise prompted JSON as before.
 
+## Editable system prompt (July 2026)
+
+The system prompt is split in two (`LlmMealSuggestionService`):
+
+- **`EditableSystemPromptDefault`** — persona and soft preferences (variety, favorites,
+  reason style). The user can replace this section from the settings page: persistent
+  household guidance ("weekdays max 30 min", "reasons in Dutch") or per-model phrasing
+  tuning, which the per-request Instructions field (transient, 500 chars) can't serve.
+- **`ProtectedSystemPrompt`** — always appended, never editable: the allergy rule, the
+  freezer/collection/source mechanics and the JSON contract. These aren't style — post-
+  processing depends on them (exact recipeTitle and freezer-name matching, the sourceUrl
+  contract). Shown read-only in the settings UI so the user sees the full picture.
+
+Design notes (deliberate trade-offs, discussed before building):
+- **Textual protection is not behavioral protection.** A conflicting editable section can
+  still talk the model out of the protected rules; the real guards are post-processing,
+  the rules fallback, and the capability test. That's why **saving a changed prompt
+  automatically restarts the model capability test** — the verdict shows whether the
+  custom prompt still yields working suggestions (a heavily opinionated prompt, e.g.
+  "strictly vegan", can legitimately fail the instruction-following evaluation checks).
+- **Customizers fork off the improvement train.** The stored override freezes the user on
+  their text while the shipped default keeps improving. `AiPromptService` stores the
+  default-at-customization-time alongside the override; the settings card shows a
+  "built-in prompt improved since you customized" notice so the fork is at least visible.
+  Saving text identical to the default clears the customization instead of storing it.
+- The capability-test fingerprint includes a hash of the **full effective prompt**, so a
+  user edit *and* a shipped-prompt change in an app update both invalidate the persisted
+  verdict; a prompt edited while a test is mid-run is handled by re-running against the
+  latest prompt before the shared task completes.
+
+Storage: `UserSettings` rows (`aiSystemPrompt`, `aiSystemPromptBaseline`; Value widened
+to 4000 chars). API: `GET/PUT/DELETE /api/settings/ai-prompt`.
+
 ## Frontend
 
 - Planner toolbar: `auto_awesome` "Suggest week" button, visible only when the status
@@ -293,7 +341,11 @@ model gets **one real test per process** (`AiModelTester` + `AiModelCapabilitySe
 - `components/integrations-status/` (settings page): under the AI row, the last model
   test verdict with its per-check list and a "(Re-)test model" button; while a test
   runs, the cooking-pot loader with a "can take a couple of minutes" note (polls the
-  test endpoint every 2s).
+  test endpoint every 2s) and the button is hidden until it completes.
+- `components/ai-prompt-settings/` (settings page, shown only when AI is configured):
+  the editable prompt section (monospace textarea, 4000-char cap) with Save /
+  Reset-to-default, a "customized" tag, the drift notice, and the protected rules in a
+  collapsed read-only panel. Saving points the user at the restarted model test.
 
 ## Risks / Notes
 
@@ -331,3 +383,5 @@ model gets **one real test per process** (`AiModelTester` + `AiModelCapabilitySe
 - [x] docker-compose `searxng` service + `WebSearch__*` vars + `@` autocomplete
 - [x] Model capability test: `AiModelTester` (evaluation fixture + scoring) + startup gate + settings-page re-test + response-format negotiation
 - [x] Persisted test verdict (`AiModelTestRecord` keyed by config fingerprint) — no re-test per reboot, only on config change or manual re-test
+- [x] Editable system prompt (`AiPromptService`, settings card, drift notice, auto re-test on save; protected machinery never editable)
+- [x] Id-based freezer linking (`freezerItemId`, id-confirmed dishName override, name-match fallback) replacing exact-dish-name-only matching

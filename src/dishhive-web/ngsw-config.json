@@ -1,6 +1,17 @@
 {
   "$schema": "./node_modules/@angular/service-worker/config/schema.json",
   "index": "/index.html",
+  "navigationUrls": [
+    "/**",
+    "!/**/*.*",
+    "!/**/*__*",
+    "!/**/*__*/**",
+    "!/api/**",
+    "!/openapi/**",
+    "!/scalar/**",
+    "!/mcp/**",
+    "!/health"
+  ],
   "assetGroups": [
     {
       "name": "app",

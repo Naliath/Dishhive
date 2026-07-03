@@ -7,6 +7,7 @@ using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Collections;
+using Dishhive.Api.Services.Facts;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dishhive.Api.Services.Import;
@@ -51,17 +52,20 @@ public partial class RecipeExchangeService : IRecipeExchangeService
     private readonly HttpClient _httpClient;
     private readonly DishhiveDbContext _context;
     private readonly AutoCollectionProvider _autoCollections;
+    private readonly RecipeFactsAssessmentService _factsQueue;
     private readonly ILogger<RecipeExchangeService> _logger;
 
     public RecipeExchangeService(
         HttpClient httpClient,
         DishhiveDbContext context,
         AutoCollectionProvider autoCollections,
+        RecipeFactsAssessmentService factsQueue,
         ILogger<RecipeExchangeService> logger)
     {
         _httpClient = httpClient;
         _context = context;
         _autoCollections = autoCollections;
+        _factsQueue = factsQueue;
         _logger = logger;
     }
 
@@ -72,6 +76,7 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             .Include(r => r.Ingredients)
             .Include(r => r.Steps)
             .Include(r => r.Tags).ThenInclude(a => a.RecipeTag)
+            .Include(r => r.DietaryFacts)
             .OrderBy(r => r.Title)
             .ToListAsync(cancellationToken);
 
@@ -120,6 +125,8 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             .ToListAsync(cancellationToken);
 
         var result = new RecipeFileImportResultDto();
+        // Recipes the file carried no facts for; queued for AI assessment after save
+        var needAssessment = new List<(Recipe Recipe, bool WasUpdate)>();
 
         foreach (var node in nodes)
         {
@@ -139,6 +146,7 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             var sourceUrl = IsHttpUrl(imported.SourceUrl) ? imported.SourceUrl : null;
 
             Recipe recipe;
+            var isUpdate = false;
             if (sourceUrl != null && knownUrls.TryGetValue(sourceUrl, out var existingId))
             {
                 // same source page: update, consistent with re-importing a URL
@@ -146,11 +154,13 @@ public partial class RecipeExchangeService : IRecipeExchangeService
                     .Include(r => r.Ingredients)
                     .Include(r => r.Steps)
                     .Include(r => r.Tags).ThenInclude(a => a.RecipeTag)
+                    .Include(r => r.DietaryFacts)
                     .FirstAsync(r => r.Id == existingId, cancellationToken);
                 _context.RecipeIngredients.RemoveRange(recipe.Ingredients);
                 _context.RecipeSteps.RemoveRange(recipe.Steps);
                 recipe.Ingredients.Clear();
                 recipe.Steps.Clear();
+                isUpdate = true;
                 result.Updated++;
             }
             else if (knownTitles.Contains(imported.Title.Trim().ToLowerInvariant()))
@@ -179,12 +189,74 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             }
             SyncTags(recipe, ReadDishhiveTags(node), allTags);
             await SyncCollectionsAsync(recipe, ReadDishhiveCollections(node), allCookbooks, cancellationToken);
+
+            // Facts from the file win (a Dishhive export carries the assessment status
+            // with them); files without facts leave the recipe for the AI queue below —
+            // on updates the ingredient list was just replaced, so any stored facts are
+            // stale and get re-assessed even when user-confirmed
+            var facts = ReadDishhiveFacts(node);
+            if (facts != null)
+            {
+                ApplyFacts(recipe, facts.Value.Contains, facts.Value.Status);
+            }
+            else
+            {
+                needAssessment.Add((recipe, isUpdate));
+            }
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+        foreach (var (recipe, wasUpdate) in needAssessment)
+        {
+            _factsQueue.TryEnqueue(recipe.Id, overwriteUserConfirmed: wasUpdate);
+        }
         _logger.LogInformation("Recipe file import: {Created} created, {Updated} updated, {Skipped} skipped",
             result.Created, result.Updated, result.Skipped);
         return result;
+    }
+
+    /// <summary>Replaces the facts rows and stamps the assessment status</summary>
+    private void ApplyFacts(Recipe recipe, List<IngredientClass> classes, DietaryFactsStatus status)
+    {
+        _context.RecipeDietaryFacts.RemoveRange(recipe.DietaryFacts);
+        recipe.DietaryFacts.Clear();
+        foreach (var ingredientClass in classes.Distinct())
+        {
+            recipe.DietaryFacts.Add(new RecipeDietaryFact { Recipe = recipe, IngredientClass = ingredientClass });
+        }
+        recipe.DietaryFactsStatus = status;
+        recipe.DietaryFactsAssessedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Reads the "dishhive:dietaryFacts" extension: null when absent/unreadable
+    /// (recipe goes to the AI queue), otherwise the contained classes with the
+    /// original assessment status (unknown class names are dropped, not fatal).
+    /// </summary>
+    private static (List<IngredientClass> Contains, DietaryFactsStatus Status)? ReadDishhiveFacts(JsonElement node)
+    {
+        if (!node.TryGetProperty("dishhive:dietaryFacts", out var facts)
+            || facts.ValueKind != JsonValueKind.Object
+            || !facts.TryGetProperty("contains", out var contains)
+            || contains.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var classes = contains.EnumerateArray()
+            .Where(c => c.ValueKind == JsonValueKind.String)
+            .Select(c => IngredientClasses.TryParse(c.GetString(), out var value) ? value : (IngredientClass?)null)
+            .Where(v => v.HasValue)
+            .Select(v => v!.Value)
+            .ToList();
+
+        var status = facts.TryGetProperty("status", out var statusValue)
+            && statusValue.ValueKind == JsonValueKind.String
+            && string.Equals(statusValue.GetString(), "userConfirmed", StringComparison.OrdinalIgnoreCase)
+                ? DietaryFactsStatus.UserConfirmed
+                : DietaryFactsStatus.AiDetected;
+
+        return (classes, status);
     }
 
     private static JsonObject ToSchemaOrg(Recipe recipe, List<string>? collectionNames)
@@ -261,6 +333,24 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             }
             // Manual collection memberships; auto collections are computed and not exported
             node["dishhive:collections"] = collectionArray;
+        }
+
+        // Assessed dietary facts travel with the recipe (status included, so a
+        // user-confirmed verdict survives a round trip); unassessed recipes carry
+        // nothing and get re-assessed on import
+        if (recipe.DietaryFactsStatus != DietaryFactsStatus.Unassessed)
+        {
+            var contains = new JsonArray();
+            foreach (var name in IngredientClasses.ToNames(recipe.DietaryFacts.Select(f => f.IngredientClass)))
+            {
+                contains.Add((JsonNode)name);
+            }
+            node["dishhive:dietaryFacts"] = new JsonObject
+            {
+                ["status"] = recipe.DietaryFactsStatus == DietaryFactsStatus.UserConfirmed
+                    ? "userConfirmed" : "aiDetected",
+                ["contains"] = contains
+            };
         }
 
         return node;

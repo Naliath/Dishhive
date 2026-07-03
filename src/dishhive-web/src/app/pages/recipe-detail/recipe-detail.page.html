@@ -41,6 +41,52 @@
         </div>
       }
 
+      <div class="facts-section" aria-label="Dietary facts">
+        <div class="tag-chips facts-row">
+          <span class="facts-badge"
+                [class.facts-badge--ai]="r.dietaryFacts.status === FactsStatus.AiDetected"
+                [class.facts-badge--confirmed]="r.dietaryFacts.status === FactsStatus.UserConfirmed"
+                [matTooltip]="r.dietaryFacts.status === FactsStatus.Unassessed
+                  ? 'Not assessed yet — facts are detected in the background after import, or set them via Edit'
+                  : ''">
+            <mat-icon>{{ r.dietaryFacts.status === FactsStatus.UserConfirmed ? 'verified' :
+                         r.dietaryFacts.status === FactsStatus.AiDetected ? 'smart_toy' : 'help_outline' }}</mat-icon>
+            {{ r.dietaryFacts.status === FactsStatus.UserConfirmed ? 'Contains (confirmed)' :
+               r.dietaryFacts.status === FactsStatus.AiDetected ? 'Contains (AI-detected)' : 'Contains: not assessed yet' }}
+          </span>
+          @if (r.dietaryFacts.status !== FactsStatus.Unassessed) {
+            @for (name of r.dietaryFacts.contains; track name) {
+              <span class="tag-chip facts-chip">{{ classLabel(name) }}</span>
+            }
+            @if (r.dietaryFacts.contains.length === 0) {
+              <span class="facts-none">none of the tracked classes</span>
+            }
+          }
+          @if (!factsEditing()) {
+            @if (r.dietaryFacts.status === FactsStatus.AiDetected) {
+              <button mat-stroked-button class="facts-action" (click)="confirmFacts()"
+                      [disabled]="savingFacts()"
+                      matTooltip="Mark the AI-detected facts as verified">
+                <mat-icon>check</mat-icon> Confirm
+              </button>
+            }
+            <button mat-button class="facts-action" (click)="startFactsEdit()">
+              <mat-icon>edit</mat-icon> Edit
+            </button>
+          }
+        </div>
+        @if (factsEditing()) {
+          <div class="facts-editor">
+            <app-class-picker [selected]="factsDraft()"
+                              (selectedChange)="factsDraft.set($event)" />
+            <div class="facts-editor-actions">
+              <button mat-button (click)="factsEditing.set(false)">Cancel</button>
+              <button mat-flat-button (click)="saveFactsEdit()" [disabled]="savingFacts()">Save</button>
+            </div>
+          </div>
+        }
+      </div>
+
       @if (memberOfCookbooks().length > 0 || availableCookbooks().length > 0) {
         <div class="tag-chips collections-row" aria-label="Collections">
           @for (cookbook of memberOfCookbooks(); track cookbook.id) {

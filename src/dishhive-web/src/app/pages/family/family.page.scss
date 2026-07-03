@@ -27,6 +27,32 @@
   gap: 8px;
 }
 
+// Tag chips in the form open their definition editor on tap
+.definition-chip {
+  cursor: pointer;
+}
+
+.definition-editor {
+  border: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .definition-editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .definition-editor-hint {
+    margin: 0;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
 .member-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));

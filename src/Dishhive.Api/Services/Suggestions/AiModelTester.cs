@@ -1,3 +1,4 @@
+using Dishhive.Api.Models;
 using Microsoft.Extensions.AI;
 using System.Diagnostics;
 using System.Text.Json;
@@ -351,16 +352,39 @@ public class AiModelTester
         var collectionDay = weekStart.AddDays(2);   // Wednesday
         var specificDishDay = weekStart.AddDays(3); // Thursday
 
-        string[] vegetarian = ["Pasta pesto", "Vegetable curry", "Mushroom risotto", "Spinach lasagne", "Falafel wraps"];
-        (string Title, string Category)[] others =
+        // The named candidates carry assessed dietary facts so the evaluation prompt
+        // uses the production "[contains: ...]" annotation format; the filler stays
+        // unassessed, like a real half-assessed library. No member exclusions here —
+        // they would contradict the expected answers (Chicken curry on Thursday).
+        (string Title, IngredientClass[] Contains)[] vegetarianRecipes =
         [
-            ("Chicken curry", "Meat"), ("Beef stew", "Meat"), ("Meatball spaghetti", "Meat"),
-            ("Pork schnitzel", "Meat"), ("Salmon teriyaki", "Fish")
+            ("Pasta pesto", [IngredientClass.Gluten, IngredientClass.Milk]),
+            ("Vegetable curry", []),
+            ("Mushroom risotto", [IngredientClass.Milk]),
+            ("Spinach lasagne", [IngredientClass.Gluten, IngredientClass.Milk, IngredientClass.Eggs]),
+            ("Falafel wraps", [IngredientClass.Gluten, IngredientClass.Sesame])
+        ];
+        string[] vegetarian = [.. vegetarianRecipes.Select(v => v.Title)];
+        (string Title, string Category, IngredientClass[] Contains)[] others =
+        [
+            ("Chicken curry", "Meat", [IngredientClass.Poultry]),
+            ("Beef stew", "Meat", [IngredientClass.RedMeat]),
+            ("Meatball spaghetti", "Meat", [IngredientClass.RedMeat, IngredientClass.Gluten]),
+            ("Pork schnitzel", "Meat", [IngredientClass.Pork, IngredientClass.Gluten, IngredientClass.Eggs]),
+            ("Salmon teriyaki", "Fish", [IngredientClass.Fish, IngredientClass.Soybeans, IngredientClass.Gluten])
         ];
 
-        var recipes = vegetarian
-            .Select(t => new RecipeOption { Id = Guid.NewGuid(), Title = t, Category = "Vegetarian" })
-            .Concat(others.Select(o => new RecipeOption { Id = Guid.NewGuid(), Title = o.Title, Category = o.Category }))
+        var recipes = vegetarianRecipes
+            .Select(v => new RecipeOption
+            {
+                Id = Guid.NewGuid(), Title = v.Title, Category = "Vegetarian",
+                ContainsClasses = v.Contains, FactsAssessed = true
+            })
+            .Concat(others.Select(o => new RecipeOption
+            {
+                Id = Guid.NewGuid(), Title = o.Title, Category = o.Category,
+                ContainsClasses = o.Contains, FactsAssessed = true
+            }))
             // Filler pushes the prompt to the configured token budget (BuildUserPrompt
             // trims to it); the real candidates come first so they always survive the trim
             .Concat(Enumerable.Range(1, 800).Select(i => new RecipeOption

@@ -81,6 +81,10 @@ public class FamilyMembersController : ControllerBase
         {
             return TagTooLong();
         }
+        if (HasUnknownClass(dto.AllergyTags) || HasUnknownClass(dto.DietTags))
+        {
+            return UnknownClass();
+        }
 
         var member = new FamilyMember
         {
@@ -110,6 +114,10 @@ public class FamilyMembersController : ControllerBase
         if (HasOverlongTag(dto.AllergyTags) || HasOverlongTag(dto.DietTags))
         {
             return TagTooLong();
+        }
+        if (HasUnknownClass(dto.AllergyTags) || HasUnknownClass(dto.DietTags))
+        {
+            return UnknownClass();
         }
 
         var member = await _context.FamilyMembers
@@ -291,18 +299,22 @@ public class FamilyMembersController : ControllerBase
     }
 
     /// <summary>
-    /// Syncs a member's tag links to the submitted names: missing tags are created
+    /// Syncs a member's tag links to the submitted entries: missing tags are created
     /// (reusing existing ones case-insensitively per kind), removed names unlinked.
+    /// Each link carries the member's own excluded-classes definition: an entry with
+    /// explicit classes sets them, a null one seeds a NEW link from
+    /// <see cref="DietaryTagPresets"/> and leaves an existing link's definition alone.
     /// </summary>
-    private async Task SyncTagsAsync(FamilyMember member, List<string> allergyNames, List<string> dietNames)
+    private async Task SyncTagsAsync(
+        FamilyMember member, List<DietaryTagEntryDto> allergyEntries, List<DietaryTagEntryDto> dietEntries)
     {
-        var targets = Normalize(allergyNames).Select(n => (Name: n, Kind: DietaryTagKind.Allergy))
-            .Concat(Normalize(dietNames).Select(n => (Name: n, Kind: DietaryTagKind.Diet)))
+        var targets = Normalize(allergyEntries).Select(e => (Entry: e, Kind: DietaryTagKind.Allergy))
+            .Concat(Normalize(dietEntries).Select(e => (Entry: e, Kind: DietaryTagKind.Diet)))
             .ToList();
 
         // Links and tags are matched by (name, kind) case-insensitively — never by
         // entity id, whose generation timing differs between Npgsql and InMemory
-        var targetKeys = targets.Select(t => (Name: t.Name.ToLowerInvariant(), t.Kind)).ToHashSet();
+        var targetKeys = targets.Select(t => (Name: t.Entry.Name.ToLowerInvariant(), t.Kind)).ToHashSet();
 
         var obsolete = member.DietaryTags
             .Where(link => link.DietaryTag == null
@@ -315,22 +327,30 @@ public class FamilyMembersController : ControllerBase
         }
 
         var existingTags = await _context.DietaryTags.ToListAsync();
-        foreach (var (name, kind) in targets)
+        foreach (var (entry, kind) in targets)
         {
-            var alreadyLinked = member.DietaryTags.Any(link =>
+            var explicitClasses = entry.ExcludedClasses is null
+                ? null
+                : ParseClasses(entry.ExcludedClasses);
+
+            var existingLink = member.DietaryTags.FirstOrDefault(link =>
                 link.DietaryTag != null
                 && link.DietaryTag.Kind == kind
-                && string.Equals(link.DietaryTag.Name, name, StringComparison.OrdinalIgnoreCase));
-            if (alreadyLinked)
+                && string.Equals(link.DietaryTag.Name, entry.Name, StringComparison.OrdinalIgnoreCase));
+            if (existingLink != null)
             {
+                if (explicitClasses != null)
+                {
+                    existingLink.ExcludedClasses = explicitClasses;
+                }
                 continue;
             }
 
             var tag = existingTags.FirstOrDefault(t =>
-                t.Kind == kind && string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+                t.Kind == kind && string.Equals(t.Name, entry.Name, StringComparison.OrdinalIgnoreCase));
             if (tag == null)
             {
-                tag = new DietaryTag { Name = name, Kind = kind };
+                tag = new DietaryTag { Name = entry.Name, Kind = kind };
                 _context.DietaryTags.Add(tag);
                 existingTags.Add(tag);
             }
@@ -338,7 +358,9 @@ public class FamilyMembersController : ControllerBase
             member.DietaryTags.Add(new FamilyMemberDietaryTag
             {
                 FamilyMember = member,
-                DietaryTag = tag
+                DietaryTag = tag,
+                ExcludedClasses = explicitClasses
+                    ?? [.. DietaryTagPresets.Resolve(entry.Name, kind)]
             });
         }
     }
@@ -357,13 +379,26 @@ public class FamilyMembersController : ControllerBase
         }
     }
 
-    private static List<string> Normalize(List<string> names) => names
-        .Select(n => n.Trim())
-        .Where(n => n.Length > 0)
-        .DistinctBy(n => n.ToLowerInvariant())
+    private static List<DietaryTagEntryDto> Normalize(List<DietaryTagEntryDto> entries) => entries
+        .Select(e => new DietaryTagEntryDto { Name = e.Name.Trim(), ExcludedClasses = e.ExcludedClasses })
+        .Where(e => e.Name.Length > 0)
+        .DistinctBy(e => e.Name.ToLowerInvariant())
         .ToList();
 
-    private static bool HasOverlongTag(List<string> names) => names.Any(n => n.Trim().Length > 50);
+    private static bool HasOverlongTag(List<DietaryTagEntryDto> entries) =>
+        entries.Any(e => e.Name.Trim().Length > 50);
+
+    /// <summary>Distinct parsed classes; class names were validated up front</summary>
+    private static List<IngredientClass> ParseClasses(List<string> names) => names
+        .Select(n => IngredientClasses.TryParse(n, out var value) ? value : (IngredientClass?)null)
+        .Where(v => v.HasValue)
+        .Select(v => v!.Value)
+        .Distinct()
+        .ToList();
+
+    private static bool HasUnknownClass(List<DietaryTagEntryDto> entries) => entries
+        .Any(e => e.ExcludedClasses != null
+            && e.ExcludedClasses.Any(n => !IngredientClasses.TryParse(n, out _)));
 
     private BadRequestObjectResult TagTooLong() => BadRequest(new ProblemDetails
     {
@@ -371,22 +406,32 @@ public class FamilyMembersController : ControllerBase
         Detail = "Tags are at most 50 characters."
     });
 
+    private BadRequestObjectResult UnknownClass() => BadRequest(new ProblemDetails
+    {
+        Title = "Unknown ingredient class",
+        Detail = "Excluded classes must be valid IngredientClass names (e.g. \"TreeNuts\", \"Milk\", \"Pork\")."
+    });
+
     private static FamilyMemberDto ToDto(FamilyMember member) => new()
     {
         Id = member.Id,
         Name = member.Name,
         IsGuest = member.IsGuest,
-        AllergyTags = TagNames(member, DietaryTagKind.Allergy),
-        DietTags = TagNames(member, DietaryTagKind.Diet),
+        AllergyTags = TagEntries(member, DietaryTagKind.Allergy),
+        DietTags = TagEntries(member, DietaryTagKind.Diet),
         PreferenceNotes = member.PreferenceNotes,
         IsActive = member.IsActive,
         CreatedAt = member.CreatedAt,
         UpdatedAt = member.UpdatedAt
     };
 
-    private static List<string> TagNames(FamilyMember member, DietaryTagKind kind) => member.DietaryTags
+    private static List<DietaryTagEntryDto> TagEntries(FamilyMember member, DietaryTagKind kind) => member.DietaryTags
         .Where(link => link.DietaryTag != null && link.DietaryTag.Kind == kind)
-        .Select(link => link.DietaryTag!.Name)
-        .OrderBy(n => n)
+        .OrderBy(link => link.DietaryTag!.Name)
+        .Select(link => new DietaryTagEntryDto
+        {
+            Name = link.DietaryTag!.Name,
+            ExcludedClasses = IngredientClasses.ToNames(link.ExcludedClasses)
+        })
         .ToList();
 }

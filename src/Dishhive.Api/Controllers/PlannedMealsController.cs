@@ -247,6 +247,7 @@ public class PlannedMealsController : ControllerBase
         return Ok(new MealSuggestionsDto
         {
             Enabled = true,
+            ExcludedForAllergies = request.AllergyExcludedRecipeIds.Count,
             Suggestions = suggestions.Select(s => new MealSuggestionDto
             {
                 Date = s.Date,
@@ -256,6 +257,7 @@ public class PlannedMealsController : ControllerBase
                 Reason = s.Reason,
                 FromFallback = s.Source == MealSuggestionSource.RulesFallback,
                 AllergyWarning = s.AllergyWarning,
+                DietWarning = s.DietWarning,
                 FreezyItemRef = s.FreezyItemRef,
                 FreezyItemQuantity = s.FreezyItemQuantity,
                 SourceUrl = s.SourceUrl,

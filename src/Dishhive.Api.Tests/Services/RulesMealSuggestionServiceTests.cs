@@ -301,4 +301,49 @@ public class RulesMealSuggestionServiceTests
         suggestions.Should().ContainSingle();
         suggestions[0].Date.Should().Be(WeekStart.AddDays(2));
     }
+
+    [Fact]
+    public async Task Suggest_FavoriteMatchingAllergyExcludedRecipe_IsSkippedEntirely()
+    {
+        // The allergen favorite must not be proposed at all — not even unlinked
+        // (that would dodge the exclusion, not honor it); the next favorite wins
+        var excludedId = Guid.NewGuid();
+        var request = Request(
+            daysToFill: [WeekStart],
+            recipes:
+            [
+                new RecipeOption { Id = excludedId, Title = "Peanut stew" },
+                new RecipeOption { Id = Guid.NewGuid(), Title = "Safe soup" }
+            ],
+            favorites:
+            [
+                new FavoriteDish { MemberName = "Anna", DishName = "Peanut stew" },
+                new FavoriteDish { MemberName = "Anna", DishName = "Safe soup" }
+            ]) with
+        {
+            AllergyExcludedRecipeIds = new HashSet<Guid> { excludedId }
+        };
+
+        var suggestions = await _service.SuggestAsync(request);
+
+        suggestions.Should().ContainSingle();
+        suggestions[0].DishName.Should().Be("Safe soup");
+    }
+
+    [Fact]
+    public async Task Suggest_UnlinkedFavorite_IsNotAffectedByExclusions()
+    {
+        // A favorite without a matching recipe can't be fact-checked; exclusions
+        // only apply to recipe-linked candidates
+        var request = Request(
+            daysToFill: [WeekStart],
+            favorites: [new FavoriteDish { MemberName = "Anna", DishName = "Grandma's secret dish" }]) with
+        {
+            AllergyExcludedRecipeIds = new HashSet<Guid> { Guid.NewGuid() }
+        };
+
+        var suggestions = await _service.SuggestAsync(request);
+
+        suggestions.Should().ContainSingle(s => s.DishName == "Grandma's secret dish");
+    }
 }

@@ -72,6 +72,8 @@ export class SuggestionReviewDialog implements OnInit {
   readonly webSearchAvailable = signal(false);
   readonly suggestions = signal<MealSuggestion[]>([]);
   readonly selectedIndexes = signal<Set<number>>(new Set());
+  /** Recipes kept out of planning for household allergies (visibility for false positives) */
+  readonly excludedForAllergies = signal(0);
 
   readonly selectedCount = computed(() => this.selectedIndexes().size);
 
@@ -139,6 +141,7 @@ export class SuggestionReviewDialog implements OnInit {
       .subscribe({
         next: result => {
           this.suggestions.set(result.suggestions);
+          this.excludedForAllergies.set(result.excludedForAllergies ?? 0);
           this.selectedIndexes.set(new Set(result.suggestions.map((_, index) => index)));
           this.phase.set('review');
         },

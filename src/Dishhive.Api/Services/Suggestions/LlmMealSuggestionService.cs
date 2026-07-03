@@ -1,3 +1,4 @@
+using Dishhive.Api.Models;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.WebSearch;
@@ -79,7 +80,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
                 _logger.LogWarning(
                     "[{RequestId}] Model {Provider}/{Model} failed its capability test (verdict={Verdict}); using rules fallback without calling it",
                     requestId, _options.Provider, _options.Model, capability.Verdict);
-                return await _fallback.SuggestAsync(request, cancellationToken);
+                return Finalize(await _fallback.SuggestAsync(request, cancellationToken), request);
             }
 
             // Attach the external-recipe tools ONLY when the planner explicitly referenced
@@ -180,7 +181,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
                 _logger.LogWarning(
                     "[{RequestId}] AI suggestions unparseable after {Attempts} attempt(s) in {ElapsedMs}ms; using rules fallback",
                     requestId, _options.MaxRetries + 1, stopwatch.ElapsedMilliseconds);
-                return await _fallback.SuggestAsync(request, cancellationToken);
+                return Finalize(await _fallback.SuggestAsync(request, cancellationToken), request);
             }
 
             var suggestions = PostProcess(payload, request);
@@ -190,7 +191,7 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             _logger.LogInformation(
                 "[{RequestId}] AI proposed {Count} meal suggestions via {Provider}/{Model} in {ElapsedMs}ms",
                 requestId, suggestions.Count, _options.Provider, _options.Model, stopwatch.ElapsedMilliseconds);
-            return suggestions;
+            return Finalize(suggestions, request);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -204,8 +205,23 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             _logger.LogWarning(ex,
                 "[{RequestId}] AI suggestion call failed ({Provider}/{Model}) after {ElapsedMs}ms; using rules fallback",
                 requestId, _options.Provider, _options.Model, stopwatch.ElapsedMilliseconds);
-            return await _fallback.SuggestAsync(request, cancellationToken);
+            return Finalize(await _fallback.SuggestAsync(request, cancellationToken), request);
         }
+    }
+
+    /// <summary>
+    /// Runs the constraint-conflict flagging over the final answer, whatever path
+    /// produced it. This must be the single last step of every SuggestAsync exit:
+    /// an earlier version flagged inside PostProcess only, so full rules-fallback
+    /// answers (capability gate, unparseable reply, exception) and rules-backfilled
+    /// days were returned with checkable allergy conflicts unflagged.
+    /// </summary>
+    private IReadOnlyList<MealSuggestion> Finalize(
+        IReadOnlyList<MealSuggestion> suggestions, MealSuggestionRequest request)
+    {
+        var result = suggestions.ToList();
+        FlagConstraintConflicts(result, request);
+        return result;
     }
 
     private void LogUsage(string requestId, ChatResponse response, int attempt, TimeSpan elapsed)
@@ -297,6 +313,14 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         """
         Rules that ALWAYS apply, regardless of the guidance above:
         - NEVER suggest dishes that conflict with the listed allergies or dietary constraints.
+        - Household tags may carry exact ingredient classes in brackets, e.g.
+          "Vegetarisch [excludes: RedMeat, Poultry, Pork, Fish, ...]", and known
+          recipes may carry "[contains: ...]" with the same class names ("[contains:
+          none]" = verified to contain none of the tracked classes). A dish whose
+          contained classes overlap ANY attendee's excluded classes is forbidden.
+          Recipes conflicting with an allergy are already omitted from the known-
+          recipes list; apply the same exclusions yourself to any free-text dish you
+          propose.
         - Use expiring freezer items ONLY when the item is a complete meal by itself —
           a frozen pizza, lasagna, soup, stew, or a container of home-made leftovers are
           fine. A raw ingredient or side component (e.g. a bag of peas, frozen corn,
@@ -451,6 +475,18 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
         return null;
     }
 
+    /// <summary>
+    /// Renders a member tag for the prompt: the display name plus its excluded
+    /// classes in brackets when the tag is machine-checkable, so the model matches
+    /// against exact classes instead of guessing what a (possibly Dutch) tag name
+    /// means — e.g. "Noten [excludes: TreeNuts]", "Vegetarisch [excludes: RedMeat,
+    /// Poultry, Pork, Fish, Crustaceans, Molluscs, Gelatin]". The same class names
+    /// appear in the known-recipes "[contains: ...]" annotations.
+    /// </summary>
+    private static string FormatTag(DietaryTagProfile tag) => tag.ExcludedClasses.Count == 0
+        ? tag.Name
+        : $"{tag.Name} [excludes: {string.Join(", ", tag.ExcludedClasses)}]";
+
     // internal for prompt-content tests (like ParsePayload)
     internal static string BuildUserPrompt(MealSuggestionRequest request, int maxPromptTokens = int.MaxValue)
     {
@@ -467,11 +503,11 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             sb.Append($"- {member.Name}");
             if (member.Allergies.Count > 0)
             {
-                sb.Append($"; allergies: {string.Join(", ", member.Allergies)}");
+                sb.Append($"; allergies: {string.Join(", ", member.Allergies.Select(FormatTag))}");
             }
             if (member.Diets.Count > 0)
             {
-                sb.Append($"; constraints: {string.Join(", ", member.Diets)}");
+                sb.Append($"; constraints: {string.Join(", ", member.Diets.Select(FormatTag))}");
             }
             if (!string.IsNullOrWhiteSpace(member.PreferenceNotes))
             {
@@ -572,8 +608,24 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             .OrderByDescending(d => d.AverageRating)
             .Select(d => $"{d.DishName}: {d.AverageRating!.Value.ToString("0.0", culture)}/5")
             .ToList();
+        // Recipes conflicting with an attendee's allergy exclusions are omitted —
+        // the model can't pick what it never sees (free-text dishes remain guarded
+        // by the system-prompt rule and the post-hoc net). Assessed recipes carry
+        // their contains-classes so the model matches against facts instead of
+        // guessing from (often Dutch) titles.
         var recipeLines = request.KnownRecipes
-            .Select(r => r.Category != null ? $"\"{r.Title}\" ({r.Category})" : $"\"{r.Title}\"")
+            .Where(r => !request.AllergyExcludedRecipeIds.Contains(r.Id))
+            .Select(r =>
+            {
+                var line = r.Category != null ? $"\"{r.Title}\" ({r.Category})" : $"\"{r.Title}\"";
+                if (r.FactsAssessed)
+                {
+                    line += r.ContainsClasses.Count > 0
+                        ? $" [contains: {string.Join(", ", r.ContainsClasses)}]"
+                        : " [contains: none]";
+                }
+                return line;
+            })
             .ToList();
 
         var historyBudget = unlimited ? int.MaxValue : (int)((budgetChars - sb.Length) * 0.4);
@@ -718,7 +770,6 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
             .ToList();
 
         LinkFreezerItems(result, request);
-        FlagAllergyConflicts(result, request);
         return result;
     }
 
@@ -823,39 +874,101 @@ public partial class LlmMealSuggestionService : IMealSuggestionService
     }
 
     /// <summary>
-    /// Best-effort allergy net: flags (never drops) a suggestion whose linked recipe
-    /// lists an ingredient name containing a household allergy term. Heuristic and
-    /// secondary to the prompt instruction; only verifiable when a recipe is linked.
+    /// Post-hoc constraint net: flags (never drops) a suggestion whose linked
+    /// recipe conflicts with an attendee's dietary tags. Only verifiable when a
+    /// recipe is linked. Two tiers:
+    /// - Assessed recipes: exact intersection of the recipe's contained classes
+    ///   with each member's excluded classes — allergy tags set AllergyWarning,
+    ///   diet tags set DietWarning (diets have no heuristic tier; guessing a
+    ///   lifestyle violation from substrings would be pure noise).
+    /// - Unassessed recipes: the legacy ingredient-name substring heuristic for
+    ///   allergy tag names (language-fragile — "Ei" matches "prei" — but better
+    ///   than nothing until the recipe gets assessed).
     /// </summary>
-    private void FlagAllergyConflicts(List<MealSuggestion> suggestions, MealSuggestionRequest request)
+    private void FlagConstraintConflicts(List<MealSuggestion> suggestions, MealSuggestionRequest request)
     {
+        // First member+tag per excluded class, for the warning texts
+        var allergyByClass = new Dictionary<IngredientClass, string>();
+        var dietByClass = new Dictionary<IngredientClass, string>();
+        foreach (var member in request.Members)
+        {
+            foreach (var (tags, byClass) in new[] { (member.Allergies, allergyByClass), (member.Diets, dietByClass) })
+            {
+                foreach (var tag in tags)
+                {
+                    foreach (var cls in tag.ExcludedClasses)
+                    {
+                        byClass.TryAdd(cls, $"{member.Name}'s \"{tag.Name}\"");
+                    }
+                }
+            }
+        }
+
         var allergyTerms = request.Members
-            .SelectMany(m => m.Allergies)
+            .SelectMany(m => m.Allergies.Select(a => a.Name))
             .Select(a => a.Trim())
             .Where(a => a.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (allergyTerms.Count == 0)
+        if (allergyByClass.Count == 0 && dietByClass.Count == 0 && allergyTerms.Count == 0)
         {
             return;
         }
 
+        var recipesById = request.KnownRecipes
+            .GroupBy(r => r.Id)
+            .ToDictionary(g => g.Key, g => g.First());
+
         for (var i = 0; i < suggestions.Count; i++)
         {
             var s = suggestions[i];
-            if (s.RecipeId is null
-                || !request.RecipeAllergens.TryGetValue(s.RecipeId.Value, out var allergens))
+            if (s.RecipeId is null)
             {
                 continue;
             }
 
+            if (recipesById.TryGetValue(s.RecipeId.Value, out var recipe) && recipe.FactsAssessed)
+            {
+                var allergyHits = recipe.ContainsClasses.Where(allergyByClass.ContainsKey).ToList();
+                if (allergyHits.Count > 0)
+                {
+                    suggestions[i] = s = s with
+                    {
+                        AllergyWarning =
+                            $"Contains {string.Join(", ", allergyHits)} — conflicts with {allergyByClass[allergyHits[0]]} allergy"
+                    };
+                    _logger.LogWarning(
+                        "Suggested \"{Dish}\" for {Date}; linked recipe contains [{Classes}] conflicting with a household allergy",
+                        s.DishName, s.Date, string.Join(", ", allergyHits));
+                }
+
+                var dietHits = recipe.ContainsClasses.Where(dietByClass.ContainsKey).ToList();
+                if (dietHits.Count > 0)
+                {
+                    suggestions[i] = s with
+                    {
+                        DietWarning =
+                            $"Contains {string.Join(", ", dietHits)} — conflicts with {dietByClass[dietHits[0]]} diet"
+                    };
+                    _logger.LogInformation(
+                        "Suggested \"{Dish}\" for {Date}; linked recipe contains [{Classes}] conflicting with a diet tag",
+                        s.DishName, s.Date, string.Join(", ", dietHits));
+                }
+                continue;
+            }
+
+            // Unassessed (or unknown) recipe: legacy substring heuristic, allergies only
+            if (!request.RecipeAllergens.TryGetValue(s.RecipeId.Value, out var allergens))
+            {
+                continue;
+            }
             var hit = allergyTerms.FirstOrDefault(term =>
                 allergens.Ingredients.Any(ing => ing.Contains(term, StringComparison.OrdinalIgnoreCase)));
             if (hit != null)
             {
                 suggestions[i] = s with { AllergyWarning = $"May contain {hit} (household allergy)" };
                 _logger.LogWarning(
-                    "AI suggested \"{Dish}\" for {Date}; linked recipe has an ingredient matching the {Allergy} allergy",
+                    "Suggested \"{Dish}\" for {Date}; linked recipe has an ingredient matching the {Allergy} allergy",
                     s.DishName, s.Date, hit);
             }
         }

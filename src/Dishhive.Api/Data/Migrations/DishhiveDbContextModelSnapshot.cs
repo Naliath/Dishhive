@@ -206,6 +206,13 @@ namespace Dishhive.Api.Data.Migrations
                     b.Property<Guid>("DietaryTagId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ExcludedClasses")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("");
+
                     b.HasKey("FamilyMemberId", "DietaryTagId");
 
                     b.HasIndex("DietaryTagId");
@@ -372,6 +379,12 @@ namespace Dishhive.Api.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<DateTime?>("DietaryFactsAssessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DietaryFactsStatus")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ImageContentType")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -431,6 +444,19 @@ namespace Dishhive.Api.Data.Migrations
                     b.HasIndex("Title");
 
                     b.ToTable("Recipes");
+                });
+
+            modelBuilder.Entity("Dishhive.Api.Models.RecipeDietaryFact", b =>
+                {
+                    b.Property<Guid>("RecipeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("IngredientClass")
+                        .HasColumnType("integer");
+
+                    b.HasKey("RecipeId", "IngredientClass");
+
+                    b.ToTable("RecipeDietaryFacts");
                 });
 
             modelBuilder.Entity("Dishhive.Api.Models.RecipeIngredient", b =>
@@ -674,6 +700,17 @@ namespace Dishhive.Api.Data.Migrations
                     b.Navigation("PlannedMeal");
                 });
 
+            modelBuilder.Entity("Dishhive.Api.Models.RecipeDietaryFact", b =>
+                {
+                    b.HasOne("Dishhive.Api.Models.Recipe", "Recipe")
+                        .WithMany("DietaryFacts")
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recipe");
+                });
+
             modelBuilder.Entity("Dishhive.Api.Models.RecipeIngredient", b =>
                 {
                     b.HasOne("Dishhive.Api.Models.Recipe", "Recipe")
@@ -739,6 +776,8 @@ namespace Dishhive.Api.Data.Migrations
 
             modelBuilder.Entity("Dishhive.Api.Models.Recipe", b =>
                 {
+                    b.Navigation("DietaryFacts");
+
                     b.Navigation("Ingredients");
 
                     b.Navigation("Steps");

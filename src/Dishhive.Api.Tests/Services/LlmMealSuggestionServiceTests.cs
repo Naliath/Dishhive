@@ -1,3 +1,4 @@
+using Dishhive.Api.Models;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.Suggestions;
@@ -643,7 +644,7 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
-    public async Task Suggest_LinkedRecipeWithAllergyIngredient_IsFlaggedNotDropped()
+    public async Task Suggest_UnassessedRecipeWithAllergyIngredient_IsFlaggedViaSubstringHeuristic()
     {
         var recipeId = Guid.NewGuid();
         var chatClient = new FakeChatClient(
@@ -652,7 +653,7 @@ public class LlmMealSuggestionServiceTests
         var request = Request(daysToFill: [WeekStart],
             recipes: [new RecipeOption { Id = recipeId, Title = "Peanut stew" }]) with
         {
-            Members = [new MemberProfile { Name = "Kid", Allergies = ["peanut"] }],
+            Members = [new MemberProfile { Name = "Kid", Allergies = [new DietaryTagProfile { Name = "peanut" }] }],
             RecipeAllergens = new Dictionary<Guid, RecipeAllergenInfo>
             {
                 [recipeId] = new() { Ingredients = ["peanut butter", "onion"] }
@@ -663,5 +664,202 @@ public class LlmMealSuggestionServiceTests
 
         suggestions.Should().ContainSingle();
         suggestions[0].AllergyWarning.Should().NotBeNull().And.Subject.Should().Contain("peanut");
+    }
+
+    [Fact]
+    public async Task Suggest_AssessedRecipe_ConflictsAreFlaggedByExactClassMatch()
+    {
+        // Exact facts beat the substring heuristic: no ingredient name contains the
+        // literal tag "Noten" ("hazelnootpasta" doesn't), so the legacy heuristic
+        // would stay silent — the assessed TreeNuts fact still hits
+        var recipeId = Guid.NewGuid();
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Choco cake","recipeTitle":"Choco cake"}]}""");
+
+        var request = Request(daysToFill: [WeekStart],
+            recipes:
+            [
+                new RecipeOption
+                {
+                    Id = recipeId, Title = "Choco cake",
+                    FactsAssessed = true,
+                    ContainsClasses = [IngredientClass.TreeNuts, IngredientClass.Milk]
+                }
+            ]) with
+        {
+            Members =
+            [
+                new MemberProfile
+                {
+                    Name = "Kid",
+                    Allergies = [new DietaryTagProfile { Name = "Noten", ExcludedClasses = [IngredientClass.TreeNuts] }]
+                }
+            ],
+            // No literal ingredient match — proves the exact tier fired, not the heuristic
+            RecipeAllergens = new Dictionary<Guid, RecipeAllergenInfo>
+            {
+                [recipeId] = new() { Ingredients = ["hazelnootpasta", "bloem"] }
+            }
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().ContainSingle();
+        suggestions[0].AllergyWarning.Should().Contain("TreeNuts").And.Contain("Noten");
+    }
+
+    [Fact]
+    public async Task Suggest_AssessedRecipe_DietConflictGetsDietWarningNotAllergyWarning()
+    {
+        var recipeId = Guid.NewGuid();
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Beef stew","recipeTitle":"Beef stew"}]}""");
+
+        var request = Request(daysToFill: [WeekStart],
+            recipes:
+            [
+                new RecipeOption
+                {
+                    Id = recipeId, Title = "Beef stew",
+                    FactsAssessed = true,
+                    ContainsClasses = [IngredientClass.RedMeat]
+                }
+            ]) with
+        {
+            Members =
+            [
+                new MemberProfile
+                {
+                    Name = "Anna",
+                    Diets = [new DietaryTagProfile { Name = "Vegetarisch", ExcludedClasses = [IngredientClass.RedMeat, IngredientClass.Fish] }]
+                }
+            ]
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().ContainSingle();
+        suggestions[0].DietWarning.Should().Contain("RedMeat").And.Contain("Vegetarisch");
+        suggestions[0].AllergyWarning.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Suggest_FullRulesFallback_StillFlagsAllergyConflicts()
+    {
+        // Regression for the coverage hole: the exception path used to return raw
+        // rules results without ever running the allergy net
+        var recipeId = Guid.NewGuid();
+        var chatClient = new FakeChatClient(() => throw new HttpRequestException("connection refused"));
+
+        var request = Request(daysToFill: [WeekStart],
+            recipes: [new RecipeOption { Id = recipeId, Title = "Peanut stew" }],
+            favorites: [new FavoriteDish { MemberName = "Anna", DishName = "Peanut stew" }]) with
+        {
+            Members = [new MemberProfile { Name = "Kid", Allergies = [new DietaryTagProfile { Name = "peanut" }] }],
+            RecipeAllergens = new Dictionary<Guid, RecipeAllergenInfo>
+            {
+                [recipeId] = new() { Ingredients = ["peanut butter"] }
+            }
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        var suggestion = suggestions.Should().ContainSingle().Subject;
+        suggestion.Source.Should().Be(MealSuggestionSource.RulesFallback);
+        suggestion.AllergyWarning.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Suggest_RulesBackfilledDays_AreAlsoFlagged()
+    {
+        // Model answers one of two days; the second is backfilled from rules and must
+        // pass through the same constraint net as the AI rows
+        var recipeId = Guid.NewGuid();
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Safe soup"}]}""");
+
+        var request = Request(daysToFill: [WeekStart, WeekStart.AddDays(1)],
+            recipes: [new RecipeOption { Id = recipeId, Title = "Peanut stew" }],
+            favorites: [new FavoriteDish { MemberName = "Anna", DishName = "Peanut stew" }]) with
+        {
+            Members = [new MemberProfile { Name = "Kid", Allergies = [new DietaryTagProfile { Name = "peanut" }] }],
+            RecipeAllergens = new Dictionary<Guid, RecipeAllergenInfo>
+            {
+                [recipeId] = new() { Ingredients = ["peanut butter"] }
+            }
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().HaveCount(2);
+        var backfilled = suggestions.Single(s => s.Source == MealSuggestionSource.RulesFallback);
+        backfilled.AllergyWarning.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void BuildUserPrompt_AllergyExcludedRecipes_AreOmittedFromKnownRecipesBlock()
+    {
+        var excludedId = Guid.NewGuid();
+        var request = Request(recipes:
+        [
+            new RecipeOption { Id = excludedId, Title = "Peanut stew" },
+            new RecipeOption { Id = Guid.NewGuid(), Title = "Safe soup" }
+        ]) with
+        {
+            AllergyExcludedRecipeIds = new HashSet<Guid> { excludedId }
+        };
+
+        var prompt = LlmMealSuggestionService.BuildUserPrompt(request);
+
+        prompt.Should().NotContain("Peanut stew");
+        prompt.Should().Contain("Safe soup");
+    }
+
+    [Fact]
+    public void BuildUserPrompt_AssessedRecipes_CarryContainsAnnotations()
+    {
+        var request = Request(recipes:
+        [
+            new RecipeOption
+            {
+                Id = Guid.NewGuid(), Title = "Choco cake",
+                FactsAssessed = true,
+                ContainsClasses = [IngredientClass.Milk, IngredientClass.Gluten]
+            },
+            new RecipeOption
+            {
+                Id = Guid.NewGuid(), Title = "Fruit salad",
+                FactsAssessed = true, ContainsClasses = []
+            },
+            new RecipeOption { Id = Guid.NewGuid(), Title = "Mystery dish" }
+        ]);
+
+        var prompt = LlmMealSuggestionService.BuildUserPrompt(request);
+
+        prompt.Should().Contain("\"Choco cake\" [contains: Milk, Gluten]");
+        prompt.Should().Contain("\"Fruit salad\" [contains: none]");
+        prompt.Should().Contain("\"Mystery dish\"").And.NotContain("\"Mystery dish\" [contains");
+    }
+
+    [Fact]
+    public void BuildUserPrompt_MemberTags_CarryExcludesAnnotations()
+    {
+        var request = Request() with
+        {
+            Members =
+            [
+                new MemberProfile
+                {
+                    Name = "Anna",
+                    Allergies = [new DietaryTagProfile { Name = "Noten", ExcludedClasses = [IngredientClass.TreeNuts] }],
+                    Diets = [new DietaryTagProfile { Name = "Koosjer" }] // no classes: name only
+                }
+            ]
+        };
+
+        var prompt = LlmMealSuggestionService.BuildUserPrompt(request);
+
+        prompt.Should().Contain("Noten [excludes: TreeNuts]");
+        prompt.Should().Contain("Koosjer").And.NotContain("Koosjer [excludes");
     }
 }

@@ -1,17 +1,30 @@
+using Dishhive.Api.Models;
 using Dishhive.Api.Services.Freezy;
 
 namespace Dishhive.Api.Services.Suggestions;
+
+/// <summary>
+/// One dietary tag as it applies to one member: the display name plus the member's
+/// own machine-checkable definition (excluded <see cref="IngredientClass"/>es).
+/// Empty classes = not machine-checkable, the name is prompt-only (as all tags were
+/// before recipe dietary facts existed).
+/// </summary>
+public record DietaryTagProfile
+{
+    public required string Name { get; init; }
+    public IReadOnlyList<IngredientClass> ExcludedClasses { get; init; } = [];
+}
 
 /// <summary>A household member's planning-relevant profile</summary>
 public record MemberProfile
 {
     public required string Name { get; init; }
 
-    /// <summary>Allergy/intolerance tag names (hard "must not contain")</summary>
-    public IReadOnlyList<string> Allergies { get; init; } = [];
+    /// <summary>Allergy/intolerance tags (hard "must not contain")</summary>
+    public IReadOnlyList<DietaryTagProfile> Allergies { get; init; } = [];
 
-    /// <summary>Diet tag names (e.g. vegetarian, no pork)</summary>
-    public IReadOnlyList<string> Diets { get; init; } = [];
+    /// <summary>Diet tags (e.g. vegetarian, no pork)</summary>
+    public IReadOnlyList<DietaryTagProfile> Diets { get; init; } = [];
 
     public string? PreferenceNotes { get; init; }
 }
@@ -39,6 +52,16 @@ public record RecipeOption
     public required Guid Id { get; init; }
     public required string Title { get; init; }
     public string? Category { get; init; }
+
+    /// <summary>
+    /// Canonical ingredient classes the recipe contains, meaningful only when
+    /// <see cref="FactsAssessed"/> — an empty set on an unassessed recipe means
+    /// "unknown", never "contains nothing"
+    /// </summary>
+    public IReadOnlyList<IngredientClass> ContainsClasses { get; init; } = [];
+
+    /// <summary>Whether the recipe's dietary facts were ever assessed (AI or user)</summary>
+    public bool FactsAssessed { get; init; }
 }
 
 /// <summary>
@@ -134,6 +157,16 @@ public record MealSuggestionRequest
     /// </summary>
     public IReadOnlyDictionary<Guid, RecipeAllergenInfo> RecipeAllergens { get; init; }
         = new Dictionary<Guid, RecipeAllergenInfo>();
+
+    /// <summary>
+    /// Known recipes whose assessed facts conflict with an attending member's
+    /// ALLERGY exclusions (never diets). The recipes stay in
+    /// <see cref="KnownRecipes"/> so providers can still resolve them by
+    /// name/title — consumers exclude them instead: the prompt omits them from its
+    /// known-recipes block, the rules fallback skips favorites matching them, and
+    /// the count is surfaced to the review dialog.
+    /// </summary>
+    public IReadOnlyCollection<Guid> AllergyExcludedRecipeIds { get; init; } = new HashSet<Guid>();
 }
 
 /// <summary>Which provider produced a suggestion; drives a small UI marker</summary>
@@ -155,10 +188,19 @@ public record MealSuggestion
 
     /// <summary>
     /// Set when the post-hoc allergy check found the linked recipe conflicts with a
-    /// household allergy. Heuristic (ingredient-name substring match) so it only
-    /// warns — the suggestion is kept, never silently dropped.
+    /// household allergy — exact facts-vs-exclusions match on assessed recipes, the
+    /// ingredient-name substring heuristic on unassessed ones. Only warns; the
+    /// suggestion is kept, never silently dropped.
     /// </summary>
     public string? AllergyWarning { get; init; }
+
+    /// <summary>
+    /// Set when the linked recipe's assessed facts conflict with an attending
+    /// member's DIET exclusions (e.g. a meat dish while a vegetarian attends).
+    /// Softer than an allergy: warns only, and only exact facts are checked —
+    /// there is no heuristic diet guess.
+    /// </summary>
+    public string? DietWarning { get; init; }
 
     /// <summary>Freezy item id when this dish comes from the freezer; reserves stock once accepted</summary>
     public string? FreezyItemRef { get; init; }

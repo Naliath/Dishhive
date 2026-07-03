@@ -23,8 +23,8 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         var dto = new CreateFamilyMemberDto
         {
             Name = "Anna",
-            AllergyTags = ["Noten"],
-            DietTags = ["Vegetarisch"],
+            AllergyTags = Tags("Noten"),
+            DietTags = Tags("Vegetarisch"),
             PreferenceNotes = "houdt van pasta"
         };
 
@@ -34,10 +34,111 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         created!.Id.Should().NotBeEmpty();
         created.Name.Should().Be("Anna");
-        created.AllergyTags.Should().Equal("Noten");
-        created.DietTags.Should().Equal("Vegetarisch");
+        created.AllergyTags.Select(t => t.Name).Should().Equal("Noten");
+        created.DietTags.Select(t => t.Name).Should().Equal("Vegetarisch");
         created.IsGuest.Should().BeFalse();
         created.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CreateMember_SeedsExcludedClassesFromPresets()
+    {
+        var created = await CreateMemberAsync("Anna",
+            allergyTags: ["Noten"], dietTags: ["Vegetarisch"]);
+
+        created.AllergyTags.Single().ExcludedClasses.Should().Equal("TreeNuts");
+        created.DietTags.Single().ExcludedClasses.Should().BeEquivalentTo(
+            "RedMeat", "Poultry", "Pork", "Fish", "Crustaceans", "Molluscs", "Gelatin");
+    }
+
+    [Fact]
+    public async Task CreateMember_UnknownTagName_GetsEmptyClasses()
+    {
+        var created = await CreateMemberAsync("Anna", dietTags: ["Koosjer"]);
+
+        created.DietTags.Single().ExcludedClasses.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CreateMember_ExplicitClasses_OverridePreset()
+    {
+        // This vegetarian eats fish: the member's own definition wins over the preset
+        var dto = new CreateFamilyMemberDto
+        {
+            Name = "Anna",
+            DietTags =
+            [
+                new DietaryTagEntryDto
+                {
+                    Name = "Vegetarisch",
+                    ExcludedClasses = ["RedMeat", "Poultry", "Pork", "Gelatin"]
+                }
+            ]
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/familymembers", dto);
+        var created = await response.Content.ReadFromJsonAsync<FamilyMemberDto>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        created!.DietTags.Single().ExcludedClasses
+            .Should().BeEquivalentTo("RedMeat", "Poultry", "Pork", "Gelatin");
+    }
+
+    [Fact]
+    public async Task SharedTag_CanHaveDifferentClassesPerMember()
+    {
+        // One shared "Vegetarisch" tag, two readings of it
+        var strict = await CreateMemberAsync("Strikt", dietTags: ["Vegetarisch"]);
+        var response = await Client.PostAsJsonAsync("/api/familymembers", new CreateFamilyMemberDto
+        {
+            Name = "EetVis",
+            DietTags =
+            [
+                new DietaryTagEntryDto
+                {
+                    Name = "Vegetarisch",
+                    ExcludedClasses = ["RedMeat", "Poultry", "Pork", "Gelatin"]
+                }
+            ]
+        });
+        var eetVis = await response.Content.ReadFromJsonAsync<FamilyMemberDto>();
+
+        var tags = await Client.GetFromJsonAsync<List<DietaryTagDto>>("/api/dietarytags");
+        tags!.Should().ContainSingle(t => t.Kind == DietaryTagKind.Diet);
+        strict.DietTags.Single().ExcludedClasses.Should().Contain("Fish");
+        eetVis!.DietTags.Single().ExcludedClasses.Should().NotContain("Fish");
+    }
+
+    [Fact]
+    public async Task UpdateMember_NullClasses_KeepStoredDefinition()
+    {
+        var created = await CreateMemberAsync("Anna", allergyTags: ["Noten"]);
+
+        // Re-submitting the tag without classes (the normal "edited something else"
+        // save) must not wipe the stored definition
+        var update = new UpdateFamilyMemberDto
+        {
+            Name = "Anna",
+            AllergyTags = [new DietaryTagEntryDto { Name = "Noten", ExcludedClasses = null }]
+        };
+        var response = await Client.PutAsJsonAsync($"/api/familymembers/{created.Id}", update);
+        var updated = await response.Content.ReadFromJsonAsync<FamilyMemberDto>();
+
+        updated!.AllergyTags.Single().ExcludedClasses.Should().Equal("TreeNuts");
+    }
+
+    [Fact]
+    public async Task CreateMember_UnknownClassName_ReturnsBadRequest()
+    {
+        var dto = new CreateFamilyMemberDto
+        {
+            Name = "Anna",
+            AllergyTags = [new DietaryTagEntryDto { Name = "Noten", ExcludedClasses = ["Kryptonite"] }]
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/familymembers", dto);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -75,7 +176,7 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         {
             Name = "Bijgewerkt",
             IsGuest = true,
-            AllergyTags = ["Lactose"],
+            AllergyTags = Tags("Lactose"),
             IsActive = true
         };
 
@@ -85,7 +186,7 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         updated!.Name.Should().Be("Bijgewerkt");
         updated.IsGuest.Should().BeTrue();
-        updated.AllergyTags.Should().Equal("Lactose");
+        updated.AllergyTags.Select(t => t.Name).Should().Equal("Lactose");
     }
 
     [Fact]
@@ -95,11 +196,11 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         var second = await CreateMemberAsync("Tweede", allergyTags: ["noten"]);
 
         // Both members link to the same tag, original casing preserved
-        second.AllergyTags.Should().Equal("Noten");
+        second.AllergyTags.Select(t => t.Name).Should().Equal("Noten");
         var tags = await Client.GetFromJsonAsync<List<DietaryTagDto>>("/api/dietarytags");
         tags!.Should().ContainSingle(t => t.Kind == DietaryTagKind.Allergy)
             .Which.Name.Should().Be("Noten");
-        first.AllergyTags.Should().Equal("Noten");
+        first.AllergyTags.Select(t => t.Name).Should().Equal("Noten");
     }
 
     [Fact]
@@ -146,7 +247,7 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         var dto = new CreateFamilyMemberDto
         {
             Name = "Anna",
-            AllergyTags = [new string('x', 51)]
+            AllergyTags = Tags(new string('x', 51))
         };
 
         var response = await Client.PostAsJsonAsync("/api/familymembers", dto);
@@ -159,8 +260,12 @@ public class FamilyMembersControllerIntegrationTests : TestBase
     {
         var created = await CreateMemberAsync("Anna", allergyTags: ["Noten", " noten ", "NOTEN"]);
 
-        created.AllergyTags.Should().Equal("Noten");
+        created.AllergyTags.Select(t => t.Name).Should().Equal("Noten");
     }
+
+    private static List<DietaryTagEntryDto> Tags(params string[] names) => names
+        .Select(n => new DietaryTagEntryDto { Name = n })
+        .ToList();
 
     private async Task<FamilyMemberDto> CreateMemberAsync(
         string name, List<string>? allergyTags = null, List<string>? dietTags = null)
@@ -168,8 +273,8 @@ public class FamilyMembersControllerIntegrationTests : TestBase
         var response = await Client.PostAsJsonAsync("/api/familymembers", new CreateFamilyMemberDto
         {
             Name = name,
-            AllergyTags = allergyTags ?? [],
-            DietTags = dietTags ?? []
+            AllergyTags = Tags([.. allergyTags ?? []]),
+            DietTags = Tags([.. dietTags ?? []])
         });
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         return (await response.Content.ReadFromJsonAsync<FamilyMemberDto>())!;

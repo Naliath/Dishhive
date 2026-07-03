@@ -129,6 +129,20 @@
 
     <mat-card appearance="outlined">
       <mat-card-header>
+        <mat-card-title>Contains</mat-card-title>
+        <mat-card-subtitle>
+          Allergens and ingredient classes in this dish — the week planner checks
+          them against everyone's allergies and diets. {{ factsStatusLabel() }}
+        </mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content class="form-section">
+        <app-class-picker [selected]="containsClasses()"
+                          (selectedChange)="setContainsClasses($event)" />
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined">
+      <mat-card-header>
         <mat-card-title>Preparation steps</mat-card-title>
       </mat-card-header>
       <mat-card-content class="form-section">

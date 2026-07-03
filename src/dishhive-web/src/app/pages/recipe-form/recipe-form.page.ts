@@ -10,10 +10,11 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { ClassPickerComponent } from '../../components/class-picker/class-picker';
 import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { RecipesService } from '../../services/recipes.service';
 import { PlannedMealsService } from '../../services/planned-meals.service';
-import { CreateRecipe } from '../../models/recipe.model';
+import { CreateRecipe, DietaryFactsStatus } from '../../models/recipe.model';
 
 interface IngredientRow {
   name: string;
@@ -33,6 +34,7 @@ interface StepRow {
   selector: 'app-recipe-form-page',
   standalone: true,
   imports: [
+    ClassPickerComponent,
     CookingLoaderComponent,
     RouterLink,
     FormsModule,
@@ -82,6 +84,27 @@ export class RecipeFormPage implements OnInit {
 
   /** Known ingredient names, so existing spellings win over new variants */
   private readonly knownIngredients = signal<string[]>([]);
+
+  // Dietary facts: only submitted when the user touched the picker, so an
+  // untouched form keeps AI detection (create) or the stored facts (edit)
+  readonly containsClasses = signal<string[]>([]);
+  readonly factsStatus = signal<DietaryFactsStatus>(DietaryFactsStatus.Unassessed);
+  readonly factsTouched = signal(false);
+  readonly factsStatusLabel = computed(() => {
+    if (this.factsTouched()) {
+      return 'Will be saved as confirmed by you';
+    }
+    switch (this.factsStatus()) {
+      case DietaryFactsStatus.AiDetected: return 'AI-detected — tick/untick to confirm or correct';
+      case DietaryFactsStatus.UserConfirmed: return 'Confirmed by you';
+      default: return 'Not assessed yet — leave untouched to let AI detect them on save';
+    }
+  });
+
+  setContainsClasses(classes: string[]): void {
+    this.containsClasses.set(classes);
+    this.factsTouched.set(true);
+  }
 
   /** When set, the new recipe is linked to this planned meal after saving
    *  (entry point: the shopping list's "still to decide" section) */
@@ -138,6 +161,8 @@ export class RecipeFormPage implements OnInit {
           ? recipe.steps.map(s => ({ instruction: s.instruction }))
           : [{ instruction: '' }];
         this.tags.set([...recipe.tags]);
+        this.containsClasses.set([...recipe.dietaryFacts.contains]);
+        this.factsStatus.set(recipe.dietaryFacts.status);
         this.loading.set(false);
       },
       error: () => {
@@ -234,7 +259,8 @@ export class RecipeFormPage implements OnInit {
       steps: this.steps
         .filter(s => s.instruction.trim())
         .map(s => ({ instruction: s.instruction.trim() })),
-      tags: this.tags()
+      tags: this.tags(),
+      containsClasses: this.factsTouched() ? this.containsClasses() : null
     };
 
     this.saving.set(true);

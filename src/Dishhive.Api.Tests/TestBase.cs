@@ -35,6 +35,7 @@ public abstract class TestBase : IDisposable
         DbContext.PlannedMeals.RemoveRange(DbContext.PlannedMeals);
         DbContext.RecipeIngredients.RemoveRange(DbContext.RecipeIngredients);
         DbContext.RecipeSteps.RemoveRange(DbContext.RecipeSteps);
+        DbContext.RecipeDietaryFacts.RemoveRange(DbContext.RecipeDietaryFacts);
         DbContext.Recipes.RemoveRange(DbContext.Recipes);
         DbContext.FamilyMembers.RemoveRange(DbContext.FamilyMembers);
         DbContext.UserSettings.RemoveRange(DbContext.UserSettings);

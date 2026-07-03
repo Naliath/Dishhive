@@ -65,6 +65,17 @@
             </span>
           </div>
         }
+        @if (excludedForAllergies() > 0) {
+          <div class="fallback-banner excluded-banner">
+            <mat-icon>no_meals</mat-icon>
+            <span>
+              {{ excludedForAllergies() }}
+              {{ excludedForAllergies() === 1 ? 'recipe was' : 'recipes were' }} excluded
+              because of household allergies. Wrongly excluded? Correct the facts on the
+              recipe's page.
+            </span>
+          </div>
+        }
         <div class="suggestion-list">
           @for (group of groupedSuggestions(); track group.date) {
             <div class="suggestion-day">
@@ -102,6 +113,12 @@
                       <span class="suggestion-allergy">
                         <mat-icon>warning</mat-icon>
                         {{ item.suggestion.allergyWarning }}
+                      </span>
+                    }
+                    @if (item.suggestion.dietWarning) {
+                      <span class="suggestion-diet">
+                        <mat-icon>restaurant</mat-icon>
+                        {{ item.suggestion.dietWarning }}
                       </span>
                     }
                     @if (item.suggestion.reason) {

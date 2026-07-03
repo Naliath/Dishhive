@@ -20,9 +20,11 @@ implementation checklist that is updated as work progresses.
 | [meal-feedback.md](meal-feedback.md) | Mark meals eaten/skipped, per-member ratings | past-dishes-and-statistics |
 | [ai-week-planning.md](ai-week-planning.md) | LLM week suggestions (5 providers) + rules fallback | week-planner, meal-feedback, freezy-integration |
 | [dietary-tags.md](dietary-tags.md) | Structured allergy/diet tags replacing free text | family-composition |
+| [dietary-facts.md](dietary-facts.md) | AI-detected ingredient-class facts per recipe; allergy pre-filter + exact planner checks | dietary-tags, recipe-store, ai-week-planning |
 | [recipe-organization.md](recipe-organization.md) | Recipe tags, category filter, cookbooks (saved filters) | recipe-store |
 | [pwa-support.md](pwa-support.md) | Installable app + offline read of plan and shopping list | week-planner, shopping-list-export |
 | [recipe-import-export.md](recipe-import-export.md) | Library backup/restore as schema.org Recipe JSON | recipe-store, recipe-import |
+| [mcp-server.md](mcp-server.md) | MCP endpoint (/mcp): local AI reads the week plan, eaten history and recipes | week-planner, meal-feedback, recipe-store |
 
 Future ideas live in [`../../possible-features.md`](../../possible-features.md).
 The infrastructure foundation is planned in

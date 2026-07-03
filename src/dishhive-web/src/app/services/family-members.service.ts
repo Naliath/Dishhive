@@ -8,7 +8,8 @@ import {
   UpdateFamilyMember,
   FamilyMemberFavorite,
   CreateFamilyMemberFavorite,
-  DietaryTag
+  DietaryTag,
+  DietaryTagKind
 } from '../models/family-member.model';
 
 @Injectable({ providedIn: 'root' })
@@ -47,6 +48,16 @@ export class FamilyMembersService {
   getDietaryTags(): Observable<DietaryTag[]> {
     return this.http.get<DietaryTag[]>('/api/dietarytags')
       .pipe(catchError(this.handleError));
+  }
+
+  /**
+   * The built-in preset excluded classes for a tag name, so the form can show
+   * what a not-yet-saved tag will mean (empty = not machine-checkable)
+   */
+  getTagPreset(name: string, kind: DietaryTagKind): Observable<{ excludedClasses: string[] }> {
+    return this.http.get<{ excludedClasses: string[] }>('/api/dietarytags/preset', {
+      params: { name, kind }
+    }).pipe(catchError(this.handleError));
   }
 
   getFavorites(memberId: string): Observable<FamilyMemberFavorite[]> {

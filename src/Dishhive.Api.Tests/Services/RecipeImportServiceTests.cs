@@ -1,8 +1,10 @@
 using Dishhive.Api.Data;
+using Dishhive.Api.Services.Facts;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Tests.Mocks;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Dishhive.Api.Tests.Services;
@@ -37,6 +39,12 @@ public class RecipeImportServiceTests : IDisposable
         return File.ReadAllText(path);
     }
 
+    /// <summary>Facts queue with the NoOp extractor: enqueue is a no-op, worker never runs</summary>
+    private static RecipeFactsAssessmentService NoOpFactsQueue() => new(
+        new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
+        new NoOpRecipeFactsExtractor(),
+        NullLogger<RecipeFactsAssessmentService>.Instance);
+
     private RecipeImportService CreateService(MockHttpMessageHandler handler)
     {
         return new RecipeImportService(
@@ -44,6 +52,7 @@ public class RecipeImportServiceTests : IDisposable
             [new DagelijkseKostProvider()],
             _context,
             new NoOpLlmRecipeExtractor(),
+            NoOpFactsQueue(),
             NullLogger<RecipeImportService>.Instance);
     }
 
@@ -165,6 +174,7 @@ public class RecipeImportServiceTests : IDisposable
             [new DagelijkseKostProvider(), fallback],
             _context,
             new NoOpLlmRecipeExtractor(),
+            NoOpFactsQueue(),
             NullLogger<RecipeImportService>.Instance);
     }
 
@@ -214,6 +224,7 @@ public class RecipeImportServiceTests : IDisposable
             [new DagelijkseKostProvider()], // does not handle blog.example
             _context,
             extractor,
+            NoOpFactsQueue(),
             NullLogger<RecipeImportService>.Instance);
 
         var recipe = await service.ImportAsync("https://blog.example/dish");

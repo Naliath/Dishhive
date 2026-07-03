@@ -1,6 +1,8 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Extensions;
+using Dishhive.Api.Mcp;
 using Dishhive.Api.Services.Demo;
+using Dishhive.Api.Services.Facts;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.ShoppingList;
@@ -129,6 +131,8 @@ if (!builder.Environment.IsEnvironment("Testing") && aiOptions.IsConfigured)
     // LLM recipe extraction fallback for import (used when the structured scrapers fail);
     // singleton — it only depends on the singleton IChatClient/AiOptions
     builder.Services.AddSingleton<ILlmRecipeExtractor, LlmRecipeExtractor>();
+    // Dietary-facts classification of recipes (contains milk/gluten/…), same posture
+    builder.Services.AddSingleton<IRecipeFactsExtractor, LlmRecipeFactsExtractor>();
     // Model capability test: runs once at startup (AiModelStartupTest) and gates every
     // AI suggestion call on its verdict; re-triggerable from the settings page.
     builder.Services.AddSingleton<AiModelTester>();
@@ -139,7 +143,16 @@ else
 {
     builder.Services.AddSingleton<IMealSuggestionService, NoOpMealSuggestionService>();
     builder.Services.AddSingleton<ILlmRecipeExtractor, NoOpLlmRecipeExtractor>();
+    builder.Services.AddSingleton<IRecipeFactsExtractor, NoOpRecipeFactsExtractor>();
     builder.Services.AddSingleton<IAiModelCapabilityService, NoOpAiModelCapabilityService>();
+}
+// Background dietary-facts assessment queue. The singleton is always registered
+// (controllers and the import service enqueue into it; with AI unconfigured the
+// enqueue is a visible no-op), the worker loop only outside Testing.
+builder.Services.AddSingleton<RecipeFactsAssessmentService>();
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<RecipeFactsAssessmentService>());
 }
 // Editable AI system prompt (settings-backed); registered regardless of AI state so
 // the settings endpoints work, and the suggestion pipeline reads the effective prompt
@@ -207,6 +220,17 @@ builder.Services.AddCors(options =>
     });
 });
 
+// MCP server: read-only planning/recipe tools for local AI clients on /mcp
+// (see docs/features/mcp-server.md). Stateless streamable HTTP — the tools are
+// simple request/response reads, so no session tracking is needed and clients
+// can reconnect freely. Same trust boundary as the unauthenticated REST API.
+builder.Services.AddMcpServer(options =>
+    {
+        options.ServerInfo = new() { Name = "Dishhive", Version = AppVersion.Version };
+    })
+    .WithHttpTransport(options => options.Stateless = true)
+    .WithTools<DishhiveMcpTools>();
+
 var app = builder.Build();
 
 // =============================================================================
@@ -229,10 +253,14 @@ app.MapHealthChecks("/health");
 // API Controllers - map before static files
 app.MapControllers();
 
+// MCP endpoint (streamable HTTP) for local AI clients
+app.MapMcp("/mcp");
+
 // Serve static files (Angular app) - only for non-API routes
 app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api")
                      && !context.Request.Path.StartsWithSegments("/openapi")
                      && !context.Request.Path.StartsWithSegments("/scalar")
+                     && !context.Request.Path.StartsWithSegments("/mcp")
                      && !context.Request.Path.StartsWithSegments("/health"), appBuilder =>
 {
     appBuilder.UseDefaultFiles();
@@ -242,10 +270,11 @@ app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api")
 // Fallback to index.html for Angular routing (SPA) - exclude API/OpenAPI routes
 app.MapFallback(context =>
 {
-    // Don't fallback for API, OpenAPI, Scalar, or health routes
+    // Don't fallback for API, OpenAPI, Scalar, MCP, or health routes
     if (context.Request.Path.StartsWithSegments("/api") ||
         context.Request.Path.StartsWithSegments("/openapi") ||
         context.Request.Path.StartsWithSegments("/scalar") ||
+        context.Request.Path.StartsWithSegments("/mcp") ||
         context.Request.Path.StartsWithSegments("/health"))
     {
         context.Response.StatusCode = 404;

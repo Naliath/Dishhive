@@ -33,10 +33,18 @@ public class MealSuggestionDto
     public bool FromFallback { get; set; }
 
     /// <summary>
-    /// Heuristic warning that the linked recipe may conflict with a household
-    /// allergy; surfaced in the review dialog (never used to hide the suggestion)
+    /// Warning that the linked recipe conflicts with a household allergy (exact
+    /// facts match on assessed recipes, ingredient-substring heuristic otherwise);
+    /// surfaced in the review dialog (never used to hide the suggestion)
     /// </summary>
     public string? AllergyWarning { get; set; }
+
+    /// <summary>
+    /// Warning that the linked recipe's assessed facts conflict with an attendee's
+    /// diet tag (e.g. a meat dish while a vegetarian attends); softer than an
+    /// allergy warning and likewise never hides the suggestion
+    /// </summary>
+    public string? DietWarning { get; set; }
 
     /// <summary>Freezy item id when this dish comes from the freezer (reserves stock once accepted)</summary>
     public string? FreezyItemRef { get; set; }
@@ -62,6 +70,14 @@ public class MealSuggestionsDto
 {
     public bool Enabled { get; set; }
     public List<MealSuggestionDto> Suggestions { get; set; } = new();
+
+    /// <summary>
+    /// How many known recipes were kept out of planning because their assessed
+    /// facts conflict with an attendee's allergy exclusions. Surfaced in the
+    /// review dialog so a false-positive AI fact is discoverable instead of a
+    /// recipe silently never appearing again.
+    /// </summary>
+    public int ExcludedForAllergies { get; set; }
 }
 
 public class SuggestionStatusDto

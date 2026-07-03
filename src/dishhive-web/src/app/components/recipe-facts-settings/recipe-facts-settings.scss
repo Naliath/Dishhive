@@ -1,0 +1,40 @@
+.facts-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-block-end: 12px;
+}
+
+.facts-count {
+  color: var(--mat-sys-on-surface-variant);
+
+  &--unassessed strong {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.facts-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.facts-hint {
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.facts-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  color: var(--mat-sys-error);
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}

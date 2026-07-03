@@ -96,7 +96,7 @@ export class MealSlotDialog {
     const selected = this.attendeeIds();
     return this.data.members
       .filter(m => selected.has(m.id) && (m.allergyTags.length > 0 || m.dietTags.length > 0))
-      .map(m => `${m.name}: ${[...m.allergyTags, ...m.dietTags].join(', ')}`);
+      .map(m => `${m.name}: ${[...m.allergyTags, ...m.dietTags].map(t => t.name).join(', ')}`);
   });
 
   readonly selectedFreezerItem = computed(() =>

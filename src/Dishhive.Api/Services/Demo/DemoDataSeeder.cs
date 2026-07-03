@@ -209,7 +209,9 @@ public class DemoDataSeeder : BackgroundService
             member.DietaryTags.Add(new FamilyMemberDietaryTag
             {
                 FamilyMember = member,
-                DietaryTag = tag
+                DietaryTag = tag,
+                // Same preset seeding a member saved through the API gets
+                ExcludedClasses = [.. DietaryTagPresets.Resolve(name, kind)]
             });
         }
     }

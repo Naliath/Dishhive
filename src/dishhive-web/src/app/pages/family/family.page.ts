@@ -13,10 +13,12 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { forkJoin } from 'rxjs';
+import { ClassPickerComponent } from '../../components/class-picker/class-picker';
 import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { RecipesService } from '../../services/recipes.service';
-import { DietaryTagKind, FamilyMember, FamilyMemberFavorite } from '../../models/family-member.model';
+import { DietaryTagEntry, DietaryTagKind, FamilyMember, FamilyMemberFavorite } from '../../models/family-member.model';
+import { ingredientClassLabels } from '../../models/ingredient-class.model';
 import { RecipeListItem } from '../../models/recipe.model';
 
 type TagField = 'allergy' | 'diet';
@@ -25,6 +27,7 @@ type TagField = 'allergy' | 'diet';
   selector: 'app-family-page',
   standalone: true,
   imports: [
+    ClassPickerComponent,
     CookingLoaderComponent,
     FormsModule,
     MatAutocompleteModule,
@@ -57,12 +60,23 @@ export class FamilyPage implements OnInit {
   name = '';
   isGuest = false;
   preferenceNotes = '';
-  readonly allergyTags = signal<string[]>([]);
-  readonly dietTags = signal<string[]>([]);
+  readonly allergyTags = signal<DietaryTagEntry[]>([]);
+  readonly dietTags = signal<DietaryTagEntry[]>([]);
   readonly allergyInput = signal('');
   readonly dietInput = signal('');
   newFavorite = '';
   readonly favoriteRecipeResults = signal<RecipeListItem[]>([]);
+
+  /** The tag whose excluded-classes definition is expanded in the form, if any */
+  readonly definitionTag = signal<{ field: TagField; name: string } | null>(null);
+  readonly definitionEntry = computed<DietaryTagEntry | null>(() => {
+    const open = this.definitionTag();
+    if (!open) {
+      return null;
+    }
+    const entries = open.field === 'allergy' ? this.allergyTags() : this.dietTags();
+    return entries.find(e => e.name === open.name) ?? null;
+  });
 
   /** Known tag names per kind, from the shared tag pool (for autocomplete) */
   private readonly knownAllergyTags = signal<string[]>([]);
@@ -72,6 +86,13 @@ export class FamilyPage implements OnInit {
     this.filterOptions(this.knownAllergyTags(), this.allergyTags(), this.allergyInput()));
   readonly dietOptions = computed(() =>
     this.filterOptions(this.knownDietTags(), this.dietTags(), this.dietInput()));
+
+  /** Tooltip text for a tag chip: its excluded classes, human-readable */
+  classesTooltip(entry: DietaryTagEntry): string {
+    return entry.excludedClasses?.length
+      ? `Excludes: ${ingredientClassLabels(entry.excludedClasses)}`
+      : 'Not machine-checkable (no excluded ingredient classes)';
+  }
 
   constructor(
     private familyMembersService: FamilyMembersService,
@@ -187,10 +208,11 @@ export class FamilyPage implements OnInit {
     this.name = member.name;
     this.isGuest = member.isGuest;
     this.preferenceNotes = member.preferenceNotes ?? '';
-    this.allergyTags.set([...member.allergyTags]);
-    this.dietTags.set([...member.dietTags]);
+    this.allergyTags.set(member.allergyTags.map(t => ({ ...t })));
+    this.dietTags.set(member.dietTags.map(t => ({ ...t })));
     this.allergyInput.set('');
     this.dietInput.set('');
+    this.definitionTag.set(null);
     this.formVisible.set(true);
   }
 
@@ -209,8 +231,30 @@ export class FamilyPage implements OnInit {
     event.option.deselect();
   }
 
-  removeTag(field: TagField, tag: string): void {
-    this.tagsOf(field).update(tags => tags.filter(t => t !== tag));
+  removeTag(field: TagField, name: string): void {
+    this.tagsOf(field).update(tags => tags.filter(t => t.name !== name));
+    const open = this.definitionTag();
+    if (open && open.field === field && open.name === name) {
+      this.definitionTag.set(null);
+    }
+  }
+
+  /** Expand/collapse the excluded-classes editor for a tag chip */
+  toggleDefinition(field: TagField, name: string): void {
+    const open = this.definitionTag();
+    this.definitionTag.set(open && open.field === field && open.name === name
+      ? null
+      : { field, name });
+  }
+
+  /** The class picker edited the open tag's definition */
+  setDefinitionClasses(classes: string[]): void {
+    const open = this.definitionTag();
+    if (!open) {
+      return;
+    }
+    this.tagsOf(open.field).update(tags =>
+      tags.map(t => t.name === open.name ? { ...t, excludedClasses: classes } : t));
   }
 
   private addTag(field: TagField, value: string): void {
@@ -219,8 +263,21 @@ export class FamilyPage implements OnInit {
       return;
     }
     this.tagsOf(field).update(tags =>
-      tags.some(t => t.toLowerCase() === name.toLowerCase()) ? tags : [...tags, name]);
+      tags.some(t => t.name.toLowerCase() === name.toLowerCase())
+        ? tags
+        : [...tags, { name, excludedClasses: null }]);
     this.inputOf(field).set('');
+
+    // Resolve the preset up front so the chip's definition is visible/editable
+    // before saving (the API would seed the same set on save)
+    const kind = field === 'allergy' ? DietaryTagKind.Allergy : DietaryTagKind.Diet;
+    this.familyMembersService.getTagPreset(name, kind).subscribe({
+      next: preset => this.tagsOf(field).update(tags =>
+        tags.map(t => t.name === name && t.excludedClasses === null
+          ? { ...t, excludedClasses: preset.excludedClasses }
+          : t)),
+      error: () => { /* preview only; the API seeds presets on save regardless */ }
+    });
   }
 
   private tagsOf(field: TagField) {
@@ -231,10 +288,10 @@ export class FamilyPage implements OnInit {
     return field === 'allergy' ? this.allergyInput : this.dietInput;
   }
 
-  private filterOptions(known: string[], selected: string[], input: string): string[] {
+  private filterOptions(known: string[], selected: DietaryTagEntry[], input: string): string[] {
     const query = input.trim().toLowerCase();
     return known
-      .filter(name => !selected.some(s => s.toLowerCase() === name.toLowerCase()))
+      .filter(name => !selected.some(s => s.name.toLowerCase() === name.toLowerCase()))
       .filter(name => !query || name.toLowerCase().includes(query));
   }
 
@@ -296,5 +353,6 @@ export class FamilyPage implements OnInit {
     this.dietTags.set([]);
     this.allergyInput.set('');
     this.dietInput.set('');
+    this.definitionTag.set(null);
   }
 }

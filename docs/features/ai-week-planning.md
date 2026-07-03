@@ -230,11 +230,31 @@ IMealSuggestionService
   for negligible token savings given the block is already small. Revisit only if the recipe
   library grows large enough that the ranked/capped list starts meaningfully dropping
   relevant candidates — that's the actual scaling problem a retrieval tool solves.
-- **Allergy net**: after parsing, a suggestion linked to a known recipe whose ingredient
-  names contain a household allergy term gets an `AllergyWarning` (surfaced in the review
-  dialog). Heuristic and secondary to the prompt rule — it flags, never drops, and only
-  for recipe-linked dishes. The candidate recipes' ingredient names are loaded for this
-  check only and are **not** sent to the model.
+- **Constraint net & allergy pre-filter** (July 2026, see
+  [dietary-facts.md](dietary-facts.md)): recipes carry assessed ingredient-class facts
+  and member tags carry per-member excluded classes, so the checks are exact where
+  facts exist:
+    - **Pre-filter**: `MealSuggestionRequestBuilder` computes `AllergyExcludedRecipeIds`
+      (assessed facts ∩ an attending member's allergy exclusions). `KnownRecipes` stays
+      complete so titles remain resolvable — the prompt omits excluded recipes from its
+      block, the rules fallback skips favorites matching them entirely, `#[Collection]`
+      constraints drop excluded titles, and the count is surfaced to the review dialog
+      (`excludedForAllergies`) so a false-positive AI fact is discoverable. Diets never
+      hard-filter — annotation + warning only.
+    - **Prompt annotations**: assessed candidates render `[contains: Milk, Gluten]`
+      (`[contains: none]` = verified clean), member tags render `[excludes: …]`, and a
+      protected-prompt rule forbids overlap — covering the free-text dishes the model
+      invents, which no list filter can.
+    - **Post-hoc net** (`FlagConstraintConflicts`): assessed + linked → exact
+      intersection (allergy ⇒ `AllergyWarning`, diet ⇒ `DietWarning` — diets previously
+      had no post-hoc check at all); unassessed + linked → the legacy ingredient-name
+      substring heuristic, allergies only. Flags, never drops. Ingredient names are
+      still loaded for the heuristic only and are **not** sent to the model.
+    - **Coverage fix (was a real hole)**: flagging used to run only inside
+      `PostProcess`, so full rules-fallback answers (capability gate, unparseable
+      reply, exception) and rules-backfilled days were returned with checkable allergy
+      conflicts **unflagged**. `Finalize()` now runs the net as the single last step of
+      every `SuggestAsync` exit; regression-tested.
 - **Failure posture**: AI errors are logged and answered by the fallback; the endpoint
   never 500s because a model is down (Freezy precedent).
 

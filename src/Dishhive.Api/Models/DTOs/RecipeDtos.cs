@@ -2,6 +2,21 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Dishhive.Api.Models.DTOs;
 
+/// <summary>
+/// A recipe's dietary facts: the canonical ingredient classes it contains plus the
+/// tri-state assessment status. An Unassessed recipe's empty Contains list means
+/// "unknown", never "contains nothing" — consumers must check the status.
+/// </summary>
+public class RecipeDietaryFactsDto
+{
+    /// <summary>IngredientClass names (e.g. "Milk", "Gluten", "Pork")</summary>
+    public List<string> Contains { get; set; } = [];
+
+    public DietaryFactsStatus Status { get; set; }
+
+    public DateTime? AssessedAt { get; set; }
+}
+
 /// <summary>Slim DTO for recipe lists and planner autocomplete</summary>
 public class RecipeListItemDto
 {
@@ -61,6 +76,9 @@ public class RecipeDto
 
     /// <summary>Ids of the manual collections this recipe belongs to</summary>
     public List<Guid> CookbookIds { get; set; } = new();
+
+    /// <summary>Dietary facts (contained ingredient classes + assessment status)</summary>
+    public RecipeDietaryFactsDto DietaryFacts { get; set; } = new();
 }
 
 public class RecipeIngredientDto
@@ -116,6 +134,13 @@ public class CreateRecipeDto
     /// <summary>Organization tag names; tags are created when new, synced on update</summary>
     [MaxLength(20)]
     public List<string> Tags { get; set; } = new();
+
+    /// <summary>
+    /// Contained IngredientClass names. Null = untouched: a create queues an AI
+    /// assessment, an update keeps the stored facts (unless the ingredients changed,
+    /// which re-queues). Non-null = the user set them explicitly → UserConfirmed.
+    /// </summary>
+    public List<string>? ContainsClasses { get; set; }
 }
 
 public class CreateRecipeIngredientDto
@@ -237,3 +262,38 @@ public class RecipeCookbooksRequestDto
 
 /// <summary>A known recipe source for the week-planner's @[Source] picker</summary>
 public record RecipeSourceDto(string Name, string Host);
+
+/// <summary>User-set dietary facts for a recipe (PUT …/facts → UserConfirmed)</summary>
+public class UpdateRecipeFactsDto
+{
+    /// <summary>IngredientClass names the recipe contains (may be empty = contains none)</summary>
+    [Required]
+    public List<string> Contains { get; set; } = [];
+}
+
+/// <summary>
+/// Library-wide facts progress for the settings page: how much of the library is
+/// assessed and how the background queue is doing (polled during a backfill)
+/// </summary>
+public class RecipeFactsStatusDto
+{
+    public int Unassessed { get; set; }
+    public int AiDetected { get; set; }
+    public int UserConfirmed { get; set; }
+
+    /// <summary>Recipes waiting in (or being processed by) the assessment queue</summary>
+    public int QueueDepth { get; set; }
+
+    public bool Running { get; set; }
+
+    /// <summary>Whether AI is configured, i.e. whether assessment can run at all</summary>
+    public bool Available { get; set; }
+
+    public string? LastError { get; set; }
+}
+
+/// <summary>Result of a backfill request: how many recipes were newly queued</summary>
+public class RecipeFactsBackfillResultDto
+{
+    public int Enqueued { get; set; }
+}

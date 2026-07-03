@@ -86,4 +86,20 @@ public class Recipe
 
     /// <summary>Organization tags (see <see cref="RecipeTag"/>); user-curated</summary>
     public List<RecipeTagAssignment> Tags { get; set; } = new();
+
+    /// <summary>
+    /// Canonical ingredient classes this recipe contains (see
+    /// <see cref="IngredientClass"/>), meaningful only when
+    /// <see cref="DietaryFactsStatus"/> says the recipe was assessed
+    /// </summary>
+    public List<RecipeDietaryFact> DietaryFacts { get; set; } = new();
+
+    /// <summary>
+    /// Whether <see cref="DietaryFacts"/> was ever assessed and by whom (AI or user).
+    /// Unassessed recipes are excluded from exact-match allergy filtering — an empty
+    /// fact set must never read as "contains nothing".
+    /// </summary>
+    public DietaryFactsStatus DietaryFactsStatus { get; set; } = DietaryFactsStatus.Unassessed;
+
+    public DateTime? DietaryFactsAssessedAt { get; set; }
 }

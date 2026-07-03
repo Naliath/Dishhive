@@ -2,7 +2,10 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { CreateRecipe, Recipe, RecipeFileImportResult, RecipeFilter, RecipeListItem, RecipeTag } from '../models/recipe.model';
+import {
+  CreateRecipe, Recipe, RecipeDietaryFacts, RecipeFactsStatus, RecipeFileImportResult,
+  RecipeFilter, RecipeListItem, RecipeTag
+} from '../models/recipe.model';
 
 @Injectable({ providedIn: 'root' })
 export class RecipesService {
@@ -74,6 +77,24 @@ export class RecipesService {
   /** Import a recipe from a supported external source URL (see docs/features/recipe-import.md) */
   importRecipe(url: string): Observable<Recipe> {
     return this.http.post<Recipe>(`${this.apiUrl}/import`, { url });
+  }
+
+  /** Sets a recipe's dietary facts explicitly; they become user-confirmed */
+  setRecipeFacts(id: string, contains: string[]): Observable<RecipeDietaryFacts> {
+    return this.http.put<RecipeDietaryFacts>(`${this.apiUrl}/${id}/facts`, { contains })
+      .pipe(catchError(this.handleError));
+  }
+
+  /** Library-wide dietary-facts progress (settings page) */
+  getFactsStatus(): Observable<RecipeFactsStatus> {
+    return this.http.get<RecipeFactsStatus>(`${this.apiUrl}/facts/status`)
+      .pipe(catchError(this.handleError));
+  }
+
+  /** Queues all unassessed recipes for AI facts assessment */
+  backfillFacts(): Observable<{ enqueued: number }> {
+    return this.http.post<{ enqueued: number }>(`${this.apiUrl}/facts/backfill`, {})
+      .pipe(catchError(this.handleError));
   }
 
   /** Where the library export (schema.org Recipe JSON) downloads from */

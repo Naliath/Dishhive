@@ -1,0 +1,13 @@
+@for (group of groups; track group.label) {
+  <div class="class-group">
+    <span class="class-group-label mat-label-small">{{ group.label }}</span>
+    <div class="class-group-options">
+      @for (name of group.classes; track name) {
+        <mat-checkbox [checked]="isChecked(name)"
+                      (change)="toggle(name, $event.checked)">
+          {{ label(name) }}
+        </mat-checkbox>
+      }
+    </div>
+  </div>
+}

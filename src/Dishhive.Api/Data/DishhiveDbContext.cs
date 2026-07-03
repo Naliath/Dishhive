@@ -1,5 +1,6 @@
 using Dishhive.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Dishhive.Api.Data;
 
@@ -14,6 +15,7 @@ public class DishhiveDbContext : DbContext
     public DbSet<DietaryTag> DietaryTags => Set<DietaryTag>();
     public DbSet<FamilyMemberDietaryTag> FamilyMemberDietaryTags => Set<FamilyMemberDietaryTag>();
     public DbSet<Recipe> Recipes => Set<Recipe>();
+    public DbSet<RecipeDietaryFact> RecipeDietaryFacts => Set<RecipeDietaryFact>();
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
     public DbSet<RecipeStep> RecipeSteps => Set<RecipeStep>();
     public DbSet<RecipeTag> RecipeTags => Set<RecipeTag>();
@@ -92,6 +94,23 @@ public class DishhiveDbContext : DbContext
                   .WithMany(t => t.Members)
                   .HasForeignKey(e => e.DietaryTagId)
                   .OnDelete(DeleteBehavior.Cascade);
+
+            // Per-member tag definition, stored as a CSV of enum names (readable in
+            // the DB, and the set is tiny — max 20 classes). Rows are always loaded
+            // with their member; matching happens in memory.
+            entity.Property(e => e.ExcludedClasses)
+                  .HasConversion(
+                      v => string.Join(',', v.Select(c => c.ToString())),
+                      v => v.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(Enum.Parse<IngredientClass>)
+                            .ToList(),
+                      new ValueComparer<List<IngredientClass>>(
+                          (a, b) => (a ?? new()).SequenceEqual(b ?? new()),
+                          v => v.Aggregate(0, (hash, c) => HashCode.Combine(hash, c)),
+                          v => v.ToList()))
+                  .HasMaxLength(500)
+                  .IsRequired()
+                  .HasDefaultValue(new List<IngredientClass>());
         });
 
         // Recipe configuration
@@ -118,6 +137,17 @@ public class DishhiveDbContext : DbContext
 
             // Unique source URL prevents duplicate imports (re-import updates instead)
             entity.HasIndex(e => e.SourceUrl).IsUnique();
+        });
+
+        // RecipeDietaryFact configuration (composite key: one row per contained class)
+        modelBuilder.Entity<RecipeDietaryFact>(entity =>
+        {
+            entity.HasKey(e => new { e.RecipeId, e.IngredientClass });
+
+            entity.HasOne(e => e.Recipe)
+                  .WithMany(r => r.DietaryFacts)
+                  .HasForeignKey(e => e.RecipeId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // RecipeIngredient configuration

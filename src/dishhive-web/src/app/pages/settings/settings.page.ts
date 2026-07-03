@@ -13,6 +13,7 @@ import { CookbooksService } from '../../services/cookbooks.service';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
 import { AiPromptSettingsComponent } from '../../components/ai-prompt-settings/ai-prompt-settings';
 import { IntegrationsStatusComponent } from '../../components/integrations-status/integrations-status';
+import { RecipeFactsSettingsComponent } from '../../components/recipe-facts-settings/recipe-facts-settings';
 import { MeasurementSystem } from '../../models/user-setting.model';
 import { AutoCollectionInfo } from '../../models/recipe.model';
 import { environment } from '../../../environments/environment';
@@ -22,7 +23,8 @@ import { environment } from '../../../environments/environment';
   standalone: true,
   imports: [
     MatButtonModule, MatButtonToggleModule, MatCardModule, MatIconModule, MatRadioModule,
-    MatSlideToggleModule, MatSnackBarModule, AiPromptSettingsComponent, IntegrationsStatusComponent
+    MatSlideToggleModule, MatSnackBarModule, AiPromptSettingsComponent, IntegrationsStatusComponent,
+    RecipeFactsSettingsComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings.page.html',

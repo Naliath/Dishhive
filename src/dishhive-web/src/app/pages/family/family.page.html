@@ -27,10 +27,13 @@
         <mat-form-field appearance="outline">
           <mat-label>Allergies / intolerances</mat-label>
           <mat-chip-grid #allergyGrid aria-label="Allergy tags">
-            @for (tag of allergyTags(); track tag) {
-              <mat-chip-row (removed)="removeTag('allergy', tag)">
-                {{ tag }}
-                <button matChipRemove [attr.aria-label]="'Remove ' + tag">
+            @for (tag of allergyTags(); track tag.name) {
+              <mat-chip-row (removed)="removeTag('allergy', tag.name)"
+                            (click)="toggleDefinition('allergy', tag.name)"
+                            [matTooltip]="classesTooltip(tag)"
+                            class="definition-chip">
+                {{ tag.name }}
+                <button matChipRemove [attr.aria-label]="'Remove ' + tag.name">
                   <mat-icon>cancel</mat-icon>
                 </button>
               </mat-chip-row>
@@ -49,16 +52,19 @@
               <mat-option [value]="option">{{ option }}</mat-option>
             }
           </mat-autocomplete>
-          <mat-hint>Press Enter or comma to add a tag</mat-hint>
+          <mat-hint>Press Enter or comma to add a tag; tap a tag to edit what it excludes</mat-hint>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
           <mat-label>Diets</mat-label>
           <mat-chip-grid #dietGrid aria-label="Diet tags">
-            @for (tag of dietTags(); track tag) {
-              <mat-chip-row (removed)="removeTag('diet', tag)">
-                {{ tag }}
-                <button matChipRemove [attr.aria-label]="'Remove ' + tag">
+            @for (tag of dietTags(); track tag.name) {
+              <mat-chip-row (removed)="removeTag('diet', tag.name)"
+                            (click)="toggleDefinition('diet', tag.name)"
+                            [matTooltip]="classesTooltip(tag)"
+                            class="definition-chip">
+                {{ tag.name }}
+                <button matChipRemove [attr.aria-label]="'Remove ' + tag.name">
                   <mat-icon>cancel</mat-icon>
                 </button>
               </mat-chip-row>
@@ -77,8 +83,28 @@
               <mat-option [value]="option">{{ option }}</mat-option>
             }
           </mat-autocomplete>
-          <mat-hint>Press Enter or comma to add a tag</mat-hint>
+          <mat-hint>Press Enter or comma to add a tag; tap a tag to edit what it excludes</mat-hint>
         </mat-form-field>
+
+        @if (definitionEntry(); as entry) {
+          <div class="definition-editor">
+            <div class="definition-editor-header">
+              <span class="mat-title-small">What does "{{ entry.name }}" exclude for {{ name.trim() || 'this member' }}?</span>
+              <button mat-icon-button type="button" aria-label="Close definition editor"
+                      (click)="definitionTag.set(null)">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <p class="definition-editor-hint mat-body-small">
+              This is this member's own reading of the tag — another member's
+              "{{ entry.name }}" can exclude different things (e.g. a vegetarian who
+              does eat fish). Without any checked classes the tag is only passed to
+              the AI as text and can't be checked against recipes.
+            </p>
+            <app-class-picker [selected]="entry.excludedClasses ?? []"
+                              (selectedChange)="setDefinitionClasses($event)" />
+          </div>
+        }
 
         <mat-form-field appearance="outline">
           <mat-label>Preferences</mat-label>
@@ -164,14 +190,14 @@
         <mat-card-content>
           @if (member.allergyTags.length > 0 || member.dietTags.length > 0) {
             <div class="tag-chips" aria-label="Dietary tags">
-              @for (tag of member.allergyTags; track tag) {
-                <span class="tag-chip tag-chip--allergy">
-                  <mat-icon>warning</mat-icon>{{ tag }}
+              @for (tag of member.allergyTags; track tag.name) {
+                <span class="tag-chip tag-chip--allergy" [matTooltip]="classesTooltip(tag)">
+                  <mat-icon>warning</mat-icon>{{ tag.name }}
                 </span>
               }
-              @for (tag of member.dietTags; track tag) {
-                <span class="tag-chip tag-chip--diet">
-                  <mat-icon>restaurant</mat-icon>{{ tag }}
+              @for (tag of member.dietTags; track tag.name) {
+                <span class="tag-chip tag-chip--diet" [matTooltip]="classesTooltip(tag)">
+                  <mat-icon>restaurant</mat-icon>{{ tag.name }}
                 </span>
               }
             </div>

@@ -1,4 +1,5 @@
 using Dishhive.Api.Data;
+using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -34,5 +35,20 @@ public class DietaryTagsController : ControllerBase
             .ToListAsync();
 
         return Ok(tags);
+    }
+
+    /// <summary>
+    /// The built-in preset excluded classes for a tag name of a kind, so the family
+    /// form can preview what a not-yet-saved tag will mean (the same resolution a
+    /// save without explicit classes applies). Empty = not machine-checkable.
+    /// </summary>
+    [HttpGet("preset")]
+    [ProducesResponseType(typeof(DietaryTagPresetDto), StatusCodes.Status200OK)]
+    public ActionResult<DietaryTagPresetDto> GetPreset([FromQuery] string? name, [FromQuery] DietaryTagKind kind)
+    {
+        return Ok(new DietaryTagPresetDto
+        {
+            ExcludedClasses = IngredientClasses.ToNames(DietaryTagPresets.Resolve(name ?? "", kind))
+        });
     }
 }

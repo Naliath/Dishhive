@@ -1,0 +1,51 @@
+@if (status(); as s) {
+  <mat-card appearance="raised" class="settings-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>fact_check</mat-icon>
+      <mat-card-title>Recipe dietary facts</mat-card-title>
+      <mat-card-subtitle>
+        AI-detected allergens and ingredient classes (milk, gluten, meat kinds, …)
+        per recipe. The week planner uses them to keep allergy-conflicting recipes
+        out of suggestions; you can review and correct them on each recipe page.
+      </mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="facts-counts">
+        <span class="facts-count facts-count--unassessed">
+          <strong>{{ s.unassessed }}</strong> not assessed
+        </span>
+        <span class="facts-count">
+          <strong>{{ s.aiDetected }}</strong> AI-detected
+        </span>
+        <span class="facts-count">
+          <strong>{{ s.userConfirmed }}</strong> confirmed by you
+        </span>
+      </div>
+
+      @if (!s.available) {
+        <p class="facts-hint">
+          Configure an AI provider (see Integrations above) to detect facts
+          automatically — recipes can still be classified by hand on their page.
+        </p>
+      } @else if (running()) {
+        <div class="facts-progress">
+          <app-cooking-loader diameter="28" />
+          <span>Assessing recipes… {{ s.queueDepth }} remaining</span>
+        </div>
+      } @else {
+        <button mat-stroked-button (click)="backfill()"
+                [disabled]="starting() || s.unassessed === 0">
+          <mat-icon>fact_check</mat-icon>
+          {{ s.unassessed === 0 ? 'Everything assessed' : 'Assess ' + s.unassessed + ' unclassified recipes' }}
+        </button>
+      }
+
+      @if (s.lastError) {
+        <p class="facts-error">
+          <mat-icon>error_outline</mat-icon>
+          {{ s.lastError }}
+        </p>
+      }
+    </mat-card-content>
+  </mat-card>
+}

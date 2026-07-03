@@ -25,15 +25,18 @@ public class MealSuggestionRequestBuilder
     private readonly FreezerAvailabilityService _freezerAvailability;
     private readonly CollectionMentionResolver _mentionResolver;
     private readonly SourceMentionResolver _sourceMentionResolver;
+    private readonly ILogger<MealSuggestionRequestBuilder> _logger;
 
     public MealSuggestionRequestBuilder(
         DishhiveDbContext context, FreezerAvailabilityService freezerAvailability,
-        CollectionMentionResolver mentionResolver, SourceMentionResolver sourceMentionResolver)
+        CollectionMentionResolver mentionResolver, SourceMentionResolver sourceMentionResolver,
+        ILogger<MealSuggestionRequestBuilder> logger)
     {
         _context = context;
         _freezerAvailability = freezerAvailability;
         _mentionResolver = mentionResolver;
         _sourceMentionResolver = sourceMentionResolver;
+        _logger = logger;
     }
 
     public async Task<MealSuggestionRequest> BuildAsync(
@@ -175,17 +178,71 @@ public class MealSuggestionRequestBuilder
             .Take(RecipeCandidateCap)
             .ToList();
 
-        // Ingredient names for the ranked candidates only, for the post-hoc allergy
-        // check (not prompted). Scoped to the candidates so large libraries stay cheap.
+        // Ingredient names (post-hoc substring net for unassessed recipes) and
+        // assessed dietary facts for the ranked candidates only, in one round trip.
+        // Scoped to the candidates so large libraries stay cheap.
         var rankedIds = knownRecipes.Select(r => r.Id).ToList();
-        var recipeAllergens = (await _context.Recipes
-                .AsNoTracking()
-                .Where(r => rankedIds.Contains(r.Id))
-                .Select(r => new { r.Id, Ingredients = r.Ingredients.Select(i => i.Name).ToList() })
-                .ToListAsync(cancellationToken))
-            .ToDictionary(
-                x => x.Id,
-                x => new RecipeAllergenInfo { Ingredients = x.Ingredients });
+        var candidateInfo = await _context.Recipes
+            .AsNoTracking()
+            .Where(r => rankedIds.Contains(r.Id))
+            .Select(r => new
+            {
+                r.Id,
+                Ingredients = r.Ingredients.Select(i => i.Name).ToList(),
+                Assessed = r.DietaryFactsStatus != DietaryFactsStatus.Unassessed,
+                Facts = r.DietaryFacts.Select(f => f.IngredientClass).ToList()
+            })
+            .ToListAsync(cancellationToken);
+
+        var recipeAllergens = candidateInfo.ToDictionary(
+            x => x.Id,
+            x => new RecipeAllergenInfo { Ingredients = x.Ingredients });
+
+        var factsById = candidateInfo
+            .Where(x => x.Assessed)
+            .ToDictionary(x => x.Id, x => x.Facts);
+        knownRecipes = knownRecipes
+            .Select(r => factsById.TryGetValue(r.Id, out var classes)
+                ? r with { ContainsClasses = classes, FactsAssessed = true }
+                : r)
+            .ToList();
+
+        // Assessed candidates conflicting with an attending member's ALLERGY
+        // exclusions are excluded from planning (prompt block + rules fallback).
+        // Diets never hard-exclude — they only annotate and warn. The recipes stay
+        // in KnownRecipes so titles remain resolvable; consumers filter by id.
+        var allergyClasses = members
+            .SelectMany(m => m.DietaryTags)
+            .Where(link => link.DietaryTag?.Kind == DietaryTagKind.Allergy)
+            .SelectMany(link => link.ExcludedClasses)
+            .ToHashSet();
+        var allergyExcludedIds = knownRecipes
+            .Where(r => r.FactsAssessed && r.ContainsClasses.Any(allergyClasses.Contains))
+            .Select(r => r.Id)
+            .ToHashSet();
+
+        // A #[Collection]-referenced title that is allergy-excluded must not stay a
+        // hard "pick from this list" option; drop it from the constraint (visibly).
+        if (allergyExcludedIds.Count > 0)
+        {
+            var excludedTitles = knownRecipes
+                .Where(r => allergyExcludedIds.Contains(r.Id))
+                .Select(r => r.Title)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            collectionConstraints = collectionConstraints
+                .Select(c =>
+                {
+                    var kept = c.RecipeTitles.Where(t => !excludedTitles.Contains(t)).ToList();
+                    if (kept.Count < c.RecipeTitles.Count)
+                    {
+                        _logger.LogInformation(
+                            "Dropped {Count} recipe(s) from #[{Collection}] for household allergies",
+                            c.RecipeTitles.Count - kept.Count, c.Name);
+                    }
+                    return c with { RecipeTitles = kept };
+                })
+                .ToList();
+        }
 
         return new MealSuggestionRequest
         {
@@ -193,8 +250,8 @@ public class MealSuggestionRequestBuilder
             Members = members.Select(m => new MemberProfile
             {
                 Name = m.Name,
-                Allergies = TagNames(m, DietaryTagKind.Allergy),
-                Diets = TagNames(m, DietaryTagKind.Diet),
+                Allergies = TagProfiles(m, DietaryTagKind.Allergy),
+                Diets = TagProfiles(m, DietaryTagKind.Diet),
                 PreferenceNotes = m.PreferenceNotes
             }).ToList(),
             Favorites = favorites,
@@ -206,13 +263,18 @@ public class MealSuggestionRequestBuilder
             Instructions = string.IsNullOrWhiteSpace(instructions) ? null : instructions.Trim(),
             CollectionConstraints = collectionConstraints,
             SourceConstraints = sourceConstraints,
-            RecipeAllergens = recipeAllergens
+            RecipeAllergens = recipeAllergens,
+            AllergyExcludedRecipeIds = allergyExcludedIds
         };
     }
 
-    private static List<string> TagNames(FamilyMember member, DietaryTagKind kind) => member.DietaryTags
+    private static List<DietaryTagProfile> TagProfiles(FamilyMember member, DietaryTagKind kind) => member.DietaryTags
         .Where(link => link.DietaryTag != null && link.DietaryTag.Kind == kind)
-        .Select(link => link.DietaryTag!.Name)
-        .OrderBy(n => n)
+        .OrderBy(link => link.DietaryTag!.Name)
+        .Select(link => new DietaryTagProfile
+        {
+            Name = link.DietaryTag!.Name,
+            ExcludedClasses = link.ExcludedClasses
+        })
         .ToList();
 }

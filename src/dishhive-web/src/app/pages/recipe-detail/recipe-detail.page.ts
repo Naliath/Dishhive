@@ -17,9 +17,11 @@ import { MeasurementService } from '../../services/measurement.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { StatisticsService } from '../../services/statistics.service';
+import { ClassPickerComponent } from '../../components/class-picker/class-picker';
 import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { MealRatingDialog, MealRatingDialogData } from '../../components/meal-rating-dialog/meal-rating-dialog';
-import { Cookbook, Recipe } from '../../models/recipe.model';
+import { Cookbook, DietaryFactsStatus, Recipe } from '../../models/recipe.model';
+import { ingredientClassLabel } from '../../models/ingredient-class.model';
 import { DishStatistic } from '../../models/statistics.model';
 import { FamilyMember, FamilyMemberFavorite } from '../../models/family-member.model';
 
@@ -34,6 +36,7 @@ function toIso(date: Date): string {
   selector: 'app-recipe-detail-page',
   standalone: true,
   imports: [
+    ClassPickerComponent,
     CookingLoaderComponent,
     DatePipe,
     DecimalPipe,
@@ -89,6 +92,13 @@ export class RecipeDetailPage implements OnInit {
 
   private readonly cookbooks = signal<Cookbook[]>([]);
 
+  // Dietary facts review/edit (AI-detected facts become user-confirmed here)
+  readonly FactsStatus = DietaryFactsStatus;
+  readonly classLabel = ingredientClassLabel;
+  readonly factsEditing = signal(false);
+  readonly factsDraft = signal<string[]>([]);
+  readonly savingFacts = signal(false);
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -130,6 +140,42 @@ export class RecipeDetailPage implements OnInit {
     this.cookbooksService.getCookbooks().subscribe({
       next: cookbooks => this.cookbooks.set(cookbooks),
       error: () => { /* non-critical */ }
+    });
+  }
+
+  /** Confirms the AI-detected facts as-is (they become user-confirmed) */
+  confirmFacts(): void {
+    const recipe = this.recipe();
+    if (recipe) {
+      this.saveFactsInternal(recipe, recipe.dietaryFacts.contains, 'Facts confirmed');
+    }
+  }
+
+  startFactsEdit(): void {
+    this.factsDraft.set([...(this.recipe()?.dietaryFacts.contains ?? [])]);
+    this.factsEditing.set(true);
+  }
+
+  saveFactsEdit(): void {
+    const recipe = this.recipe();
+    if (recipe) {
+      this.saveFactsInternal(recipe, this.factsDraft(), 'Facts saved');
+    }
+  }
+
+  private saveFactsInternal(recipe: Recipe, contains: string[], successMessage: string): void {
+    this.savingFacts.set(true);
+    this.recipesService.setRecipeFacts(recipe.id, contains).subscribe({
+      next: facts => {
+        this.savingFacts.set(false);
+        this.factsEditing.set(false);
+        this.recipe.set({ ...recipe, dietaryFacts: facts });
+        this.snackBar.open(successMessage, 'Dismiss', { duration: 3000 });
+      },
+      error: () => {
+        this.savingFacts.set(false);
+        this.snackBar.open('Could not save the facts', 'Dismiss', { duration: 4000 });
+      }
     });
   }
 

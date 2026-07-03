@@ -117,6 +117,15 @@ public class RulesMealSuggestionService : IMealSuggestionService
 
         var candidates = request.Favorites
             .Where(f => !usedDishes.Contains(f.DishName))
+            // A favorite matching a recipe whose assessed facts conflict with an
+            // attendee's allergy is skipped ENTIRELY — proposing the dish name
+            // unlinked would dodge the exclusion, not honor it. (Collection picks
+            // are covered upstream: excluded titles never reach the constraint.)
+            .Where(f =>
+            {
+                var recipeId = MatchRecipe(request, f.DishName);
+                return recipeId == null || !request.AllergyExcludedRecipeIds.Contains(recipeId.Value);
+            })
             .Where(f =>
             {
                 if (!historyByDish.TryGetValue(f.DishName, out var history))

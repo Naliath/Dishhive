@@ -6,7 +6,8 @@ and generate shopping lists.
 
 ## Features
 
-- 👨‍👩‍👧 **Family Composition** - Household members, guests, reusable allergy/diet tags and favorite dishes
+- 👨‍👩‍👧 **Family Composition** - Household members, guests, reusable allergy/diet tags (with per-member definitions — one vegetarian eats fish, another doesn't) and favorite dishes
+- 🥜 **Dietary Facts** - AI-detected allergens and ingredient classes (EU-14 + meat kinds) per recipe, user-confirmable; the planner excludes allergy conflicts and warns about diet conflicts *(detection needs the optional AI provider)*
 - 📖 **Recipe Store** - Recipes with ingredients, steps and planning metadata; manual entry and editing; filterable tags, categories and cookbooks (saved filters)
 - ⬇️ **Recipe Import** - Import recipes from Dagelijkse Kost by URL (pluggable sources, locally stored images)
 - 📅 **Week Planner** - Plan recipes, dishes or vague intentions per day with per-meal attendance; multiple dishes per day (e.g. lunch + dinner with appetizer and dessert)
@@ -16,6 +17,7 @@ and generate shopping lists.
 - ⭐ **Meal Feedback** - Mark meals eaten/skipped and rate them per member (1–5 stars); feeds statistics and AI suggestions
 - ✨ **AI Week Suggestions** - Propose dinners for unplanned days from your household's constraints, favorites, ratings and freezer *(optional; any OpenAI-compatible provider — Ollama, LM Studio, OpenAI, Mistral, OpenRouter, ...)*
 - 📏 **Measurement Preferences** - Metric (default) or imperial display
+- 🔌 **MCP Server** - Local AI assistants (LM Studio, Claude, …) can read the week plan, what was eaten (with ratings) and search recipes via `http://localhost:5100/mcp`
 - 🎬 **Demo Mode** - Seeds an empty database with 20 Dagelijkse Kost recipes and a demo household (on by default in Docker)
 - 🐳 **Self-Hosted** - Run everything in Docker containers
 

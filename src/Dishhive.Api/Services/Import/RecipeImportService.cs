@@ -1,5 +1,6 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
+using Dishhive.Api.Services.Facts;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
 
@@ -40,6 +41,7 @@ public class RecipeImportService : IRecipeImportService
     private readonly IEnumerable<IRecipeSourceProvider> _providers;
     private readonly DishhiveDbContext _context;
     private readonly ILlmRecipeExtractor _llmExtractor;
+    private readonly RecipeFactsAssessmentService _factsQueue;
     private readonly ILogger<RecipeImportService> _logger;
 
     public RecipeImportService(
@@ -47,12 +49,14 @@ public class RecipeImportService : IRecipeImportService
         IEnumerable<IRecipeSourceProvider> providers,
         DishhiveDbContext context,
         ILlmRecipeExtractor llmExtractor,
+        RecipeFactsAssessmentService factsQueue,
         ILogger<RecipeImportService> logger)
     {
         _httpClient = httpClient;
         _providers = providers;
         _context = context;
         _llmExtractor = llmExtractor;
+        _factsQueue = factsQueue;
         _logger = logger;
     }
 
@@ -102,6 +106,7 @@ public class RecipeImportService : IRecipeImportService
             .Include(r => r.Steps)
             .FirstOrDefaultAsync(r => r.SourceUrl == sourceUrl, cancellationToken);
 
+        var isReimport = recipe != null;
         if (recipe == null)
         {
             recipe = new Recipe();
@@ -120,6 +125,10 @@ public class RecipeImportService : IRecipeImportService
         await RecipeImageDownloader.TryDownloadAsync(_httpClient, recipe, _logger, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
+        // Fire-and-forget dietary-facts assessment (no-op when AI is unconfigured).
+        // A re-import replaced the ingredient list, so even user-confirmed facts are
+        // stale then and get overwritten by the fresh assessment.
+        _factsQueue.TryEnqueue(recipe.Id, overwriteUserConfirmed: isReimport);
         return recipe;
     }
 

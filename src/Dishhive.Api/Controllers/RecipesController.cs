@@ -2,6 +2,7 @@ using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Collections;
+using Dishhive.Api.Services.Facts;
 using Dishhive.Api.Services.Import;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,17 +19,20 @@ public class RecipesController : ControllerBase
     private readonly DishhiveDbContext _context;
     private readonly IRecipeImportService _importService;
     private readonly IRecipeExchangeService _exchangeService;
+    private readonly RecipeFactsAssessmentService _factsQueue;
     private readonly ILogger<RecipesController> _logger;
 
     public RecipesController(
         DishhiveDbContext context,
         IRecipeImportService importService,
         IRecipeExchangeService exchangeService,
+        RecipeFactsAssessmentService factsQueue,
         ILogger<RecipesController> logger)
     {
         _context = context;
         _importService = importService;
         _exchangeService = exchangeService;
+        _factsQueue = factsQueue;
         _logger = logger;
     }
 
@@ -178,6 +182,7 @@ public class RecipesController : ControllerBase
             .Include(r => r.Ingredients)
             .Include(r => r.Steps)
             .Include(r => r.Tags).ThenInclude(a => a.RecipeTag)
+            .Include(r => r.DietaryFacts)
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (recipe == null)
@@ -253,13 +258,25 @@ public class RecipesController : ControllerBase
         {
             return TagTooLong();
         }
+        if (HasUnknownClass(dto.ContainsClasses))
+        {
+            return UnknownClass();
+        }
 
         var recipe = new Recipe();
         ApplyDto(recipe, dto);
+        if (dto.ContainsClasses != null)
+        {
+            ApplyFacts(recipe, ParseClasses(dto.ContainsClasses), DietaryFactsStatus.UserConfirmed);
+        }
 
         _context.Recipes.Add(recipe);
         await SyncTagsAsync(recipe, dto.Tags);
         await _context.SaveChangesAsync();
+        if (dto.ContainsClasses == null)
+        {
+            _factsQueue.TryEnqueue(recipe.Id);
+        }
 
         _logger.LogInformation("Created recipe {Title} ({Id})", recipe.Title, recipe.Id);
         return CreatedAtAction(nameof(GetRecipe), new { id = recipe.Id }, ToDto(recipe));
@@ -279,11 +296,16 @@ public class RecipesController : ControllerBase
         {
             return TagTooLong();
         }
+        if (HasUnknownClass(dto.ContainsClasses))
+        {
+            return UnknownClass();
+        }
 
         var recipe = await _context.Recipes
             .Include(r => r.Ingredients)
             .Include(r => r.Steps)
             .Include(r => r.Tags).ThenInclude(a => a.RecipeTag)
+            .Include(r => r.DietaryFacts)
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (recipe == null)
@@ -291,15 +313,36 @@ public class RecipesController : ControllerBase
             return NotFound();
         }
 
+        var previousIngredients = recipe.Ingredients
+            .Select(i => i.Name.Trim().ToLowerInvariant())
+            .OrderBy(n => n)
+            .ToList();
+
         _context.RecipeIngredients.RemoveRange(recipe.Ingredients);
         _context.RecipeSteps.RemoveRange(recipe.Steps);
         recipe.Ingredients.Clear();
         recipe.Steps.Clear();
 
         ApplyDto(recipe, dto);
+        if (dto.ContainsClasses != null)
+        {
+            ApplyFacts(recipe, ParseClasses(dto.ContainsClasses), DietaryFactsStatus.UserConfirmed);
+        }
         await SyncTagsAsync(recipe, dto.Tags);
         await _context.SaveChangesAsync();
         await RemoveOrphanedTagsAsync();
+
+        // A changed ingredient list makes stored facts stale — even user-confirmed
+        // ones describe ingredients that no longer exist — so re-assess (unless the
+        // same request set the facts explicitly, which is the freshest verdict).
+        var newIngredients = recipe.Ingredients
+            .Select(i => i.Name.Trim().ToLowerInvariant())
+            .OrderBy(n => n)
+            .ToList();
+        if (dto.ContainsClasses == null && !previousIngredients.SequenceEqual(newIngredients))
+        {
+            _factsQueue.TryEnqueue(recipe.Id, overwriteUserConfirmed: true);
+        }
 
         return Ok(ToDto(recipe));
     }
@@ -386,6 +429,85 @@ public class RecipesController : ControllerBase
             _logger.LogWarning(ex, "Failed to fetch recipe page {Url}", dto.Url);
             return UnprocessableEntity(new ProblemDetails { Title = "Could not fetch page", Detail = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Sets a recipe's dietary facts explicitly (the review/edit affordance on the
+    /// detail page). The facts become UserConfirmed: the background assessment will
+    /// no longer overwrite them unless the ingredients change.
+    /// </summary>
+    [HttpPut("{id:guid}/facts")]
+    [ProducesResponseType(typeof(RecipeDietaryFactsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RecipeDietaryFactsDto>> SetRecipeFacts(Guid id, UpdateRecipeFactsDto dto)
+    {
+        if (HasUnknownClass(dto.Contains))
+        {
+            return UnknownClass();
+        }
+
+        var recipe = await _context.Recipes
+            .Include(r => r.DietaryFacts)
+            .FirstOrDefaultAsync(r => r.Id == id);
+        if (recipe == null)
+        {
+            return NotFound();
+        }
+
+        ApplyFacts(recipe, ParseClasses(dto.Contains), DietaryFactsStatus.UserConfirmed);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("User confirmed dietary facts for {Title}: [{Classes}]",
+            recipe.Title, string.Join(", ", recipe.DietaryFacts.Select(f => f.IngredientClass)));
+        return Ok(FactsDto(recipe));
+    }
+
+    /// <summary>
+    /// Library-wide dietary-facts progress: assessed/unassessed counts plus the
+    /// background queue state. Polled by the settings page while a backfill runs.
+    /// </summary>
+    [HttpGet("facts/status")]
+    [ProducesResponseType(typeof(RecipeFactsStatusDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RecipeFactsStatusDto>> GetFactsStatus(
+        [FromServices] IRecipeFactsExtractor extractor, CancellationToken cancellationToken)
+    {
+        var counts = await _context.Recipes
+            .GroupBy(r => r.DietaryFactsStatus)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+        var queue = _factsQueue.Status;
+
+        return Ok(new RecipeFactsStatusDto
+        {
+            Unassessed = counts.FirstOrDefault(c => c.Status == DietaryFactsStatus.Unassessed)?.Count ?? 0,
+            AiDetected = counts.FirstOrDefault(c => c.Status == DietaryFactsStatus.AiDetected)?.Count ?? 0,
+            UserConfirmed = counts.FirstOrDefault(c => c.Status == DietaryFactsStatus.UserConfirmed)?.Count ?? 0,
+            QueueDepth = queue.QueueDepth,
+            Running = queue.Running,
+            Available = extractor.IsAvailable,
+            LastError = queue.LastError
+        });
+    }
+
+    /// <summary>
+    /// Queues every still-unassessed recipe for AI facts assessment (the settings
+    /// page backfill). Already-assessed recipes are never re-queued here — re-runs
+    /// happen per recipe via ingredient edits or the explicit facts editor.
+    /// </summary>
+    [HttpPost("facts/backfill")]
+    [ProducesResponseType(typeof(RecipeFactsBackfillResultDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RecipeFactsBackfillResultDto>> BackfillFacts(CancellationToken cancellationToken)
+    {
+        var unassessedIds = await _context.Recipes
+            .Where(r => r.DietaryFactsStatus == DietaryFactsStatus.Unassessed)
+            .Select(r => r.Id)
+            .ToListAsync(cancellationToken);
+
+        var enqueued = _factsQueue.EnqueueMany(unassessedIds);
+        _logger.LogInformation("Facts backfill requested: {Enqueued} of {Total} unassessed recipes queued",
+            enqueued, unassessedIds.Count);
+        return Ok(new RecipeFactsBackfillResultDto { Enqueued = enqueued });
     }
 
     /// <summary>
@@ -517,6 +639,43 @@ public class RecipesController : ControllerBase
         Detail = "Tags are at most 50 characters."
     });
 
+    private BadRequestObjectResult UnknownClass() => BadRequest(new ProblemDetails
+    {
+        Title = "Unknown ingredient class",
+        Detail = "Contained classes must be valid IngredientClass names (e.g. \"Milk\", \"Gluten\", \"Pork\")."
+    });
+
+    private static bool HasUnknownClass(List<string>? names) =>
+        names != null && names.Any(n => !IngredientClasses.TryParse(n, out _));
+
+    /// <summary>Distinct parsed classes; class names were validated up front</summary>
+    private static List<IngredientClass> ParseClasses(List<string> names) => names
+        .Select(n => IngredientClasses.TryParse(n, out var value) ? value : (IngredientClass?)null)
+        .Where(v => v.HasValue)
+        .Select(v => v!.Value)
+        .Distinct()
+        .ToList();
+
+    /// <summary>Replaces the facts rows and stamps the assessment status</summary>
+    private void ApplyFacts(Recipe recipe, List<IngredientClass> classes, DietaryFactsStatus status)
+    {
+        _context.RecipeDietaryFacts.RemoveRange(recipe.DietaryFacts);
+        recipe.DietaryFacts.Clear();
+        foreach (var ingredientClass in classes)
+        {
+            recipe.DietaryFacts.Add(new RecipeDietaryFact { Recipe = recipe, IngredientClass = ingredientClass });
+        }
+        recipe.DietaryFactsStatus = status;
+        recipe.DietaryFactsAssessedAt = DateTime.UtcNow;
+    }
+
+    private static RecipeDietaryFactsDto FactsDto(Recipe recipe) => new()
+    {
+        Contains = IngredientClasses.ToNames(recipe.DietaryFacts.Select(f => f.IngredientClass)),
+        Status = recipe.DietaryFactsStatus,
+        AssessedAt = recipe.DietaryFactsAssessedAt
+    };
+
     private static void ApplyDto(Recipe recipe, CreateRecipeDto dto)
     {
         recipe.Title = dto.Title;
@@ -604,6 +763,7 @@ public class RecipesController : ControllerBase
             .Where(a => a.RecipeTag != null)
             .Select(a => a.RecipeTag!.Name)
             .OrderBy(n => n)
-            .ToList()
+            .ToList(),
+        DietaryFacts = FactsDto(recipe)
     };
 }

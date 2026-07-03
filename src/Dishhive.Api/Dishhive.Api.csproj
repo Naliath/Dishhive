@@ -29,6 +29,8 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.9.0" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.4.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
 
     <!-- Native OpenAPI + Scalar UI -->

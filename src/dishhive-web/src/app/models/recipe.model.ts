@@ -85,6 +85,42 @@ export interface CreateRecipe {
   steps: { instruction: string }[];
   /** Organization tag names; tags are created when new, synced on update */
   tags: string[];
+  /**
+   * Contained ingredient-class names (see ingredient-class.model.ts). Null/absent
+   * = untouched (a create queues an AI assessment, an update keeps stored facts
+   * unless the ingredients changed); a list = the user set them → UserConfirmed.
+   */
+  containsClasses?: string[] | null;
+}
+
+/** Assessment state of a recipe's dietary facts (mirrors the API enum) */
+export enum DietaryFactsStatus {
+  Unassessed = 0,
+  AiDetected = 1,
+  UserConfirmed = 2
+}
+
+/**
+ * A recipe's dietary facts: the ingredient classes it contains plus how that was
+ * established. On an Unassessed recipe the empty contains list means "unknown",
+ * never "contains nothing".
+ */
+export interface RecipeDietaryFacts {
+  contains: string[];
+  status: DietaryFactsStatus;
+  assessedAt?: string;
+}
+
+/** Library-wide facts progress (settings page, polled while a backfill runs) */
+export interface RecipeFactsStatus {
+  unassessed: number;
+  aiDetected: number;
+  userConfirmed: number;
+  queueDepth: number;
+  running: boolean;
+  /** Whether AI is configured, i.e. whether assessment can run at all */
+  available: boolean;
+  lastError?: string;
 }
 
 /** Outcome of importing a recipe file (schema.org Recipe JSON) */
@@ -121,4 +157,6 @@ export interface Recipe {
   tags: string[];
   /** Ids of the manual collections this recipe belongs to */
   cookbookIds: string[];
+  /** Dietary facts (contained ingredient classes + assessment status) */
+  dietaryFacts: RecipeDietaryFacts;
 }

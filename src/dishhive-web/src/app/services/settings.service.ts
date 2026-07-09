@@ -2,7 +2,14 @@ import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
-import { AiPromptSettings, MeasurementSystem, MEASUREMENT_SYSTEM_KEY, UserSetting } from '../models/user-setting.model';
+import {
+  AiPromptSettings,
+  FIRST_DAY_OF_WEEK_KEY,
+  FirstDayOfWeek,
+  MeasurementSystem,
+  MEASUREMENT_SYSTEM_KEY,
+  UserSetting
+} from '../models/user-setting.model';
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
@@ -10,6 +17,9 @@ export class SettingsService {
 
   /** Current measurement system; metric is the default by absence */
   readonly measurementSystem = signal<MeasurementSystem>('metric');
+
+  /** Current first day of the week; Monday is the default by absence */
+  readonly firstDayOfWeek = signal<FirstDayOfWeek>('monday');
 
   constructor(private http: HttpClient) {}
 
@@ -27,6 +37,31 @@ export class SettingsService {
     return this.http.put<UserSetting>(`${this.apiUrl}/${MEASUREMENT_SYSTEM_KEY}`, { value: system }).pipe(
       tap(() => this.measurementSystem.set(system))
     );
+  }
+
+  /** Loads the first-day-of-week preference from the backend into the signal */
+  loadFirstDayOfWeek(): Observable<FirstDayOfWeek> {
+    return this.http.get<UserSetting>(`${this.apiUrl}/${FIRST_DAY_OF_WEEK_KEY}`).pipe(
+      map((setting): FirstDayOfWeek => setting.value === 'sunday' ? 'sunday' : 'monday'),
+      // 404 means the setting was never changed: Monday default
+      catchError(() => of<FirstDayOfWeek>('monday')),
+      tap(day => this.firstDayOfWeek.set(day))
+    );
+  }
+
+  setFirstDayOfWeek(day: FirstDayOfWeek): Observable<UserSetting> {
+    return this.http.put<UserSetting>(`${this.apiUrl}/${FIRST_DAY_OF_WEEK_KEY}`, { value: day }).pipe(
+      tap(() => this.firstDayOfWeek.set(day))
+    );
+  }
+
+  /** Local midnight of the start of the week containing `date`, per the configured first day */
+  startOfWeek(date: Date): Date {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const firstDay = this.firstDayOfWeek() === 'sunday' ? 0 : 1;
+    start.setDate(start.getDate() - ((start.getDay() - firstDay + 7) % 7));
+    return start;
   }
 
   getAiPrompt(): Observable<AiPromptSettings | null> {

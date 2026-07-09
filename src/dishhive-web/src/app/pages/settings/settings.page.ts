@@ -14,7 +14,7 @@ import { ThemeService, ThemeMode } from '../../services/theme.service';
 import { AiPromptSettingsComponent } from '../../components/ai-prompt-settings/ai-prompt-settings';
 import { IntegrationsStatusComponent } from '../../components/integrations-status/integrations-status';
 import { RecipeFactsSettingsComponent } from '../../components/recipe-facts-settings/recipe-facts-settings';
-import { MeasurementSystem } from '../../models/user-setting.model';
+import { FirstDayOfWeek, MeasurementSystem } from '../../models/user-setting.model';
 import { AutoCollectionInfo } from '../../models/recipe.model';
 import { environment } from '../../../environments/environment';
 
@@ -49,6 +49,7 @@ export class SettingsPage implements OnInit {
 
   ngOnInit(): void {
     this.settingsService.loadMeasurementSystem().subscribe();
+    this.settingsService.loadFirstDayOfWeek().subscribe();
     this.loadAutoCollections();
   }
 
@@ -116,5 +117,12 @@ export class SettingsPage implements OnInit {
 
   setTheme(mode: ThemeMode): void {
     this.themeService.setTheme(mode);
+  }
+
+  setFirstDayOfWeek(day: FirstDayOfWeek): void {
+    this.settingsService.setFirstDayOfWeek(day).subscribe({
+      next: () => this.snackBar.open(`First day of the week set to ${day === 'sunday' ? 'Sunday' : 'Monday'}`, 'Dismiss', { duration: 3000 }),
+      error: () => this.snackBar.open('Could not save the setting', 'Dismiss', { duration: 4000 })
+    });
   }
 }

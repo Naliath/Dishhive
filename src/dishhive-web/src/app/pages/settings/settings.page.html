@@ -59,6 +59,26 @@
 
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
+    <mat-icon mat-card-avatar>calendar_view_week</mat-icon>
+    <mat-card-title>First day of the week</mat-card-title>
+    <mat-card-subtitle>
+      Used by the week planner and the weekly shopping list.
+    </mat-card-subtitle>
+  </mat-card-header>
+  <mat-card-content>
+    <mat-radio-group
+      class="first-day-group"
+      [value]="settingsService.firstDayOfWeek()"
+      (change)="setFirstDayOfWeek($event.value)"
+      aria-label="First day of the week">
+      <mat-radio-button value="monday">Monday — default</mat-radio-button>
+      <mat-radio-button value="sunday">Sunday</mat-radio-button>
+    </mat-radio-group>
+  </mat-card-content>
+</mat-card>
+
+<mat-card appearance="raised" class="settings-card">
+  <mat-card-header>
     <mat-icon mat-card-avatar>auto_awesome</mat-icon>
     <mat-card-title>Automatic collections</mat-card-title>
     <mat-card-subtitle>

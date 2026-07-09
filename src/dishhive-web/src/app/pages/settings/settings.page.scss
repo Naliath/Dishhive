@@ -10,7 +10,8 @@ h1 {
   margin: 0;
 }
 
-.measurement-group {
+.measurement-group,
+.first-day-group {
   display: flex;
   flex-direction: column;
   gap: 8px;

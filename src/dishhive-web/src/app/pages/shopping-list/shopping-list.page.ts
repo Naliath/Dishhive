@@ -15,6 +15,7 @@ import { ShoppingListService } from '../../services/shopping-list.service';
 import { MeasurementService } from '../../services/measurement.service';
 import { RecipesService } from '../../services/recipes.service';
 import { PlannedMealsService } from '../../services/planned-meals.service';
+import { SettingsService } from '../../services/settings.service';
 import { ShoppingList, ShoppingListReminder } from '../../models/shopping-list.model';
 import { RecipeListItem } from '../../models/recipe.model';
 
@@ -22,13 +23,6 @@ function toIso(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function mondayOf(date: Date): Date {
-  const monday = new Date(date);
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  return monday;
 }
 
 @Component({
@@ -70,18 +64,19 @@ export class ShoppingListPage implements OnInit {
     private recipesService: RecipesService,
     private plannedMealsService: PlannedMealsService,
     public measurementService: MeasurementService,
+    private settingsService: SettingsService,
     private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
     // Range from query params (planner entry point) or default to the current week
     const params = this.route.snapshot.queryParamMap;
-    const monday = mondayOf(new Date());
-    const sunday = new Date(monday);
-    sunday.setDate(sunday.getDate() + 6);
+    const weekStart = this.settingsService.startOfWeek(new Date());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
 
-    this.from = params.get('from') ?? toIso(monday);
-    this.to = params.get('to') ?? toIso(sunday);
+    this.from = params.get('from') ?? toIso(weekStart);
+    this.to = params.get('to') ?? toIso(weekEnd);
     this.load();
   }
 

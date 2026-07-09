@@ -11,6 +11,8 @@ namespace Dishhive.Api.Controllers;
 /// Controller for managing user settings and application preferences.
 /// Known keys: "measurementSystem" = "metric" | "imperial" (metric is the default
 /// when the key is absent; see docs/features/measurement-preferences.md).
+/// "firstDayOfWeek" = "monday" | "sunday" (Monday is the default when the key is
+/// absent); used by the week planner and shopping list to anchor the week.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -18,6 +20,9 @@ public class SettingsController : ControllerBase
 {
     /// <summary>Setting key for the household's measurement system</summary>
     public const string MeasurementSystemKey = "measurementSystem";
+
+    /// <summary>Setting key for the household's first day of the week</summary>
+    public const string FirstDayOfWeekKey = "firstDayOfWeek";
 
     private readonly DishhiveDbContext _context;
     private readonly ILogger<SettingsController> _logger;

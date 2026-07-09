@@ -15,6 +15,7 @@ import { FamilyMembersService } from '../../services/family-members.service';
 import { FreezerService } from '../../services/freezer.service';
 import { MealSuggestionsService } from '../../services/meal-suggestions.service';
 import { RecipesService } from '../../services/recipes.service';
+import { SettingsService } from '../../services/settings.service';
 import { MealSuggestion } from '../../models/meal-suggestion.model';
 import {
   COURSE_LABELS,
@@ -52,13 +53,6 @@ function toIso(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-function mondayOf(date: Date): Date {
-  const monday = new Date(date);
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  return monday;
-}
-
 @Component({
   selector: 'app-week-planner-page',
   standalone: true,
@@ -84,7 +78,7 @@ export class WeekPlannerPage implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private loadingTimer: ReturnType<typeof setTimeout> | undefined;
 
-  readonly weekStart = signal<Date>(mondayOf(new Date()));
+  readonly weekStart = signal<Date>(new Date());
   readonly meals = signal<PlannedMeal[]>([]);
   readonly members = signal<FamilyMember[]>([]);
   readonly freezer = signal<FreezerSuggestions>({ enabled: false, items: [] });
@@ -127,9 +121,11 @@ export class WeekPlannerPage implements OnInit {
     private freezerService: FreezerService,
     private mealSuggestionsService: MealSuggestionsService,
     private recipesService: RecipesService,
+    private settingsService: SettingsService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar
   ) {
+    this.weekStart.set(this.settingsService.startOfWeek(new Date()));
     this.destroyRef.onDestroy(() => this.clearLoadingTimer());
   }
 
@@ -195,7 +191,7 @@ export class WeekPlannerPage implements OnInit {
   }
 
   goToCurrentWeek(): void {
-    this.weekStart.set(mondayOf(new Date()));
+    this.weekStart.set(this.settingsService.startOfWeek(new Date()));
     this.loadWeek();
   }
 

@@ -14,6 +14,9 @@ Servings stepper on the recipe detail page that rescales displayed ingredient qu
 ### Ingredient canonicalization
 Map spelling variants ("ui"/"uien") to one ingredient for cleaner shopping aggregation and stats. Manage these mappings in the settings so they can be manually tweaked
 
+### Reorde planned meals
+Allow switching planned meals of meals that are being planned in an easy fashion. Perhaps drag and drop them to another day. This allows the user to quickly match planning to reality.
+
 ## Medium Scope Features
 
 ### Persisted shopping list with check-off

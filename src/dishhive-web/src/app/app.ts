@@ -39,7 +39,8 @@ export class App implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Load the measurement preference once so all display formatting uses it
+    // Load display preferences once so all pages use them from the start
     this.settingsService.loadMeasurementSystem().subscribe();
+    this.settingsService.loadFirstDayOfWeek().subscribe();
   }
 }

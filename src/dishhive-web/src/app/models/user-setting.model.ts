@@ -10,6 +10,11 @@ export type MeasurementSystem = 'metric' | 'imperial';
 /** Setting key for the household's measurement system; metric is the default by absence */
 export const MEASUREMENT_SYSTEM_KEY = 'measurementSystem';
 
+export type FirstDayOfWeek = 'monday' | 'sunday';
+
+/** Setting key for the week's first day; Monday is the default by absence */
+export const FIRST_DAY_OF_WEEK_KEY = 'firstDayOfWeek';
+
 /** The editable AI system prompt and its context (GET/PUT/DELETE /api/settings/ai-prompt) */
 export interface AiPromptSettings {
   /** The effective editable section (the user's override, or the default) */

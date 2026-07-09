@@ -98,6 +98,28 @@ docker-compose down       # Stop and keep data
 docker-compose down -v    # Stop and remove all data (including database)
 ```
 
+## Publishing to Docker Hub
+
+[scripts/push-to-dockerhub.ps1](scripts/push-to-dockerhub.ps1) builds and pushes the two
+custom images (`dishhive-app`, `dishhive-scraper`) to Docker Hub under your namespace —
+e.g. [naliath/dishhive-app](https://hub.docker.com/r/naliath/dishhive-app) and
+[naliath/dishhive-scraper](https://hub.docker.com/r/naliath/dishhive-scraper). The `db`
+(stock `postgres:16-alpine`) and `searxng` (stock `searxng/searxng`) services use upstream
+images and are not published.
+
+```powershell
+.\scripts\push-to-dockerhub.ps1 -Username naliath              # tag = short git commit hash
+.\scripts\push-to-dockerhub.ps1 -Username naliath -Tag 1.2.0   # explicit version tag
+.\scripts\push-to-dockerhub.ps1 -Username naliath -SkipBuild   # reuse already-built local images
+```
+
+The script verifies the Docker daemon is up, runs `docker login` (a no-op when credentials
+are already stored), builds both images from `docker/*.Dockerfile`, and pushes each one
+twice: once with the version tag and once as `:latest`. Without `-Tag` the short git commit
+hash is used, so every push is traceable to a commit. The username is lowercased
+automatically — Docker Hub namespaces are lowercase-only, and an uppercase letter would make
+Docker treat the name as a registry hostname instead.
+
 ## Local Development
 
 For a faster inner loop, run the database in Docker and the frontend/backend locally.

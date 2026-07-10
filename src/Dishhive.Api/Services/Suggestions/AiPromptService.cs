@@ -24,12 +24,6 @@ public interface IAiPromptProvider
 /// </summary>
 public class AiPromptService : IAiPromptProvider
 {
-    /// <summary>Setting key holding the user's editable-prompt override</summary>
-    public const string OverrideKey = "aiSystemPrompt";
-
-    /// <summary>Setting key holding the shipped default at customization time (drift detection)</summary>
-    public const string BaselineKey = "aiSystemPromptBaseline";
-
     public const int MaxLength = 4000;
 
     private readonly DishhiveDbContext _context;
@@ -39,7 +33,7 @@ public class AiPromptService : IAiPromptProvider
     public async Task<string?> GetOverrideAsync(CancellationToken cancellationToken = default)
     {
         var setting = await _context.UserSettings.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Key == OverrideKey, cancellationToken);
+            .FirstOrDefaultAsync(s => s.Key == UserSettingKeys.AiSystemPrompt, cancellationToken);
         return string.IsNullOrWhiteSpace(setting?.Value) ? null : setting.Value;
     }
 
@@ -57,8 +51,11 @@ public class AiPromptService : IAiPromptProvider
             return;
         }
 
-        await UpsertAsync(OverrideKey, trimmed, cancellationToken);
-        await UpsertAsync(BaselineKey, LlmMealSuggestionService.EditableSystemPromptDefault, cancellationToken);
+        await UpsertAsync(UserSettingKeys.AiSystemPrompt, trimmed, cancellationToken);
+        await UpsertAsync(
+            UserSettingKeys.AiSystemPromptBaseline,
+            LlmMealSuggestionService.EditableSystemPromptDefault,
+            cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
     }
 
@@ -66,7 +63,8 @@ public class AiPromptService : IAiPromptProvider
     public async Task ResetAsync(CancellationToken cancellationToken = default)
     {
         var rows = await _context.UserSettings
-            .Where(s => s.Key == OverrideKey || s.Key == BaselineKey)
+            .Where(s => s.Key == UserSettingKeys.AiSystemPrompt
+                || s.Key == UserSettingKeys.AiSystemPromptBaseline)
             .ToListAsync(cancellationToken);
         if (rows.Count > 0)
         {
@@ -82,7 +80,7 @@ public class AiPromptService : IAiPromptProvider
     public async Task<bool> DefaultChangedSinceCustomizedAsync(CancellationToken cancellationToken = default)
     {
         var baseline = await _context.UserSettings.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Key == BaselineKey, cancellationToken);
+            .FirstOrDefaultAsync(s => s.Key == UserSettingKeys.AiSystemPromptBaseline, cancellationToken);
         return baseline is not null
             && baseline.Value != LlmMealSuggestionService.EditableSystemPromptDefault;
     }

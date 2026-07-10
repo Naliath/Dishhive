@@ -100,9 +100,9 @@ public class DishhiveDbContext : DbContext
             // with their member; matching happens in memory.
             entity.Property(e => e.ExcludedClasses)
                   .HasConversion(
-                      v => string.Join(',', v.Select(c => c.ToString())),
+                      v => string.Join(',', v.Select(EnumNames.ToName)),
                       v => v.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                            .Select(Enum.Parse<IngredientClass>)
+                            .Select(EnumNames.Parse<IngredientClass>)
                             .ToList(),
                       new ValueComparer<List<IngredientClass>>(
                           (a, b) => (a ?? new()).SequenceEqual(b ?? new()),

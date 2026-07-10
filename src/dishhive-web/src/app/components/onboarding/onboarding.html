@@ -1,0 +1,161 @@
+<section class="onboarding-shell" aria-labelledby="onboarding-title">
+  <header class="onboarding-header">
+    <div class="brand" aria-label="Dishhive">
+      <img class="brand-logo" src="/icons/dishhive_pwa_48x48.png" width="40" height="40" alt="">
+      <span class="mat-title-large">Dishhive</span>
+    </div>
+    <button mat-button type="button" (click)="skip()" [disabled]="finishing()">
+      Skip setup
+    </button>
+  </header>
+
+  <main class="onboarding-content">
+    <div class="welcome-copy">
+      <p class="eyebrow mat-label-large">A fresh kitchen</p>
+      <h1 id="onboarding-title" class="mat-display-small">Let’s make Dishhive yours</h1>
+      <p class="mat-body-large">
+        Two quick choices and your household are all we need to get meal planning.
+      </p>
+    </div>
+
+    <mat-card appearance="raised" class="wizard-card">
+      @if (errorMessage(); as message) {
+        <div class="error-banner" role="alert">
+          <mat-icon>error</mat-icon>
+          <span>{{ message }}</span>
+        </div>
+      }
+
+      <mat-vertical-stepper #stepper [linear]="true">
+        <mat-step [stepControl]="preferencesForm">
+          <ng-template matStepLabel>Planning preferences</ng-template>
+          <form [formGroup]="preferencesForm" class="step-content">
+            <div>
+              <h2 class="mat-title-large">Start with the familiar</h2>
+              <p class="mat-body-medium secondary-copy">
+                We picked the most common defaults. You can change these later in Settings.
+              </p>
+            </div>
+
+            <fieldset class="choice-group">
+              <legend class="mat-title-medium">First day of the week</legend>
+              <mat-radio-group formControlName="firstDayOfWeek" aria-label="First day of the week">
+                <mat-radio-button value="monday">Monday</mat-radio-button>
+                <mat-radio-button value="sunday">Sunday</mat-radio-button>
+              </mat-radio-group>
+            </fieldset>
+
+            <fieldset class="choice-group">
+              <legend class="mat-title-medium">Measurements</legend>
+              <mat-radio-group formControlName="measurementSystem" aria-label="Measurement system">
+                <mat-radio-button value="metric">Metric (g, ml, °C)</mat-radio-button>
+                <mat-radio-button value="imperial">Imperial (oz, cups, °F)</mat-radio-button>
+              </mat-radio-group>
+            </fieldset>
+
+            <div class="step-actions">
+              @if (savingPreferences()) {
+                <button mat-flat-button type="button" disabled aria-label="Saving preferences">
+                  <mat-spinner diameter="20" />
+                </button>
+              } @else {
+                <button mat-flat-button type="button" (click)="savePreferences(stepper)">
+                  Continue
+                  <mat-icon iconPositionEnd>arrow_forward</mat-icon>
+                </button>
+              }
+            </div>
+          </form>
+        </mat-step>
+
+        <mat-step>
+          <ng-template matStepLabel>Your household</ng-template>
+          <div class="step-content">
+            <div>
+              <h2 class="mat-title-large">Who are we cooking for?</h2>
+              <p class="mat-body-medium secondary-copy">
+                Add as many people as you like, or continue without adding anyone.
+              </p>
+            </div>
+
+            <form #memberFormDirective="ngForm" [formGroup]="memberForm" class="member-form"
+                  (ngSubmit)="addMember(memberFormDirective)">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Name</mat-label>
+                <input matInput formControlName="name" maxlength="100" autocomplete="name"
+                       [errorStateMatcher]="memberErrorStateMatcher">
+                @if (memberSubmissionAttempted() && memberForm.controls.name.hasError('required')) {
+                  <mat-error>Enter a name</mat-error>
+                }
+              </mat-form-field>
+              <mat-slide-toggle formControlName="isGuest">Guest</mat-slide-toggle>
+              @if (addingMember()) {
+                <button mat-stroked-button type="button" disabled aria-label="Adding household member">
+                  <mat-spinner diameter="20" />
+                </button>
+              } @else {
+                <button mat-stroked-button type="submit">
+                  <mat-icon>person_add</mat-icon>
+                  Add person
+                </button>
+              }
+            </form>
+
+            @if (members().length > 0) {
+              <mat-list class="member-list" aria-label="Added household members">
+                @for (member of members(); track member.id) {
+                  <mat-list-item>
+                    <mat-icon matListItemIcon>{{ member.isGuest ? 'badge' : 'person' }}</mat-icon>
+                    <span matListItemTitle>{{ member.name }}</span>
+                    @if (member.isGuest) {
+                      <span matListItemLine>Guest</span>
+                    }
+                  </mat-list-item>
+                }
+              </mat-list>
+            }
+
+            <div class="step-actions split-actions">
+              <button mat-button type="button" matStepperPrevious>Back</button>
+              <button mat-flat-button type="button" matStepperNext>
+                Continue
+                <mat-icon iconPositionEnd>arrow_forward</mat-icon>
+              </button>
+            </div>
+          </div>
+        </mat-step>
+
+        <mat-step>
+          <ng-template matStepLabel>Ready</ng-template>
+          <div class="step-content ready-step">
+            <div class="ready-icon" aria-hidden="true"><mat-icon>restaurant_menu</mat-icon></div>
+            <div>
+              <h2 class="mat-headline-small">Your table is ready</h2>
+              <p class="mat-body-large secondary-copy">
+                @if (members().length === 0) {
+                  Start planning now and add household members whenever you’re ready.
+                } @else {
+                  Dishhive is set up for {{ members().length }}
+                  {{ members().length === 1 ? 'person' : 'people' }}.
+                }
+              </p>
+            </div>
+            <div class="step-actions split-actions">
+              <button mat-button type="button" matStepperPrevious>Back</button>
+              @if (finishing()) {
+                <button mat-flat-button type="button" disabled aria-label="Finishing setup">
+                  <mat-spinner diameter="20" />
+                </button>
+              } @else {
+                <button mat-flat-button type="button" (click)="finish()">
+                  Open Dishhive
+                  <mat-icon iconPositionEnd>celebration</mat-icon>
+                </button>
+              }
+            </div>
+          </div>
+        </mat-step>
+      </mat-vertical-stepper>
+    </mat-card>
+  </main>
+</section>

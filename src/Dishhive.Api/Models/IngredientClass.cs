@@ -46,16 +46,13 @@ public static class IngredientClasses
     /// the numeric strings Enum.TryParse would otherwise accept)</summary>
     public static bool TryParse(string? name, out IngredientClass value)
     {
-        value = default;
-        return name != null
-            && Enum.TryParse(name.Trim(), ignoreCase: true, out value)
-            && Enum.IsDefined(value);
+        return EnumNames.TryParse(name, out value);
     }
 
     /// <summary>Distinct, enum-ordered names for DTOs</summary>
     public static List<string> ToNames(IEnumerable<IngredientClass> classes) => classes
         .Distinct()
         .OrderBy(c => c)
-        .Select(c => c.ToString())
+        .Select(EnumNames.ToName)
         .ToList();
 }

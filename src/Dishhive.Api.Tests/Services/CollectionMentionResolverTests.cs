@@ -145,7 +145,7 @@ public class CollectionMentionResolverTests : IDisposable
         _context.Recipes.Add(new Recipe { Id = Guid.NewGuid(), Title = "Wrap", TotalTimeMinutes = 20 });
         _context.UserSettings.Add(new Models.UserSetting
         {
-            Key = AutoCollectionProvider.DisabledSettingKey,
+            Key = UserSettingKeys.DisabledAutoCollections,
             Value = "[\"auto-quick\"]"
         });
         await _context.SaveChangesAsync();

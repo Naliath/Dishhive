@@ -78,7 +78,8 @@ public class AiPromptServiceTests
         (await service.DefaultChangedSinceCustomizedAsync()).Should().BeFalse();
 
         // Simulate an app update that shipped a different default after customization
-        var baseline = await context.UserSettings.SingleAsync(s => s.Key == AiPromptService.BaselineKey);
+        var baseline = await context.UserSettings
+            .SingleAsync(s => s.Key == UserSettingKeys.AiSystemPromptBaseline);
         baseline.Value = "an older shipped default";
         await context.SaveChangesAsync();
 

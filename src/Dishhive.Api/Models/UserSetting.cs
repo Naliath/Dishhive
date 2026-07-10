@@ -4,8 +4,7 @@ namespace Dishhive.Api.Models;
 
 /// <summary>
 /// Key-value application setting (same pattern as Freezy).
-/// Known keys: "measurementSystem" = "metric" (default by absence) | "imperial".
-/// "firstDayOfWeek" = "monday" (default by absence) | "sunday".
+/// Known keys are centralized in <see cref="UserSettingKeys"/>.
 /// </summary>
 public class UserSetting
 {

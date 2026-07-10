@@ -39,9 +39,6 @@ public class AutoCollectionProvider(DishhiveDbContext context)
     public const string RecentId = "auto-recent";
     private const string MemberFavoritesIdPrefix = "auto-fav-";
 
-    /// <summary>UserSetting key holding the JSON list of disabled auto-collection ids</summary>
-    public const string DisabledSettingKey = "autoCollections.disabled";
-
     /// <summary>The enabled auto collections (the ones users actually see and reference)</summary>
     public async Task<IReadOnlyList<AutoCollection>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -140,7 +137,7 @@ public class AutoCollectionProvider(DishhiveDbContext context)
     {
         var setting = await context.UserSettings
             .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Key == DisabledSettingKey, cancellationToken);
+            .FirstOrDefaultAsync(s => s.Key == UserSettingKeys.DisabledAutoCollections, cancellationToken);
 
         if (setting == null || string.IsNullOrWhiteSpace(setting.Value))
         {
@@ -163,10 +160,11 @@ public class AutoCollectionProvider(DishhiveDbContext context)
     private async Task SaveDisabledAsync(HashSet<string> disabled, CancellationToken cancellationToken)
     {
         var value = JsonSerializer.Serialize(disabled.ToList());
-        var setting = await context.UserSettings.FirstOrDefaultAsync(s => s.Key == DisabledSettingKey, cancellationToken);
+        var setting = await context.UserSettings
+            .FirstOrDefaultAsync(s => s.Key == UserSettingKeys.DisabledAutoCollections, cancellationToken);
         if (setting == null)
         {
-            context.UserSettings.Add(new UserSetting { Key = DisabledSettingKey, Value = value });
+            context.UserSettings.Add(new UserSetting { Key = UserSettingKeys.DisabledAutoCollections, Value = value });
         }
         else
         {

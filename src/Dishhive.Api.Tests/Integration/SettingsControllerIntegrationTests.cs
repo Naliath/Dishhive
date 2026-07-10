@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using FluentAssertions;
 
@@ -11,7 +12,7 @@ public class SettingsControllerIntegrationTests : TestBase
     public async Task GetSetting_UnknownKey_ReturnsNotFound()
     {
         // measurementSystem is metric by absence: no row until the user changes it
-        var response = await Client.GetAsync("/api/settings/measurementSystem");
+        var response = await Client.GetAsync($"/api/settings/{UserSettingKeys.MeasurementSystem}");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -20,22 +21,26 @@ public class SettingsControllerIntegrationTests : TestBase
     public async Task SetSetting_NewKey_CreatesSetting()
     {
         var response = await Client.PutAsJsonAsync(
-            "/api/settings/measurementSystem",
+            $"/api/settings/{UserSettingKeys.MeasurementSystem}",
             new UpsertUserSettingDto { Value = "imperial" });
 
         var created = await response.Content.ReadFromJsonAsync<UserSettingDto>();
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        created!.Key.Should().Be("measurementSystem");
+        created!.Key.Should().Be(UserSettingKeys.MeasurementSystem);
         created.Value.Should().Be("imperial");
     }
 
     [Fact]
     public async Task SetSetting_ExistingKey_UpdatesValue()
     {
-        await Client.PutAsJsonAsync("/api/settings/measurementSystem", new UpsertUserSettingDto { Value = "imperial" });
+        await Client.PutAsJsonAsync(
+            $"/api/settings/{UserSettingKeys.MeasurementSystem}",
+            new UpsertUserSettingDto { Value = "imperial" });
 
-        var response = await Client.PutAsJsonAsync("/api/settings/measurementSystem", new UpsertUserSettingDto { Value = "metric" });
+        var response = await Client.PutAsJsonAsync(
+            $"/api/settings/{UserSettingKeys.MeasurementSystem}",
+            new UpsertUserSettingDto { Value = "metric" });
         var updated = await response.Content.ReadFromJsonAsync<UserSettingDto>();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -45,10 +50,12 @@ public class SettingsControllerIntegrationTests : TestBase
     [Fact]
     public async Task DeleteSetting_ExistingKey_RemovesSetting()
     {
-        await Client.PutAsJsonAsync("/api/settings/measurementSystem", new UpsertUserSettingDto { Value = "imperial" });
+        await Client.PutAsJsonAsync(
+            $"/api/settings/{UserSettingKeys.MeasurementSystem}",
+            new UpsertUserSettingDto { Value = "imperial" });
 
-        var deleteResponse = await Client.DeleteAsync("/api/settings/measurementSystem");
-        var getResponse = await Client.GetAsync("/api/settings/measurementSystem");
+        var deleteResponse = await Client.DeleteAsync($"/api/settings/{UserSettingKeys.MeasurementSystem}");
+        var getResponse = await Client.GetAsync($"/api/settings/{UserSettingKeys.MeasurementSystem}");
 
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
         getResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);

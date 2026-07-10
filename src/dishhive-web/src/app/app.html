@@ -1,3 +1,16 @@
+@if (checkingOnboarding()) {
+  <main class="onboarding-loading" aria-label="Checking setup">
+    <mat-spinner diameter="48" />
+  </main>
+} @else if (showOnboarding()) {
+  @defer {
+    <app-onboarding (finished)="finishOnboarding()" />
+  } @placeholder {
+    <main class="onboarding-loading" aria-label="Loading setup">
+      <mat-spinner diameter="48" />
+    </main>
+  }
+} @else {
 <mat-toolbar class="app-toolbar">
   <button mat-icon-button (click)="sidenav.toggle()" aria-label="Toggle menu">
     <mat-icon>menu</mat-icon>
@@ -46,3 +59,4 @@
     </div>
   </mat-sidenav-content>
 </mat-sidenav-container>
+}

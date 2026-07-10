@@ -218,7 +218,7 @@ public class AiModelCapabilityService : IAiModelCapabilityService
         record.TestedAt = result.TestedAt;
         record.EndpointReachable = result.EndpointReachable;
         record.ModelListed = result.ModelListed;
-        record.ResponseMode = result.ResponseMode.ToString();
+        record.ResponseMode = EnumNames.ToName(result.ResponseMode);
         record.EvaluationPassed = result.EvaluationPassed;
         record.ChecksJson = JsonSerializer.Serialize(result.Checks);
         record.TokensPerSecond = result.TokensPerSecond;
@@ -229,7 +229,7 @@ public class AiModelCapabilityService : IAiModelCapabilityService
     /// (unknown enum value, corrupt checks JSON) — the caller then re-tests.</summary>
     private AiModelTestResult? ToResult(AiModelTestRecord record)
     {
-        if (!Enum.TryParse<AiResponseMode>(record.ResponseMode, out var mode))
+        if (!EnumNames.TryParse<AiResponseMode>(record.ResponseMode, out var mode))
         {
             return null;
         }

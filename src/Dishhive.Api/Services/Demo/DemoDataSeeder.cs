@@ -17,7 +17,6 @@ namespace Dishhive.Api.Services.Demo;
 /// </summary>
 public class DemoDataSeeder : BackgroundService
 {
-    internal const string SeededSettingKey = "demo.dataSeeded";
     private const string SeedResourceSuffix = "demo-seed.json";
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -61,7 +60,7 @@ public class DemoDataSeeder : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<DishhiveDbContext>();
 
-        if (await context.UserSettings.AnyAsync(s => s.Key == SeededSettingKey, cancellationToken))
+        if (await context.UserSettings.AnyAsync(s => s.Key == UserSettingKeys.DemoDataSeeded, cancellationToken))
         {
             return;
         }
@@ -184,7 +183,7 @@ public class DemoDataSeeder : BackgroundService
 
         SeedPastMeals(context, recipesByUrl.Values.ToList(), familyMembers);
 
-        context.UserSettings.Add(new UserSetting { Key = SeededSettingKey, Value = "true" });
+        context.UserSettings.Add(new UserSetting { Key = UserSettingKeys.DemoDataSeeded, Value = "true" });
         await context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Demo data seeded: {RecipeCount} recipes, {MemberCount} family members",

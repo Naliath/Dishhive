@@ -1,14 +1,17 @@
-import { Component, OnInit } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
+import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { SettingsService } from './services/settings.service';
+import { OnboardingService } from './services/onboarding.service';
 import { PwaService } from './services/pwa.service';
 import { ThemeService } from './services/theme.service';
+import { OnboardingComponent } from './components/onboarding/onboarding';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatListModule } from '@angular/material/list';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 @Component({
   selector: 'app-root',
@@ -22,16 +25,23 @@ import { MatDividerModule } from '@angular/material/divider';
     MatIconModule,
     MatSidenavModule,
     MatListModule,
-    MatDividerModule
+    MatDividerModule,
+    MatProgressSpinnerModule,
+    OnboardingComponent
   ],
   templateUrl: './app.html',
-  styleUrl: './app.scss'
+  styleUrl: './app.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class App implements OnInit {
   title = 'Dishhive';
+  readonly checkingOnboarding = signal(true);
+  readonly showOnboarding = signal(false);
 
   constructor(
     private settingsService: SettingsService,
+    private onboardingService: OnboardingService,
+    private router: Router,
     // Instantiated for its side effects: update checks, offline notices, install prompt
     private pwaService: PwaService,
     // Instantiated for its side effects: restores saved theme preference on startup
@@ -42,5 +52,18 @@ export class App implements OnInit {
     // Load display preferences once so all pages use them from the start
     this.settingsService.loadMeasurementSystem().subscribe();
     this.settingsService.loadFirstDayOfWeek().subscribe();
+    this.onboardingService.start().subscribe({
+      next: status => {
+        this.showOnboarding.set(status.shouldShow);
+        this.checkingOnboarding.set(false);
+      },
+      // Onboarding must never lock users out when the startup check is unavailable.
+      error: () => this.checkingOnboarding.set(false)
+    });
+  }
+
+  finishOnboarding(): void {
+    this.showOnboarding.set(false);
+    void this.router.navigateByUrl('/');
   }
 }

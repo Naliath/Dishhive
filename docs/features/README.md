@@ -25,6 +25,7 @@ implementation checklist that is updated as work progresses.
 | [pwa-support.md](pwa-support.md) | Installable app + offline read of plan and shopping list | week-planner, shopping-list-export |
 | [recipe-import-export.md](recipe-import-export.md) | Library backup/restore as schema.org Recipe JSON | recipe-store, recipe-import |
 | [mcp-server.md](mcp-server.md) | MCP endpoint (/mcp): local AI reads the week plan, eaten history and recipes | week-planner, meal-feedback, recipe-store |
+| [onboarding.md](onboarding.md) | One-time setup wizard for an empty database | family-composition, measurement-preferences |
 
 Future ideas live in [`../../possible-features.md`](../../possible-features.md).
 The infrastructure foundation is planned in

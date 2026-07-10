@@ -213,7 +213,16 @@ IMealSuggestionService
   suggestion's full back-and-forth traceable in the merged log stream. `LlmRecipeExtractor`
   and `RecipeImportService.PreviewAsync` (fetch vs. extract broken out separately) log their
   own timings the same way, since they're reachable both from `get_recipe` and from a normal
-  import.
+  import. Every raw final model response is logged at `Debug`, correlated by the same request
+  id. Container logging defaults to `Information`; set compose interpolation variable
+  `LOG_LEVEL=Debug` to expose raw responses or `LOG_LEVEL=Warning` to reduce production logs.
+  The Development environment uses `Debug` by default.
+- **External source URL recovery**: `get_recipe` returns its canonical `sourceUrl` alongside
+  the recipe fields. The tool set also retains exact fetched-title-to-URL pairs for the one
+  request, so post-processing can restore a missing/malformed final `sourceUrl` when the final
+  dish title uniquely and exactly matches a successfully fetched recipe. It deliberately does
+  not infer a URL from the free-text reason, make a fuzzy title match, or choose between two
+  fetched pages with the same title, any of which could import the wrong page.
 - **Context budgeting**: recipes are **relevance-ranked** by the request builder
   (favorites, ratings, collection membership; recently-eaten pushed down) rather than sent
   alphabetically, and history is two compact lists (recent-to-avoid, liked/disliked). The

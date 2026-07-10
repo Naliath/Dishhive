@@ -361,7 +361,10 @@ to 4000 chars). API: `GET/PUT/DELETE /api/settings/ai-prompt`.
 - `components/integrations-status/` (settings page): under the AI row, the last model
   test verdict with its per-check list and a "(Re-)test model" button; while a test
   runs, the cooking-pot loader with a "can take a couple of minutes" note (polls the
-  test endpoint every 2s) and the button is hidden until it completes.
+  test endpoint every 2s) and the button is hidden until it completes. The Web Search
+  row probes the actual JSON search contract rather than only service availability;
+  an instance that rejects `format=json` is marked **Misconfigured** with the required
+  nested `search: formats:` SearXNG setting shown inline.
 - `components/ai-prompt-settings/` (settings page, shown only when AI is configured):
   the editable prompt section (monospace textarea, 4000-char cap) with Save /
   Reset-to-default, a "customized" tag, the drift notice, and the protected rules in a
@@ -397,6 +400,7 @@ to 4000 chars). API: `GET/PUT/DELETE /api/settings/ai-prompt`.
 - [x] Planner button + review dialog + accept flow
 - [x] docker-compose `Ai__*` vars + README provider table
 - [x] Web search seam (`IWebSearchClient` + SearXNG) + `WebSearch__*` config + integrations status
+- [x] Web-search contract health check + actionable settings-page diagnostics for disabled JSON output
 - [x] External-recipe tools (`search_recipes`, `get_recipe`) + `FunctionInvokingChatClient` wiring
 - [x] `@[Source]` mentions (`SourceMentionResolver`, `RecipeSourceCatalog`, `GET /api/recipes/sources`)
 - [x] LLM recipe-extraction fallback for import + `PreviewAsync`; import-on-accept in the review dialog

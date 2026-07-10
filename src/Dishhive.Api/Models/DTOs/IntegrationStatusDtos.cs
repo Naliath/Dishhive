@@ -10,8 +10,10 @@ public record IntegrationStatusResponseDto(
 public record WebSearchIntegrationStatusDto(
     bool Configured,
     bool Reachable,
+    bool Operational,
     string? Provider,
-    string? BaseUrl
+    string? BaseUrl,
+    string? Error
 );
 
 public record AiIntegrationStatusDto(

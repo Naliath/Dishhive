@@ -4,7 +4,9 @@ using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.WebSearch;
 using Microsoft.AspNetCore.Mvc;
+using System.Net;
 using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace Dishhive.Api.Controllers;
 
@@ -28,8 +30,9 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
 
         var scraperVersion = await scrapersClient.GetInstalledVersionAsync(cancellationToken);
 
-        var webSearchReachable = webSearchOptions.IsConfigured
-            && await CheckWebSearchReachableAsync(webSearchOptions, cancellationToken);
+        var webSearchProbe = webSearchOptions.IsConfigured
+            ? await CheckWebSearchAsync(webSearchOptions, cancellationToken)
+            : WebSearchProbe.NotConfigured;
 
         return new IntegrationStatusResponseDto(
             Ai: new AiIntegrationStatusDto(
@@ -55,16 +58,23 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
             ),
             WebSearch: new WebSearchIntegrationStatusDto(
                 Configured: webSearchOptions.IsConfigured,
-                Reachable: webSearchReachable,
+                Reachable: webSearchProbe.Reachable,
+                Operational: webSearchProbe.Operational,
                 Provider: webSearchOptions.IsConfigured ? webSearchOptions.Provider : null,
                 BaseUrl: webSearchOptions.IsConfigured && !string.IsNullOrEmpty(webSearchOptions.BaseUrl)
-                    ? webSearchOptions.BaseUrl : null
+                    ? webSearchOptions.BaseUrl : null,
+                Error: webSearchProbe.Error
             )
         );
     }
 
-    /// <summary>Probes the SearXNG instance's /healthz endpoint (returns "OK" when up)</summary>
-    private async Task<bool> CheckWebSearchReachableAsync(WebSearchOptions options, CancellationToken cancellationToken)
+    /// <summary>
+    /// Probes the same JSON search contract Dishhive uses. A generic health endpoint can
+    /// be healthy while SearXNG still rejects format=json because it is not enabled.
+    /// </summary>
+    private async Task<WebSearchProbe> CheckWebSearchAsync(
+        WebSearchOptions options,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -73,13 +83,65 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
 
             var baseUrl = new Uri(options.BaseUrl.TrimEnd('/') + "/");
             using var http = httpClientFactory.CreateClient();
-            using var response = await http.GetAsync(new Uri(baseUrl, "healthz"), cts.Token);
-            return response.IsSuccessStatusCode;
+            var probeUrl = new Uri(baseUrl, "search?q=dishhive-integration-check&format=json&safesearch=1");
+            using var response = await http.GetAsync(probeUrl, cts.Token);
+
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                return new WebSearchProbe(
+                    Reachable: true,
+                    Operational: false,
+                    Error: "SearXNG is reachable, but JSON search is forbidden. In settings.yml, use a nested search section with a formats list (not a search.formats key), include json, and restart SearXNG.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new WebSearchProbe(
+                    Reachable: true,
+                    Operational: false,
+                    Error: $"The search service returned {(int)response.StatusCode} ({response.ReasonPhrase}) for its JSON search endpoint.");
+            }
+
+            await using var body = await response.Content.ReadAsStreamAsync(cts.Token);
+            using var document = await JsonDocument.ParseAsync(body, cancellationToken: cts.Token);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("results", out var results)
+                || results.ValueKind != JsonValueKind.Array)
+            {
+                return new WebSearchProbe(
+                    Reachable: true,
+                    Operational: false,
+                    Error: "The search service responded, but not with the expected SearXNG JSON search result. Check WebSearch__BaseUrl and the SearXNG JSON format configuration.");
+            }
+
+            return new WebSearchProbe(Reachable: true, Operational: true, Error: null);
         }
-        catch
+        catch (JsonException)
         {
-            return false;
+            return new WebSearchProbe(
+                Reachable: true,
+                Operational: false,
+                Error: "The search service responded, but its search response was not valid JSON. Ensure json is enabled under search: formats: in SearXNG settings.yml.");
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new WebSearchProbe(
+                Reachable: false,
+                Operational: false,
+                Error: "The search service did not respond within 5 seconds. Check the URL and that the service is running.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UriFormatException)
+        {
+            return new WebSearchProbe(
+                Reachable: false,
+                Operational: false,
+                Error: "Could not reach the search service. Check WebSearch__BaseUrl and that the service is running.");
+        }
+    }
+
+    private sealed record WebSearchProbe(bool Reachable, bool Operational, string? Error)
+    {
+        public static readonly WebSearchProbe NotConfigured = new(false, false, null);
     }
 
     /// <summary>

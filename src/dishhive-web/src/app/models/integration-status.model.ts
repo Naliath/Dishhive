@@ -60,8 +60,10 @@ export interface ScraperUpdateResponse {
 export interface WebSearchIntegrationStatus {
   configured: boolean;
   reachable: boolean;
+  operational: boolean;
   provider: string | null;
   baseUrl: string | null;
+  error: string | null;
 }
 
 export interface IntegrationStatusResponse {

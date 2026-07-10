@@ -113,6 +113,22 @@ export class IntegrationsStatusComponent implements OnInit {
     return integration.reachable ? 'Active' : 'Unreachable';
   }
 
+  webSearchChipClass(integration: IntegrationStatusResponse['webSearch']): string {
+    if (!integration.configured) return 'status-chip--off';
+    return integration.operational ? 'status-chip--ok' : 'status-chip--warn';
+  }
+
+  webSearchChipIcon(integration: IntegrationStatusResponse['webSearch']): string {
+    if (!integration.configured) return 'radio_button_unchecked';
+    return integration.operational ? 'check_circle' : 'warning';
+  }
+
+  webSearchChipLabel(integration: IntegrationStatusResponse['webSearch']): string {
+    if (!integration.configured) return 'Not configured';
+    if (integration.operational) return 'Active';
+    return integration.reachable ? 'Misconfigured' : 'Unreachable';
+  }
+
   checkForUpdates(): void {
     this.checkingVersion.set(true);
     this.scraperMessage.set(null);

@@ -139,16 +139,16 @@
               @if (status.webSearch.baseUrl) {
                 <div class="integration-detail muted">{{ status.webSearch.baseUrl }}</div>
               }
-              @if (!status.webSearch.reachable) {
-                <div class="integration-detail warn">Could not reach the search service — check the URL and that it is running</div>
+              @if (status.webSearch.error) {
+                <div class="integration-detail warn">{{ status.webSearch.error }}</div>
               }
             } @else {
               <div class="integration-detail muted">Set WebSearch__Provider and WebSearch__BaseUrl (e.g. a SearXNG instance) to let the AI search the web</div>
             }
           </div>
-          <span class="status-chip" [class]="chipClass(status.webSearch)">
-            <mat-icon>{{ chipIcon(status.webSearch) }}</mat-icon>
-            {{ chipLabel(status.webSearch) }}
+          <span class="status-chip" [class]="webSearchChipClass(status.webSearch)">
+            <mat-icon>{{ webSearchChipIcon(status.webSearch) }}</mat-icon>
+            {{ webSearchChipLabel(status.webSearch) }}
           </span>
         </div>
 

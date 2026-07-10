@@ -9,7 +9,8 @@ namespace Dishhive.Api.Services.Collections;
 /// </summary>
 public static class RecipeListMapping
 {
-    public static IQueryable<RecipeListItemDto> Project(IQueryable<Recipe> query)
+    public static IQueryable<RecipeListItemDto> Project(
+        IQueryable<Recipe> query, IQueryable<CookbookEntry> cookbookEntries)
     {
         return query.Select(r => new RecipeListItemDto
         {
@@ -18,10 +19,16 @@ public static class RecipeListMapping
             Servings = r.Servings,
             TotalTimeMinutes = r.TotalTimeMinutes,
             Category = r.Category,
-            ImageUrl = r.ImageData != null ? null : r.ImageUrl,
+            // Remote URLs are references only. Rendering never reaches outside
+            // Dishhive, even when an older import failed to download its image.
+            ImageUrl = null,
             HasLocalImage = r.ImageData != null,
             SourceProvider = r.SourceProvider,
-            Tags = r.Tags.Select(a => a.RecipeTag!.Name).OrderBy(n => n).ToList()
+            Tags = r.Tags.Select(a => a.RecipeTag!.Name).OrderBy(n => n).ToList(),
+            CookbookIds = cookbookEntries
+                .Where(entry => entry.RecipeId == r.Id)
+                .Select(entry => entry.CookbookId)
+                .ToList()
         });
     }
 

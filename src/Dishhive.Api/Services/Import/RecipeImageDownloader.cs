@@ -10,7 +10,32 @@ namespace Dishhive.Api.Services.Import;
 /// </summary>
 public static class RecipeImageDownloader
 {
-    public const int MaxImageBytes = 5 * 1024 * 1024;
+    // Kept as an alias for the exchange importer and older callers.
+    public const int MaxImageBytes = RecipeImageProcessor.MaxSourceBytes;
+
+    public static async Task<ProcessedRecipeImage> DownloadAsync(
+        HttpClient httpClient, Uri imageUri, CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.GetAsync(
+            imageUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var contentType = response.Content.Headers.ContentType?.MediaType;
+        if (contentType == null || !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new RecipeImageException(
+                $"The URL returned '{contentType ?? "no content type"}' instead of an image.");
+        }
+
+        if (response.Content.Headers.ContentLength > RecipeImageProcessor.MaxSourceBytes)
+        {
+            throw new RecipeImageException(
+                $"Images may be at most {RecipeImageProcessor.MaxSourceBytes / 1024 / 1024} MB.");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        return await RecipeImageProcessor.ProcessAsync(stream, cancellationToken);
+    }
 
     public static async Task TryDownloadAsync(
         HttpClient httpClient, Recipe recipe, ILogger logger, CancellationToken cancellationToken)
@@ -24,33 +49,11 @@ public static class RecipeImageDownloader
 
         try
         {
-            using var response = await httpClient.GetAsync(imageUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            response.EnsureSuccessStatusCode();
-
-            var contentType = response.Content.Headers.ContentType?.MediaType;
-            if (contentType == null || !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-            {
-                logger.LogWarning("Recipe image {Url} has non-image content type {ContentType}; skipping download",
-                    imageUri, contentType ?? "(none)");
-                return;
-            }
-
-            if (response.Content.Headers.ContentLength > MaxImageBytes)
-            {
-                logger.LogWarning("Recipe image {Url} exceeds {MaxBytes} bytes; skipping download", imageUri, MaxImageBytes);
-                return;
-            }
-
-            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-            if (bytes.Length == 0 || bytes.Length > MaxImageBytes)
-            {
-                return;
-            }
-
-            recipe.ImageData = bytes;
-            recipe.ImageContentType = contentType;
+            var processed = await DownloadAsync(httpClient, imageUri, cancellationToken);
+            recipe.ImageData = processed.Data;
+            recipe.ImageContentType = processed.ContentType;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or RecipeImageException)
         {
             logger.LogWarning(ex, "Could not download recipe image {Url}; keeping remote URL only", imageUri);
         }

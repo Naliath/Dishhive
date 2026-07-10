@@ -69,6 +69,18 @@ export class RecipesService {
     return this.http.put<Recipe>(`${this.apiUrl}/${id}`, recipe);
   }
 
+  /** Replaces the stored image from a local file or browser camera capture */
+  setRecipeImage(id: string, file: File): Observable<void> {
+    const form = new FormData();
+    form.append('file', file, file.name || 'recipe-photo');
+    return this.http.put<void>(`${this.apiUrl}/${id}/image`, form);
+  }
+
+  /** Removes the stored image and any retained remote source URL */
+  deleteRecipeImage(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}/image`);
+  }
+
   deleteRecipe(id: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${id}`)
       .pipe(catchError(this.handleError));

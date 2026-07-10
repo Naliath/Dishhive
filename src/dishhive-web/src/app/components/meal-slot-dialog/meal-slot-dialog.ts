@@ -150,7 +150,8 @@ export class MealSlotDialog {
           title: meal.recipeTitle,
           servings: 0,
           hasLocalImage: false,
-          tags: []
+          tags: [],
+          cookbookIds: []
         });
       }
     } else {

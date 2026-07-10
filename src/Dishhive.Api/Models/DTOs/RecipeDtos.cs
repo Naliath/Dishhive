@@ -27,8 +27,7 @@ public class RecipeListItemDto
     public string? Category { get; set; }
 
     /// <summary>
-    /// Image location: the local image endpoint when the image is stored in Dishhive,
-    /// otherwise the remote source URL (or null)
+    /// Local Dishhive image endpoint, or null when no local image is stored
     /// </summary>
     public string? ImageUrl { get; set; }
 
@@ -39,6 +38,9 @@ public class RecipeListItemDto
 
     /// <summary>Organization tag names (user-curated, see recipe-organization.md)</summary>
     public List<string> Tags { get; set; } = new();
+
+    /// <summary>Ids of the manual collections this recipe belongs to</summary>
+    public List<Guid> CookbookIds { get; set; } = new();
 }
 
 /// <summary>Full recipe DTO for the detail view</summary>
@@ -55,13 +57,18 @@ public class RecipeDto
     public string? Keywords { get; set; }
 
     /// <summary>
-    /// Image location: the local image endpoint when the image is stored in Dishhive,
-    /// otherwise the remote source URL (or null)
+    /// Local Dishhive image endpoint, or null when no local image is stored
     /// </summary>
     public string? ImageUrl { get; set; }
 
     /// <summary>True when the image bytes are stored locally in Dishhive</summary>
     public bool HasLocalImage { get; set; }
+
+    /// <summary>
+    /// Original remote image URL retained for traceability. Unlike ImageUrl, this is
+    /// never used for display when a local image exists.
+    /// </summary>
+    public string? ImageSourceUrl { get; set; }
 
     public string? VideoUrl { get; set; }
     public string? SourceUrl { get; set; }

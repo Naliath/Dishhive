@@ -29,7 +29,8 @@ public class RecipeImportEndpointIntegrationTests : IDisposable
 
         var mockHandler = new MockHttpMessageHandler()
             .RespondWith(FixtureUrl, fixtureHtml)
-            .RespondWith("https://storage.googleapis.com/", [0xFF, 0xD8, 0xFF, 0xE0], "image/jpeg");
+            .RespondWith("https://storage.googleapis.com/", Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="), "image/png");
 
         _factory = new ImportTestFactory(mockHandler);
         _client = _factory.CreateClient();
@@ -75,8 +76,9 @@ public class RecipeImportEndpointIntegrationTests : IDisposable
         var imageResponse = await _client.GetAsync($"/api/recipes/{recipe!.Id}/image");
 
         imageResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        imageResponse.Content.Headers.ContentType!.MediaType.Should().Be("image/jpeg");
-        (await imageResponse.Content.ReadAsByteArrayAsync()).Should().Equal(0xFF, 0xD8, 0xFF, 0xE0);
+        imageResponse.Content.Headers.ContentType!.MediaType.Should().Be("image/webp");
+        (await imageResponse.Content.ReadAsByteArrayAsync()).Should().StartWith(
+            [(byte)'R', (byte)'I', (byte)'F', (byte)'F']);
     }
 
     [Fact]

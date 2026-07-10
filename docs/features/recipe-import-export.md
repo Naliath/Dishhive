@@ -58,7 +58,8 @@ and files saved from other recipe managers. Per recipe:
 | Otherwise | **Created** (`SourceProvider = "file-import"`) |
 
 - Ingredient lines re-parse through `IngredientLineParser` (same as URL import).
-- Data-URI images become locally stored bytes; remote image URLs are downloaded
+- Data-URI images and remote image URLs are decoded/downloaded through the same resize and
+  WebP normalization pipeline before becoming locally stored bytes
   best-effort (failure never fails the import).
 - Response reports created/updated/skipped counts with per-recipe skip reasons.
 - Errors: 400 not JSON / no file, 422 JSON without any Recipe objects.

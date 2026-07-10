@@ -8,6 +8,9 @@ namespace Dishhive.Api.Tests.Integration;
 
 public class RecipesControllerIntegrationTests : TestBase
 {
+    private static readonly byte[] TinyPng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+
     private static CreateRecipeDto SampleRecipe() => new()
     {
         Title = "Spaghetti bolognese",
@@ -42,6 +45,27 @@ public class RecipesControllerIntegrationTests : TestBase
         created.Steps.Should().HaveCount(2);
         created.Steps[0].StepNumber.Should().Be(1);
         created.Steps[0].Instruction.Should().Be("Bak het gehakt.");
+    }
+
+    [Fact]
+    public async Task CreateRecipe_WithImageUrl_DownloadsLocalCopyAndKeepsSourceReference()
+    {
+        var dto = SampleRecipe();
+        dto.ImageUrl = "https://1.1.1.1/recipe.png";
+
+        var response = await Client.PostAsJsonAsync("/api/recipes", dto);
+        var created = await response.Content.ReadFromJsonAsync<RecipeDto>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        created!.HasLocalImage.Should().BeTrue();
+        created.ImageUrl.Should().Be($"/api/recipes/{created.Id}/image");
+        created.ImageSourceUrl.Should().Be(dto.ImageUrl);
+
+        using var freshContext = CreateFreshContext();
+        var stored = freshContext.Recipes.Single(r => r.Id == created.Id);
+        stored.ImageContentType.Should().Be("image/webp");
+        stored.ImageData.Should().NotBeNullOrEmpty();
+        stored.ImageUrl.Should().Be(dto.ImageUrl);
     }
 
     [Fact]
@@ -112,6 +136,24 @@ public class RecipesControllerIntegrationTests : TestBase
     }
 
     [Fact]
+    public async Task GetRecipe_RemoteReferenceWithoutLocalBytes_IsNotUsedAsDisplayUrl()
+    {
+        var recipe = new Recipe
+        {
+            Title = "Remote-only legacy recipe",
+            ImageUrl = "https://example.com/legacy.jpg"
+        };
+        DbContext.Recipes.Add(recipe);
+        await DbContext.SaveChangesAsync();
+
+        var result = await Client.GetFromJsonAsync<RecipeDto>($"/api/recipes/{recipe.Id}");
+
+        result!.ImageUrl.Should().BeNull();
+        result.HasLocalImage.Should().BeFalse();
+        result.ImageSourceUrl.Should().Be(recipe.ImageUrl);
+    }
+
+    [Fact]
     public async Task UpdateRecipe_ReplacesIngredientsAndStepsWholesale()
     {
         var createResponse = await Client.PostAsJsonAsync("/api/recipes", SampleRecipe());
@@ -137,6 +179,88 @@ public class RecipesControllerIntegrationTests : TestBase
         using var freshContext = CreateFreshContext();
         freshContext.RecipeIngredients.Count(i => i.RecipeId == created.Id).Should().Be(1);
         freshContext.RecipeSteps.Count(s => s.RecipeId == created.Id).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task UpdateRecipe_WithoutImageUrl_PreservesStoredLocalImage()
+    {
+        var recipe = new Recipe
+        {
+            Title = "Recipe with image",
+            ImageData = [1, 2, 3],
+            ImageContentType = "image/webp",
+            ImageUrl = "https://example.com/original.jpg"
+        };
+        DbContext.Recipes.Add(recipe);
+        await DbContext.SaveChangesAsync();
+        DbContext.ChangeTracker.Clear();
+
+        var response = await Client.PutAsJsonAsync($"/api/recipes/{recipe.Id}", new UpdateRecipeDto
+        {
+            Title = "Updated recipe",
+            Servings = 4
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var freshContext = CreateFreshContext();
+        var stored = freshContext.Recipes.Single(r => r.Id == recipe.Id);
+        stored.ImageData.Should().Equal(1, 2, 3);
+        stored.ImageUrl.Should().Be("https://example.com/original.jpg");
+    }
+
+    [Fact]
+    public async Task SetRecipeImage_LocalFile_NormalizesAndClearsRemoteReference()
+    {
+        var recipe = new Recipe
+        {
+            Title = "Recipe with remote image",
+            ImageUrl = "https://example.com/original.jpg",
+            ImageData = [1, 2, 3],
+            ImageContentType = "image/jpeg"
+        };
+        DbContext.Recipes.Add(recipe);
+        await DbContext.SaveChangesAsync();
+        DbContext.ChangeTracker.Clear();
+
+        using var content = new MultipartFormDataContent
+        {
+            { new ByteArrayContent(TinyPng), "file", "camera.png" }
+        };
+        var response = await Client.PutAsync($"/api/recipes/{recipe.Id}/image", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        using var freshContext = CreateFreshContext();
+        var stored = freshContext.Recipes.Single(r => r.Id == recipe.Id);
+        stored.ImageUrl.Should().BeNull();
+        stored.ImageContentType.Should().Be("image/webp");
+        stored.ImageData.Should().NotBeNullOrEmpty();
+
+        var imageResponse = await Client.GetAsync($"/api/recipes/{recipe.Id}/image");
+        imageResponse.Content.Headers.ContentType!.MediaType.Should().Be("image/webp");
+    }
+
+    [Fact]
+    public async Task DeleteRecipeImage_ClearsBytesAndSourceReference()
+    {
+        var recipe = new Recipe
+        {
+            Title = "Recipe with image",
+            ImageUrl = "https://example.com/original.jpg",
+            ImageData = [1, 2, 3],
+            ImageContentType = "image/webp"
+        };
+        DbContext.Recipes.Add(recipe);
+        await DbContext.SaveChangesAsync();
+        DbContext.ChangeTracker.Clear();
+
+        var response = await Client.DeleteAsync($"/api/recipes/{recipe.Id}/image");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        using var freshContext = CreateFreshContext();
+        var stored = freshContext.Recipes.Single(r => r.Id == recipe.Id);
+        stored.ImageData.Should().BeNull();
+        stored.ImageContentType.Should().BeNull();
+        stored.ImageUrl.Should().BeNull();
     }
 
     [Fact]

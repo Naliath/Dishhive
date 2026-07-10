@@ -80,6 +80,15 @@ builder.Services.AddHttpClient<IRecipeExchangeService, RecipeExchangeService>((s
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 
+// Manual image URLs use the same fetch posture, but a separate named client keeps
+// recipe CRUD independent from the import services' typed clients.
+builder.Services.AddHttpClient("RecipeImages", client =>
+{
+    var userAgent = builder.Configuration["RecipeImport:UserAgent"] ?? "Dishhive/1.0";
+    client.DefaultRequestHeaders.Add("User-Agent", userAgent);
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+
 // Freezy integration (optional; disabled when Freezy:BaseUrl is empty)
 builder.Services.AddHttpClient<IFreezyClient, FreezyHttpClient>(client =>
 {

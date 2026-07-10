@@ -119,6 +119,17 @@ Follows Freezy's `TESTING_STRATEGY.md` approach:
 - Naming: `[Method/Feature]_[Scenario]_[ExpectedResult]`, AAA pattern
 - Tests are contracts: when changing production code, fix the code, not the tests
 
+## Dependency Policy
+
+- New dependencies must use the latest stable release available at implementation time.
+- Only add actively maintained projects with a license and runtime support compatible with
+  Dishhive's MIT-licensed .NET/Angular application and Linux production container.
+- If the current release cannot be used (for example because of licensing, platform support,
+  or a security issue), choose a maintained alternative instead of pinning an older release.
+- Verify newly added .NET packages with `dotnet list package --outdated` and
+  `dotnet list package --vulnerable --include-transitive`; apply the equivalent current-version
+  and audit checks for npm dependencies.
+
 ## Feature Documentation Workflow
 
 Every functional feature has a living document in `docs/features/` containing scope, domain

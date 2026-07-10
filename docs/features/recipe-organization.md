@@ -61,8 +61,8 @@ referenceable from planning instructions as `#[Name]`.
 - **Recipes page**: filter bar (search + category + tags + clear) combinable with the
   collections row — one chip per collection (manual `bookmark`, auto `auto_awesome` with
   dashed border; tap to view, tap again to clear, × deletes manual ones) and an inline
-  "New collection…" input. Recipe cards get a hover bookmark menu: add to any manual
-  collection, or remove from the currently viewed one.
+  "New collection…" input. Recipe cards get a hover bookmark menu that shows every manual
+  collection with an empty/full bookmark for membership and toggles that membership directly.
 - **Recipe detail**: collection chips next to the tags (tap to remove) plus an
   "Add to collection" menu.
 - **Meal slot dialog**: "surprise me" chips — tap a collection to fill the slot with a
@@ -87,7 +87,7 @@ referenceable from planning instructions as `#[Name]`.
 - [x] Collections CRUD + membership endpoints + `cookbookId` recipe filter
 - [x] Auto collections (`AutoCollectionProvider`) in list/detail/filter/mentions
 - [x] Demo seed collections (Easy Weekday Dishes, Comfort Food, Feestelijk)
-- [x] Collections row + card menus on the recipes page; detail chips + menu
+- [x] Collections row + membership-aware toggle menus on recipe cards; detail chips + menu
 - [x] Random "surprise me from collection" in the meal slot dialog
 - [x] `dishhive:collections` in export/import
 - [x] Integration tests (membership CRUD, sync, cascade, filters, auto collections,

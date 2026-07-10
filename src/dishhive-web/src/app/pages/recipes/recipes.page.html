@@ -126,22 +126,39 @@
           </button>
           <mat-menu #cardMenu="matMenu">
             @for (cookbook of manualCookbooks(); track cookbook.id) {
-              <button mat-menu-item (click)="addToCookbook(recipe, cookbook)">
-                <mat-icon>bookmark</mat-icon>
-                Add to {{ cookbook.name }}
-              </button>
-            }
-            @if (activeCookbook()?.kind === 'manual') {
-              <button mat-menu-item (click)="removeFromActiveCookbook(recipe)">
-                <mat-icon>bookmark_remove</mat-icon>
-                Remove from {{ activeCookbook()!.name }}
+              <button mat-menu-item (click)="toggleCookbookMembership(recipe, cookbook)"
+                      [attr.aria-label]="(isInCookbook(recipe, cookbook) ? 'Remove from ' : 'Add to ') + cookbook.name">
+                <mat-icon>{{ isInCookbook(recipe, cookbook) ? 'bookmark' : 'bookmark_border' }}</mat-icon>
+                {{ cookbook.name }}
               </button>
             }
           </mat-menu>
         }
-        @if (recipe.imageUrl) {
-          <img mat-card-image [src]="recipe.imageUrl" [alt]="recipe.title" loading="lazy">
-        }
+        <div class="recipe-card-image">
+          @if (recipe.imageUrl) {
+            <img [src]="recipe.imageUrl" [alt]="recipe.title" loading="lazy">
+          } @else {
+            <div class="recipe-image-placeholder" aria-hidden="true">
+              <img src="/icons/dishhive_pwa_192x192.png" alt="" loading="lazy">
+            </div>
+          }
+          @if (statsOf(recipe)?.averageRating || favoriteCountOf(recipe) > 0) {
+            <div class="recipe-image-indicators">
+              @if (statsOf(recipe)?.averageRating; as rating) {
+                <span class="recipe-image-indicator recipe-image-indicator--rating"
+                      [attr.aria-label]="'Average rating ' + (rating | number:'1.1-1')">
+                  <mat-icon>star</mat-icon>{{ rating | number:'1.1-1' }}
+                </span>
+              }
+              @if (favoriteCountOf(recipe) > 0) {
+                <span class="recipe-image-indicator recipe-image-indicator--favorite"
+                      [attr.aria-label]="favoriteCountOf(recipe) + ' favorites'">
+                  <mat-icon>favorite</mat-icon>{{ favoriteCountOf(recipe) }}
+                </span>
+              }
+            </div>
+          }
+        </div>
         <mat-card-header>
           <mat-card-title>{{ recipe.title }}</mat-card-title>
           <mat-card-subtitle>
@@ -153,18 +170,8 @@
               · {{ recipe.category }}
             }
           </mat-card-subtitle>
-          @if (statsOf(recipe) || favoriteCountOf(recipe) > 0 || recipe.tags.length > 0) {
+          @if (recipe.tags.length > 0) {
             <div class="card-badges">
-              @if (statsOf(recipe)?.averageRating; as rating) {
-                <span class="card-badge card-badge--rating">
-                  <mat-icon>star</mat-icon>{{ rating | number:'1.1-1' }}
-                </span>
-              }
-              @if (favoriteCountOf(recipe) > 0) {
-                <span class="card-badge card-badge--favorite">
-                  <mat-icon>favorite</mat-icon>{{ favoriteCountOf(recipe) }}
-                </span>
-              }
               @for (tag of recipe.tags.slice(0, 3); track tag) {
                 <span class="card-badge card-badge--tag">{{ tag }}</span>
               }

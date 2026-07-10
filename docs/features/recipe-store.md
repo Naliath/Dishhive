@@ -16,7 +16,8 @@ manually or imported (see recipe-import.md).
 - Recipe CRUD (manual entry and edit of imported recipes)
 - Ingredients with quantity/unit (normalized + original values, see measurement-preferences.md)
 - Ordered preparation steps
-- Metadata: servings, prep/cook/total time, category, keywords, image URL, video URL,
+- Metadata: servings, prep/cook/total time, category, keywords, locally stored image with
+  optional source URL reference, video URL,
   source URL/provider, raw source payload (traceability)
 - Search by title/keyword (planner autocomplete)
 
@@ -32,6 +33,9 @@ manually or imported (see recipe-import.md).
 3. As a planner, I search recipes by title or keyword when filling a planner slot.
 4. As a planner, I open a recipe from the week plan to cook from it.
 5. As the shopping list, I read structured ingredients for all planned recipes.
+6. As a recipe editor, I choose a local image or take a photo without first hosting it online.
+7. As a recipe editor, I can provide an image URL while Dishhive downloads and thereafter
+   serves its own local copy.
 
 ## Domain Model Considerations
 
@@ -77,16 +81,24 @@ RecipeStep
   always shown and editable (decision recorded in measurement-preferences.md).
 - `SourceRawData` stored as PostgreSQL `jsonb` — enables re-parsing after extractor improvements
   without re-fetching.
-- **Images are stored locally**: the import pipeline downloads the image (max 5 MB,
-  `image/*` only) into `ImageData`/`ImageContentType` so recipes don't depend on expiring
-  source URLs. The API serves it at `GET /api/recipes/{id}/image` and DTOs point `imageUrl`
-  at that endpoint when local bytes exist (remote URL as fallback). Bytes-in-database +
-  dedicated endpoint was chosen over Base64-in-JSON to keep list responses small and let the
-  browser cache images. Download failure never fails an import. Video stays a URL.
+- **Images are always rendered from local storage**: URL imports and manually entered image
+  URLs are downloaded into `ImageData`; the original remote URL remains in `ImageUrl` only
+  for traceability. DTO `imageUrl` values are either `GET /api/recipes/{id}/image` or null,
+  never a remote host. A download failure remains non-fatal for recipe imports, but leaves the
+  recipe without a displayed image until the source is retried or replaced.
+- Local files and browser camera captures use `PUT /api/recipes/{id}/image`. They clear
+  `ImageUrl`, because the file/device—not a remote URL—is now the source. Removing an image
+  clears both the bytes and source reference.
+- Every incoming image is validated, auto-oriented, reduced to fit within 1600 × 1600, and
+  encoded as quality-82 WebP. Sources are capped at 15 MB and stored output at 5 MB. This
+  keeps good recipe-card/detail quality while bounding database usage. Bytes-in-database plus
+  a dedicated endpoint avoids Base64 in normal JSON responses. Video remains a URL.
 
 ## Backend Requirements
 
 - `RecipesController`: `GET /api/recipes?search=`, `GET /api/recipes/{id}`, `POST`, `PUT`, `DELETE`
+- Recipe images: `GET/PUT/DELETE /api/recipes/{id}/image`; create/update downloads a newly
+  supplied remote image URL before committing and retains it as `imageSourceUrl` in detail DTOs
 - `GET /api/recipes/ingredients` — distinct ingredient names in use (case variants
   collapsed), feeding the form autocomplete so spelling variants ("ei"/"eieren") converge
 - Ingredients/steps replaced wholesale on update (simple, atomic; no per-line endpoints)
@@ -97,7 +109,9 @@ RecipeStep
 
 - Page `pages/recipes/` — searchable card grid (image, title, time, servings) with
   rating (★) and favorite-count (♥) badges from history/favorites; category/tag filter
-  bar and cookbook chips (see [recipe-organization.md](recipe-organization.md)).
+  bar and cookbook chips (see [recipe-organization.md](recipe-organization.md)). Rating and
+  favorite indicators sit over the image so the title area stays uncluttered. Recipes without
+  an image use the Dishhive logo placeholder so every card keeps the same image area.
   Search is debounced (300 ms) and results keep the previous grid until they arrive;
   newly matching cards fade in instead of the page flashing a spinner
 - Page `pages/recipe-detail/` — full view incl. original ingredient text toggle and
@@ -105,7 +119,10 @@ RecipeStep
   dialog, see meal-feedback.md). Favorites show as heart chips only for members who
   favorited the dish, plus a quiet "mark as favorite" menu for the rest
 - Page `pages/recipe-form/` — manual create/edit (dynamic ingredient + step rows);
-  ingredient names autocomplete from the library's known ingredients
+  ingredient names autocomplete from the library's known ingredients; the form displays the
+  current image, shows a prominent skeleton/empty state, and offers file, camera and a
+  button-opened URL editor. A newly confirmed URL is previewed before save; the retained source
+  is available from the image's info affordance, while removal is a quiet overlay action.
 - `recipes.service.ts`, models
 
 ## Integration Requirements
@@ -119,6 +136,8 @@ RecipeStep
 - Ingredient parsing quality varies by source — mitigated by `OriginalText` + manual edit.
 - Wholesale ingredient replacement on update loses per-line identity — acceptable (no
   external references to ingredient rows).
+- Existing remote-only records are intentionally not rendered remotely. Editing and saving their
+  retained source URL retries localization; a future maintenance job may bulk-retry them if needed.
 
 ## Phased Implementation Plan
 
@@ -131,6 +150,11 @@ RecipeStep
 **Phase 3 — Manual editing**
 - Create/edit form with dynamic ingredients/steps
 
+**Phase 4 — Local image ownership**
+- Normalize URL imports and local uploads into bounded local WebP images
+- Add file/camera/URL controls and an edit-view preview/placeholder
+- Keep remote URLs as references only; never render them directly
+
 ## Implementation Checklist
 
 - [x] `Recipe`/`RecipeIngredient`/`RecipeStep` entities + migration
@@ -141,3 +165,10 @@ RecipeStep
 - [x] Recipe list page with search
 - [x] Recipe detail page (incl. original ingredient text toggle, edit, delete)
 - [x] Recipe create/edit form (dynamic ingredient + step rows)
+- [x] Central image validation, auto-orientation, resize (1600 px), and WebP encoding
+- [x] New/changed image URLs download locally while retaining the original URL as a reference
+- [x] Local file and camera upload endpoint; replacement clears the remote URL reference
+- [x] Local-only image DTO policy plus remove-image endpoint
+- [x] Edit-view image preview, skeleton placeholder, file/camera controls, confirmable URL editor,
+      source info tooltip, and unobtrusive remove action
+- [x] Image processor and controller/import integration tests

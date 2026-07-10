@@ -36,6 +36,11 @@
     <!-- Native OpenAPI + Scalar UI -->
     <PackageReference Include="Scalar.AspNetCore" Version="2.14.14" />
 
+    <!-- Current, maintained MIT-licensed image processing. The no-dependencies
+         native package supplies libSkiaSharp for the Debian production container. -->
+    <PackageReference Include="SkiaSharp" Version="4.150.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.150.0" />
+
     <!-- Health Checks -->
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
   </ItemGroup>

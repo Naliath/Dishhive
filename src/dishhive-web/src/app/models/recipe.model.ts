@@ -4,13 +4,15 @@ export interface RecipeListItem {
   servings: number;
   totalTimeMinutes?: number;
   category?: string;
-  /** Local image endpoint when stored in Dishhive, otherwise the remote source URL */
+  /** Local Dishhive image endpoint; absent when no local image is stored */
   imageUrl?: string;
   /** True when the image bytes are stored locally in Dishhive */
   hasLocalImage: boolean;
   sourceProvider?: string;
   /** Organization tag names (user-curated) */
   tags: string[];
+  /** Ids of the manual collections this recipe belongs to */
+  cookbookIds: string[];
 }
 
 export interface RecipeTag {
@@ -142,10 +144,12 @@ export interface Recipe {
   totalTimeMinutes?: number;
   category?: string;
   keywords?: string;
-  /** Local image endpoint when stored in Dishhive, otherwise the remote source URL */
+  /** Local Dishhive image endpoint; absent when no local image is stored */
   imageUrl?: string;
   /** True when the image bytes are stored locally in Dishhive */
   hasLocalImage: boolean;
+  /** Original remote image URL retained as a reference; never used as the local display URL */
+  imageSourceUrl?: string;
   videoUrl?: string;
   sourceUrl?: string;
   sourceProvider?: string;

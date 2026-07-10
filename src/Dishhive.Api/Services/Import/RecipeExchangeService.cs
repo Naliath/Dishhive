@@ -182,7 +182,7 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             }
 
             RecipeImportService.ApplyImportedRecipe(recipe, imported, sourceUrl, FileProviderKey);
-            ApplyImage(recipe, imported.ImageUrl);
+            await ApplyImageAsync(recipe, imported.ImageUrl, cancellationToken);
             if (recipe.ImageData == null)
             {
                 await RecipeImageDownloader.TryDownloadAsync(_httpClient, recipe, _logger, cancellationToken);
@@ -372,8 +372,12 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             .Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 
-    /// <summary>Decodes a data-URI image into local bytes; remote URLs stay on ImageUrl</summary>
-    private void ApplyImage(Recipe recipe, string? image)
+    /// <summary>
+    /// Decodes and normalizes a data-URI image; remote URLs stay on ImageUrl and are
+    /// downloaded by the shared downloader immediately afterwards.
+    /// </summary>
+    private async Task ApplyImageAsync(
+        Recipe recipe, string? image, CancellationToken cancellationToken)
     {
         if (image == null || !image.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
         {
@@ -393,16 +397,20 @@ public partial class RecipeExchangeService : IRecipeExchangeService
         try
         {
             var bytes = Convert.FromBase64String(match.Groups["payload"].Value);
-            if (bytes.Length == 0 || bytes.Length > RecipeImageDownloader.MaxImageBytes)
+            if (bytes.Length == 0 || bytes.Length > RecipeImageProcessor.MaxSourceBytes)
             {
                 return;
             }
-            recipe.ImageData = bytes;
-            recipe.ImageContentType = match.Groups["type"].Value;
+
+            await using var stream = new MemoryStream(bytes, writable: false);
+            var processed = await RecipeImageProcessor.ProcessAsync(stream, cancellationToken);
+            recipe.ImageData = processed.Data;
+            recipe.ImageContentType = processed.ContentType;
         }
-        catch (FormatException)
+        catch (Exception ex) when (ex is FormatException or RecipeImageException)
         {
-            _logger.LogWarning("Recipe {Title} has invalid base64 image data; importing without image", recipe.Title);
+            _logger.LogWarning(ex,
+                "Recipe {Title} has invalid image data; importing without image", recipe.Title);
         }
     }
 

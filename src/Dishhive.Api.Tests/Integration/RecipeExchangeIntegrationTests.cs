@@ -243,13 +243,14 @@ public class RecipeExchangeIntegrationTests : TestBase
 
         var fresh = CreateFreshContext();
         var recipe = fresh.Recipes.Single();
-        recipe.ImageData.Should().Equal(Convert.FromBase64String(TinyPngBase64));
-        recipe.ImageContentType.Should().Be("image/png");
+        recipe.ImageData.Should().NotBeNullOrEmpty();
+        recipe.ImageData.Should().NotEqual(Convert.FromBase64String(TinyPngBase64));
+        recipe.ImageContentType.Should().Be("image/webp");
         recipe.ImageUrl.Should().BeNull(); // data URIs never land in the URL column
 
         var image = await Client.GetAsync($"/api/recipes/{recipe.Id}/image");
         image.StatusCode.Should().Be(HttpStatusCode.OK);
-        image.Content.Headers.ContentType!.MediaType.Should().Be("image/png");
+        image.Content.Headers.ContentType!.MediaType.Should().Be("image/webp");
     }
 
     [Fact]

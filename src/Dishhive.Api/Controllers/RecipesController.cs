@@ -1,6 +1,7 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
+using Dishhive.Api.Services;
 using Dishhive.Api.Services.Collections;
 using Dishhive.Api.Services.Facts;
 using Dishhive.Api.Services.Import;
@@ -20,6 +21,7 @@ public class RecipesController : ControllerBase
     private readonly IRecipeImportService _importService;
     private readonly IRecipeExchangeService _exchangeService;
     private readonly RecipeFactsAssessmentService _factsQueue;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<RecipesController> _logger;
 
     public RecipesController(
@@ -27,12 +29,14 @@ public class RecipesController : ControllerBase
         IRecipeImportService importService,
         IRecipeExchangeService exchangeService,
         RecipeFactsAssessmentService factsQueue,
+        IHttpClientFactory httpClientFactory,
         ILogger<RecipesController> logger)
     {
         _context = context;
         _importService = importService;
         _exchangeService = exchangeService;
         _factsQueue = factsQueue;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
@@ -97,7 +101,9 @@ public class RecipesController : ControllerBase
             }
         }
 
-        var recipes = await RecipeListMapping.Project(query.OrderBy(r => r.Title)).ToListAsync(cancellationToken);
+        var recipes = await RecipeListMapping.Project(
+            query.OrderBy(r => r.Title), _context.CookbookEntries.AsNoTracking())
+            .ToListAsync(cancellationToken);
         RecipeListMapping.ResolveLocalImageUrls(recipes);
         return Ok(recipes);
     }
@@ -165,6 +171,79 @@ public class RecipesController : ControllerBase
         }
 
         return File(image.ImageData, image.ImageContentType ?? "image/jpeg");
+    }
+
+    /// <summary>
+    /// Replaces a recipe image from a local file or browser camera capture. The image
+    /// is normalized before storage and any old remote source URL is cleared.
+    /// </summary>
+    [HttpPut("{id:guid}/image")]
+    [Consumes("multipart/form-data")]
+    [RequestFormLimits(MultipartBodyLengthLimit = RecipeImageProcessor.MaxSourceBytes + 1024 * 64)]
+    [RequestSizeLimit(RecipeImageProcessor.MaxSourceBytes + 1024 * 64)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> SetRecipeImage(
+        Guid id, IFormFile? file, CancellationToken cancellationToken)
+    {
+        var recipe = await _context.Recipes.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        if (recipe == null)
+        {
+            return NotFound();
+        }
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new ProblemDetails { Title = "No image supplied" });
+        }
+        if (file.Length > RecipeImageProcessor.MaxSourceBytes)
+        {
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, new ProblemDetails
+            {
+                Title = "Image too large",
+                Detail = $"Images may be at most {RecipeImageProcessor.MaxSourceBytes / 1024 / 1024} MB."
+            });
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var processed = await RecipeImageProcessor.ProcessAsync(stream, cancellationToken);
+            recipe.ImageData = processed.Data;
+            recipe.ImageContentType = processed.ContentType;
+            recipe.ImageUrl = null;
+            await _context.SaveChangesAsync(cancellationToken);
+            return NoContent();
+        }
+        catch (RecipeImageException ex)
+        {
+            return UnprocessableEntity(new ProblemDetails
+            {
+                Title = "Invalid recipe image",
+                Detail = ex.Message
+            });
+        }
+    }
+
+    /// <summary>Removes both the local recipe image and its remote source reference</summary>
+    [HttpDelete("{id:guid}/image")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteRecipeImage(Guid id, CancellationToken cancellationToken)
+    {
+        var recipe = await _context.Recipes.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        if (recipe == null)
+        {
+            return NotFound();
+        }
+
+        recipe.ImageData = null;
+        recipe.ImageContentType = null;
+        recipe.ImageUrl = null;
+        await _context.SaveChangesAsync(cancellationToken);
+        return NoContent();
     }
 
     private static string ImageEndpoint(Guid id) => $"/api/recipes/{id}/image";
@@ -252,7 +331,8 @@ public class RecipesController : ControllerBase
     [HttpPost]
     [ProducesResponseType(typeof(RecipeDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<RecipeDto>> CreateRecipe(CreateRecipeDto dto)
+    public async Task<ActionResult<RecipeDto>> CreateRecipe(
+        CreateRecipeDto dto, CancellationToken cancellationToken)
     {
         if (dto.Tags.Any(t => t.Trim().Length > 50))
         {
@@ -265,6 +345,14 @@ public class RecipesController : ControllerBase
 
         var recipe = new Recipe();
         ApplyDto(recipe, dto);
+        if (!string.IsNullOrWhiteSpace(dto.ImageUrl))
+        {
+            var imageResult = await TrySetImageFromUrlAsync(recipe, dto.ImageUrl, cancellationToken);
+            if (imageResult != null)
+            {
+                return imageResult;
+            }
+        }
         if (dto.ContainsClasses != null)
         {
             ApplyFacts(recipe, ParseClasses(dto.ContainsClasses), DietaryFactsStatus.UserConfirmed);
@@ -272,7 +360,7 @@ public class RecipesController : ControllerBase
 
         _context.Recipes.Add(recipe);
         await SyncTagsAsync(recipe, dto.Tags);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
         if (dto.ContainsClasses == null)
         {
             _factsQueue.TryEnqueue(recipe.Id);
@@ -290,7 +378,8 @@ public class RecipesController : ControllerBase
     [ProducesResponseType(typeof(RecipeDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<RecipeDto>> UpdateRecipe(Guid id, UpdateRecipeDto dto)
+    public async Task<ActionResult<RecipeDto>> UpdateRecipe(
+        Guid id, UpdateRecipeDto dto, CancellationToken cancellationToken)
     {
         if (dto.Tags.Any(t => t.Trim().Length > 50))
         {
@@ -306,11 +395,28 @@ public class RecipesController : ControllerBase
             .Include(r => r.Steps)
             .Include(r => r.Tags).ThenInclude(a => a.RecipeTag)
             .Include(r => r.DietaryFacts)
-            .FirstOrDefaultAsync(r => r.Id == id);
+            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
         if (recipe == null)
         {
             return NotFound();
+        }
+
+        var requestedImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim();
+        var isCurrentLocalEndpoint = string.Equals(
+            requestedImageUrl, ImageEndpoint(recipe.Id), StringComparison.OrdinalIgnoreCase);
+        if (requestedImageUrl != null
+            && !isCurrentLocalEndpoint
+            && (recipe.ImageData == null
+                || !string.Equals(recipe.ImageUrl, requestedImageUrl, StringComparison.Ordinal)))
+        {
+            // Download before mutating the rest of the aggregate, so an invalid or
+            // unreachable image URL cannot leave a half-applied recipe edit.
+            var imageResult = await TrySetImageFromUrlAsync(recipe, requestedImageUrl, cancellationToken);
+            if (imageResult != null)
+            {
+                return imageResult;
+            }
         }
 
         var previousIngredients = recipe.Ingredients
@@ -329,7 +435,7 @@ public class RecipesController : ControllerBase
             ApplyFacts(recipe, ParseClasses(dto.ContainsClasses), DietaryFactsStatus.UserConfirmed);
         }
         await SyncTagsAsync(recipe, dto.Tags);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
         await RemoveOrphanedTagsAsync();
 
         // A changed ingredient list makes stored facts stale — even user-confirmed
@@ -686,7 +792,6 @@ public class RecipesController : ControllerBase
         recipe.TotalTimeMinutes = dto.TotalTimeMinutes;
         recipe.Category = dto.Category;
         recipe.Keywords = dto.Keywords;
-        recipe.ImageUrl = dto.ImageUrl;
         recipe.VideoUrl = dto.VideoUrl;
 
         var sortOrder = 0;
@@ -727,10 +832,11 @@ public class RecipesController : ControllerBase
         TotalTimeMinutes = recipe.TotalTimeMinutes,
         Category = recipe.Category,
         Keywords = recipe.Keywords,
-        // Prefer the locally stored copy; the source URL is the fallback for
-        // manual recipes or when the download failed at import time
-        ImageUrl = recipe.ImageData != null ? ImageEndpoint(recipe.Id) : recipe.ImageUrl,
+        // Remote URLs are retained as references only; clients always render the
+        // Dishhive endpoint so recipe views never depend on an external host.
+        ImageUrl = recipe.ImageData != null ? ImageEndpoint(recipe.Id) : null,
         HasLocalImage = recipe.ImageData != null,
+        ImageSourceUrl = recipe.ImageUrl,
         VideoUrl = recipe.VideoUrl,
         SourceUrl = recipe.SourceUrl,
         SourceProvider = recipe.SourceProvider,
@@ -766,4 +872,37 @@ public class RecipesController : ControllerBase
             .ToList(),
         DietaryFacts = FactsDto(recipe)
     };
+
+    private async Task<UnprocessableEntityObjectResult?> TrySetImageFromUrlAsync(
+        Recipe recipe, string imageUrl, CancellationToken cancellationToken)
+    {
+        var (ok, imageUri, error) = await UrlGuard.ValidateAsync(imageUrl.Trim(), cancellationToken);
+        if (!ok || imageUri == null)
+        {
+            return UnprocessableEntity(new ProblemDetails
+            {
+                Title = "Invalid image URL",
+                Detail = error
+            });
+        }
+
+        try
+        {
+            var httpClient = _httpClientFactory.CreateClient("RecipeImages");
+            var processed = await RecipeImageDownloader.DownloadAsync(httpClient, imageUri, cancellationToken);
+            recipe.ImageData = processed.Data;
+            recipe.ImageContentType = processed.ContentType;
+            recipe.ImageUrl = imageUri.AbsoluteUri;
+            return null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or RecipeImageException)
+        {
+            _logger.LogWarning(ex, "Could not store recipe image from {Url}", imageUri);
+            return UnprocessableEntity(new ProblemDetails
+            {
+                Title = "Could not download image",
+                Detail = ex is RecipeImageException ? ex.Message : "The image URL could not be downloaded."
+            });
+        }
+    }
 }

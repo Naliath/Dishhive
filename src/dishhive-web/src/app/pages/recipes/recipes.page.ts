@@ -13,7 +13,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { DecimalPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Subject, forkJoin } from 'rxjs';
+import { Observable, Subject, forkJoin } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { RecipesService } from '../../services/recipes.service';
@@ -198,30 +198,26 @@ export class RecipesPage implements OnInit {
     });
   }
 
-  addToCookbook(recipe: RecipeListItem, cookbook: Cookbook): void {
-    this.cookbooksService.addRecipes(cookbook.id, [recipe.id]).subscribe({
-      next: () => {
-        this.loadCookbooks();
-        this.snackBar.open(`"${recipe.title}" added to ${cookbook.name}`, 'Dismiss', { duration: 3000 });
-      },
-      error: () => this.snackBar.open('Could not add to the collection', 'Dismiss', { duration: 4000 })
-    });
+  isInCookbook(recipe: RecipeListItem, cookbook: Cookbook): boolean {
+    return recipe.cookbookIds.includes(cookbook.id);
   }
 
-  /** Available while viewing a manual collection */
-  removeFromActiveCookbook(recipe: RecipeListItem): void {
-    const cookbook = this.activeCookbook();
-    if (!cookbook || cookbook.kind !== 'manual') {
-      return;
-    }
+  toggleCookbookMembership(recipe: RecipeListItem, cookbook: Cookbook): void {
+    const wasMember = this.isInCookbook(recipe, cookbook);
+    const request: Observable<unknown> = wasMember
+      ? this.cookbooksService.removeRecipe(cookbook.id, recipe.id)
+      : this.cookbooksService.addRecipes(cookbook.id, [recipe.id]);
 
-    this.cookbooksService.removeRecipe(cookbook.id, recipe.id).subscribe({
+    request.subscribe({
       next: () => {
         this.loadCookbooks();
         this.loadRecipes();
-        this.snackBar.open(`"${recipe.title}" removed from ${cookbook.name}`, 'Dismiss', { duration: 3000 });
+        const action = wasMember ? 'removed from' : 'added to';
+        this.snackBar.open(
+          `"${recipe.title}" ${action} ${cookbook.name}`, 'Dismiss', { duration: 3000 });
       },
-      error: () => this.snackBar.open('Could not remove from the collection', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(
+        'Could not update the collection', 'Dismiss', { duration: 4000 })
     });
   }
 

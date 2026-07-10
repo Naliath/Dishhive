@@ -21,7 +21,9 @@ public class RecipeImportServiceTests : IDisposable
     // The fixture's JSON-LD image URL points at Google Storage
     private const string ImageUrlPrefix = "https://storage.googleapis.com/";
 
-    private static readonly byte[] FakeImageBytes = [0xFF, 0xD8, 0xFF, 0xE0, 0x42, 0x42];
+    // 1x1 transparent PNG; the pipeline should normalize it to WebP.
+    private static readonly byte[] FakeImageBytes = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
 
     private readonly DishhiveDbContext _context;
 
@@ -85,8 +87,9 @@ public class RecipeImportServiceTests : IDisposable
 
         var recipe = await service.ImportAsync(FixtureUrl);
 
-        recipe.ImageData.Should().Equal(FakeImageBytes);
-        recipe.ImageContentType.Should().Be("image/jpeg");
+        recipe.ImageData.Should().NotBeNullOrEmpty();
+        recipe.ImageData.Should().NotEqual(FakeImageBytes);
+        recipe.ImageContentType.Should().Be("image/webp");
         // The original source URL stays for traceability
         recipe.ImageUrl.Should().StartWith(ImageUrlPrefix);
     }

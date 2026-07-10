@@ -18,6 +18,83 @@
           <input matInput name="title" [(ngModel)]="title" required maxlength="300">
         </mat-form-field>
 
+        <section class="image-editor" aria-label="Recipe image">
+          <div class="image-preview" [class.image-placeholder]="!imagePreviewUrl()">
+            @if (imagePreviewUrl(); as previewUrl) {
+              <img [src]="previewUrl" [alt]="title || 'Recipe image preview'">
+              <button class="image-overlay-button image-remove-button"
+                      mat-icon-button type="button" (click)="removeImage()"
+                      matTooltip="Remove image" aria-label="Remove image">
+                <mat-icon>delete</mat-icon>
+              </button>
+            } @else {
+              <div class="skeleton-block" aria-hidden="true"></div>
+              <div class="placeholder-content">
+                <mat-icon>add_a_photo</mat-icon>
+                <strong>Add a photo to this recipe</strong>
+                <button mat-flat-button type="button" (click)="fileInput.click()">
+                  <mat-icon>photo_library</mat-icon>
+                  Choose image
+                </button>
+              </div>
+            }
+
+            @if (imageSourceUrl().trim()) {
+              <div class="source-info" [class.source-info-open]="sourceInfoOpen()">
+                <button class="image-overlay-button source-info-button"
+                        mat-icon-button type="button"
+                        (click)="showSourceInfo()"
+                        (focus)="showSourceInfo()"
+                        (blur)="sourceInfoOpen.set(false)"
+                        (keydown.escape)="sourceInfoOpen.set(false)"
+                        [attr.aria-expanded]="sourceInfoOpen()"
+                        aria-describedby="image-source-tooltip"
+                        aria-label="Show image source">
+                  <mat-icon>info</mat-icon>
+                </button>
+                <div id="image-source-tooltip" class="source-tooltip" role="tooltip">
+                  Source: {{ imageSourceUrl() }}
+                </div>
+              </div>
+            }
+          </div>
+
+          <div class="image-actions">
+            <button mat-stroked-button type="button" (click)="fileInput.click()">
+              <mat-icon>photo_library</mat-icon>
+              Choose image
+            </button>
+            @if (cameraCaptureAvailable()) {
+              <button mat-stroked-button type="button" (click)="cameraInput.click()">
+                <mat-icon>photo_camera</mat-icon>
+                Take picture
+              </button>
+              <input #cameraInput class="visually-hidden" type="file" accept="image/*"
+                     capture="environment" (change)="selectImage($event)">
+            }
+            <button mat-stroked-button type="button" (click)="openImageUrlEditor()">
+              <mat-icon>link</mat-icon>
+              {{ imageSourceUrl().trim() ? 'Change image URL' : 'Image URL' }}
+            </button>
+            <input #fileInput class="visually-hidden" type="file" accept="image/*"
+                   (change)="selectImage($event)">
+          </div>
+
+          @if (imageUrlEditorOpen()) {
+            <div class="image-url-editor">
+              <mat-form-field appearance="outline" class="image-url-field" subscriptSizing="dynamic">
+                <mat-label>Image URL</mat-label>
+                <input matInput type="url" name="imageUrlDraft"
+                       [ngModel]="imageUrlDraft()" (ngModelChange)="imageUrlDraft.set($event)"
+                       (keydown.enter)="confirmImageUrl(); $event.preventDefault()"
+                       maxlength="1000" placeholder="https://example.com/photo.jpg">
+              </mat-form-field>
+              <button mat-button type="button" (click)="cancelImageUrlEditor()">Cancel</button>
+              <button mat-flat-button type="button" (click)="confirmImageUrl()">Use image</button>
+            </div>
+          }
+        </section>
+
         <mat-form-field appearance="outline">
           <mat-label>Description</mat-label>
           <textarea matInput name="description" [(ngModel)]="description" rows="2" maxlength="2000"></textarea>
@@ -76,16 +153,10 @@
           <mat-hint>Press Enter or comma to add a tag — used to filter the library</mat-hint>
         </mat-form-field>
 
-        <div class="field-row">
-          <mat-form-field appearance="outline">
-            <mat-label>Image URL</mat-label>
-            <input matInput name="imageUrl" [(ngModel)]="imageUrl" maxlength="1000">
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Video URL</mat-label>
-            <input matInput name="videoUrl" [(ngModel)]="videoUrl" maxlength="1000">
-          </mat-form-field>
-        </div>
+        <mat-form-field appearance="outline">
+          <mat-label>Video URL</mat-label>
+          <input matInput name="videoUrl" [(ngModel)]="videoUrl" maxlength="1000">
+        </mat-form-field>
       </mat-card-content>
     </mat-card>
 

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
@@ -10,11 +10,13 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { ClassPickerComponent } from '../../components/class-picker/class-picker';
 import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { RecipesService } from '../../services/recipes.service';
 import { PlannedMealsService } from '../../services/planned-meals.service';
-import { CreateRecipe, DietaryFactsStatus } from '../../models/recipe.model';
+import { CreateRecipe, DietaryFactsStatus, Recipe } from '../../models/recipe.model';
+import { Observable, map, of, switchMap, tap } from 'rxjs';
 
 interface IngredientRow {
   name: string;
@@ -45,18 +47,22 @@ interface StepRow {
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatSnackBarModule
+    MatSnackBarModule,
+    MatTooltipModule
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './recipe-form.page.html',
   styleUrl: './recipe-form.page.scss'
 })
-export class RecipeFormPage implements OnInit {
+export class RecipeFormPage implements OnInit, OnDestroy {
+  private static readonly maxImageBytes = 15 * 1024 * 1024;
+
   readonly separatorKeys = [ENTER, COMMA] as const;
 
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly editingId = signal<string | null>(null);
+  readonly cameraCaptureAvailable = signal(false);
 
   title = '';
   description = '';
@@ -65,7 +71,19 @@ export class RecipeFormPage implements OnInit {
   cookTimeMinutes: number | null = null;
   category = '';
   keywords = '';
-  imageUrl = '';
+  readonly imageSourceUrl = signal('');
+  readonly imageUrlDraft = signal('');
+  readonly imageUrlEditorOpen = signal(false);
+  readonly urlImagePreviewUrl = signal<string | null>(null);
+  readonly sourceInfoOpen = signal(false);
+  readonly currentImageUrl = signal<string | null>(null);
+  readonly selectedImagePreviewUrl = signal<string | null>(null);
+  readonly imageRemoved = signal(false);
+  readonly imagePreviewUrl = computed(() =>
+    this.selectedImagePreviewUrl()
+      ?? this.urlImagePreviewUrl()
+      ?? (this.imageRemoved() ? null : this.currentImageUrl()));
+  private selectedImageFile: File | null = null;
   videoUrl = '';
   ingredients: IngredientRow[] = [{ name: '', quantity: null, unit: '' }];
   steps: StepRow[] = [{ instruction: '' }];
@@ -119,6 +137,8 @@ export class RecipeFormPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    void this.detectCameraCaptureAvailability();
+
     this.recipesService.getRecipeTags().subscribe({
       next: tags => this.knownTags.set(tags.map(t => t.name)),
       error: () => { /* autocomplete is a convenience; typing tags still works */ }
@@ -152,7 +172,8 @@ export class RecipeFormPage implements OnInit {
         this.cookTimeMinutes = recipe.cookTimeMinutes ?? null;
         this.category = recipe.category ?? '';
         this.keywords = recipe.keywords ?? '';
-        this.imageUrl = recipe.imageUrl ?? '';
+        this.currentImageUrl.set(recipe.imageUrl ?? null);
+        this.imageSourceUrl.set(recipe.imageSourceUrl ?? '');
         this.videoUrl = recipe.videoUrl ?? '';
         this.ingredients = recipe.ingredients.length > 0
           ? recipe.ingredients.map(i => ({ name: i.name, quantity: i.quantity ?? null, unit: i.unit ?? '' }))
@@ -171,6 +192,114 @@ export class RecipeFormPage implements OnInit {
         this.router.navigate(['/recipes']);
       }
     });
+  }
+
+  private async detectCameraCaptureAvailability(): Promise<void> {
+    if (typeof document === 'undefined' || typeof navigator === 'undefined') {
+      return;
+    }
+
+    const fileInput = document.createElement('input');
+    const mediaDevices = navigator.mediaDevices;
+    if (!('capture' in fileInput)
+        || typeof mediaDevices?.getUserMedia !== 'function'
+        || typeof mediaDevices.enumerateDevices !== 'function') {
+      return;
+    }
+
+    try {
+      const devices = await mediaDevices.enumerateDevices();
+      this.cameraCaptureAvailable.set(devices.some(device => device.kind === 'videoinput'));
+    } catch {
+      // Camera enumeration can be blocked by the browser, permissions policy, or
+      // an insecure context. In each case the capture action is not usable here.
+      this.cameraCaptureAvailable.set(false);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.clearSelectedImage();
+  }
+
+  selectImage(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+    if (file.type && !file.type.startsWith('image/')) {
+      this.snackBar.open('Choose an image file', 'Dismiss', { duration: 4000 });
+      return;
+    }
+    if (file.size > RecipeFormPage.maxImageBytes) {
+      this.snackBar.open('Images may be at most 15 MB', 'Dismiss', { duration: 4000 });
+      return;
+    }
+
+    this.clearSelectedImage();
+    this.selectedImageFile = file;
+    this.selectedImagePreviewUrl.set(URL.createObjectURL(file));
+    this.urlImagePreviewUrl.set(null);
+    this.imageSourceUrl.set('');
+    this.imageUrlDraft.set('');
+    this.imageUrlEditorOpen.set(false);
+    this.sourceInfoOpen.set(false);
+    this.imageRemoved.set(false);
+  }
+
+  openImageUrlEditor(): void {
+    this.imageUrlDraft.set(this.imageSourceUrl());
+    this.imageUrlEditorOpen.set(true);
+  }
+
+  cancelImageUrlEditor(): void {
+    this.imageUrlDraft.set(this.imageSourceUrl());
+    this.imageUrlEditorOpen.set(false);
+  }
+
+  confirmImageUrl(): void {
+    const value = this.imageUrlDraft().trim();
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('Unsupported protocol');
+      }
+    } catch {
+      this.snackBar.open('Enter a valid http(s) image URL', 'Dismiss', { duration: 4000 });
+      return;
+    }
+
+    this.clearSelectedImage();
+    this.imageSourceUrl.set(value);
+    this.imageUrlDraft.set(value);
+    this.urlImagePreviewUrl.set(value);
+    this.imageRemoved.set(false);
+    this.sourceInfoOpen.set(false);
+    this.imageUrlEditorOpen.set(false);
+  }
+
+  removeImage(): void {
+    this.clearSelectedImage();
+    this.urlImagePreviewUrl.set(null);
+    this.imageSourceUrl.set('');
+    this.imageUrlDraft.set('');
+    this.imageUrlEditorOpen.set(false);
+    this.sourceInfoOpen.set(false);
+    this.imageRemoved.set(true);
+  }
+
+  showSourceInfo(): void {
+    this.sourceInfoOpen.set(true);
+  }
+
+  private clearSelectedImage(): void {
+    const previewUrl = this.selectedImagePreviewUrl();
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    this.selectedImagePreviewUrl.set(null);
+    this.selectedImageFile = null;
   }
 
   addIngredient(): void {
@@ -247,7 +376,11 @@ export class RecipeFormPage implements OnInit {
         : undefined,
       category: this.category.trim() || undefined,
       keywords: this.keywords.trim() || undefined,
-      imageUrl: this.imageUrl.trim() || undefined,
+      // A file/camera image is uploaded after the recipe has an id. URL images are
+      // downloaded and normalized by the recipe create/update request itself.
+      imageUrl: this.selectedImageFile || this.imageRemoved()
+        ? undefined
+        : this.imageSourceUrl().trim() || undefined,
       videoUrl: this.videoUrl.trim() || undefined,
       ingredients: this.ingredients
         .filter(i => i.name.trim())
@@ -269,7 +402,11 @@ export class RecipeFormPage implements OnInit {
       ? this.recipesService.updateRecipe(editingId, payload)
       : this.recipesService.createRecipe(payload);
 
-    request.subscribe({
+    let savedRecipe: Recipe | null = null;
+    request.pipe(
+      tap(recipe => { savedRecipe = recipe; }),
+      switchMap(recipe => this.persistPendingImage(recipe))
+    ).subscribe({
       next: recipe => {
         this.saving.set(false);
         if (this.linkMealId) {
@@ -280,9 +417,29 @@ export class RecipeFormPage implements OnInit {
       },
       error: () => {
         this.saving.set(false);
-        this.snackBar.open('Could not save the recipe', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(
+          savedRecipe ? 'Recipe saved, but the image could not be updated' : 'Could not save the recipe',
+          'Dismiss',
+          { duration: 5000 });
+        if (savedRecipe && !this.editingId()) {
+          // The create succeeded, so move to its edit URL before a retry; otherwise
+          // pressing Save again would create a duplicate recipe.
+          this.router.navigate(['/recipes', savedRecipe.id, 'edit'], { replaceUrl: true });
+        }
       }
     });
+  }
+
+  private persistPendingImage(recipe: Recipe): Observable<Recipe> {
+    if (this.selectedImageFile) {
+      return this.recipesService.setRecipeImage(recipe.id, this.selectedImageFile)
+        .pipe(map(() => recipe));
+    }
+    if (this.imageRemoved()) {
+      return this.recipesService.deleteRecipeImage(recipe.id)
+        .pipe(map(() => recipe));
+    }
+    return of(recipe);
   }
 
   /** Completes the shopping list flow: attach the new recipe to the meal, go back */

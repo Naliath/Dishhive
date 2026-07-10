@@ -128,7 +128,9 @@ public class CookbooksController : ControllerBase
             recipes = auto.ApplyFilter(_context.Recipes.AsNoTracking());
         }
 
-        var items = await RecipeListMapping.Project(recipes.OrderBy(r => r.Title)).ToListAsync(cancellationToken);
+        var items = await RecipeListMapping.Project(
+            recipes.OrderBy(r => r.Title), _context.CookbookEntries.AsNoTracking())
+            .ToListAsync(cancellationToken);
         RecipeListMapping.ResolveLocalImageUrls(items);
         return Ok(items);
     }

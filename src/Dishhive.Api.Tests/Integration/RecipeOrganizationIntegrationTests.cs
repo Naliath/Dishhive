@@ -163,6 +163,7 @@ public class RecipeOrganizationIntegrationTests : TestBase
         var members = await Client.GetFromJsonAsync<List<RecipeListItemDto>>(
             $"/api/cookbooks/{collection.Id}/recipes");
         members!.Select(r => r.Title).Should().Equal("Lasagne", "Stew");
+        members.Should().OnlyContain(r => r.CookbookIds.Contains(Guid.Parse(collection.Id)));
     }
 
     [Fact]

@@ -128,7 +128,7 @@ public interface IRecipeSourceProvider
 | Ingredients (raw lines) | JSON-LD `recipeIngredient[]` |
 | Steps | Next.js payload `instructions` map (complete); JSON-LD `recipeInstructions[].text` as fallback (truncated to 2 on this site) |
 | Servings | JSON-LD `recipeYield` |
-| ImageUrl | JSON-LD `image`; the image bytes are downloaded at import time and stored locally (see recipe-store.md) |
+| ImageUrl | JSON-LD `image`; the image is downloaded, resized and stored locally while this URL is retained only as a reference (see recipe-store.md) |
 | VideoUrl | JSON-LD `video.contentUrl` when present, else null |
 | SourceUrl | canonical `@id` / requested URL |
 | Prep/Cook/Total time | ISO-8601 durations parsed to minutes |
@@ -202,7 +202,8 @@ Plus `IngredientLineParser` unit tests. Tests are offline — no network depende
 - [x] `IngredientLineParser` unit tests
 - [x] `RecipeImportService` + `POST /api/recipes/import` + duplicate-URL update
 - [x] Full step extraction from Next.js payload (JSON-LD is truncated to 2 steps) + fixture test
-- [x] Local image download at import (tolerant of failures; original URL kept) + tests
+- [x] Local image download at import (tolerant of failures; original URL kept as a reference,
+      display never falls back remotely) + resize/normalization tests
 - [x] Import pipeline tests with mocked HTTP (`RecipeImportServiceTests`)
 - [x] Import endpoint integration test (full HTTP pipeline, mocked outbound fetch:
       created recipe, local image serving, unsupported source, unreachable page)

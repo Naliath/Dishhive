@@ -208,6 +208,7 @@ Temporary Items
 # =============================================================================
 appsettings.Development.json
 appsettings.Local.json
+!src/Dishhive.Api/appsettings.Development.json
 *.pfx
 *.p12
 *.key

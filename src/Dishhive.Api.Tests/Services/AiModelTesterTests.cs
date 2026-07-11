@@ -13,11 +13,35 @@ public class AiModelTesterTests
     private const string ModelName = "test-model";
 
     /// <summary>Chat stub whose reply can depend on the options (e.g. reject json_schema)</summary>
-    private sealed class FakeChatClient(Func<ChatOptions?, ChatResponse> respond) : IChatClient
+    private sealed class FakeChatClient(
+        Func<ChatOptions?, ChatResponse> respond,
+        bool supportsTools = true) : IChatClient
     {
         public Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(respond(options));
+        {
+            if (supportsTools && options?.Tools?.Count > 0)
+            {
+                var hasToolResult = messages
+                    .SelectMany(message => message.Contents)
+                    .OfType<FunctionResultContent>()
+                    .Any();
+                return Task.FromResult(hasToolResult
+                    ? new ChatResponse(new ChatMessage(ChatRole.Assistant,
+                        """{"suggestions":[{"date":"2099-01-01","dishName":"Tool test soup","recipeTitle":null,"freezerItemId":null,"externalCandidateId":"c-test","reason":"tool test"}]}"""))
+                    : new ChatResponse(new ChatMessage(
+                        ChatRole.Assistant,
+                        [new FunctionCallContent("test-call", "get_recipe", new Dictionary<string, object?>
+                        {
+                            ["candidateId"] = "c-test"
+                        })]))
+                    {
+                        FinishReason = ChatFinishReason.ToolCalls
+                    });
+            }
+
+            return Task.FromResult(respond(options));
+        }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
@@ -46,9 +70,11 @@ public class AiModelTesterTests
     }
 
     private static AiModelTester CreateTester(
-        Func<ChatOptions?, ChatResponse> respond, string? modelsJson = null)
+        Func<ChatOptions?, ChatResponse> respond,
+        string? modelsJson = null,
+        bool supportsTools = true)
         => new(
-            new FakeChatClient(respond),
+            new FakeChatClient(respond, supportsTools),
             new AiOptions
             {
                 Provider = "lmstudio", Model = ModelName,
@@ -59,7 +85,7 @@ public class AiModelTesterTests
 
     /// <summary>Runs the tester under the default composed production prompt</summary>
     private static Task<AiModelTestResult> RunAsync(AiModelTester tester)
-        => tester.RunAsync(LlmMealSuggestionService.ComposeSystemPrompt(null));
+        => tester.RunAsync(MealSuggestionPromptBuilder.ComposeSystemPrompt(null));
 
     /// <summary>A reply satisfying every evaluation constraint of the fixture:
     /// Wednesday from the collection, Chicken curry on Thursday, ≥2 vegetarian days.</summary>
@@ -69,11 +95,11 @@ public class AiModelTesterTests
         var days = fixture.Request.DaysToFill;
         return $$"""
             {"suggestions":[
-              {"date":"{{days[0]:yyyy-MM-dd}}","dishName":"Vegetable curry","recipeTitle":"Vegetable curry","sourceUrl":null,"reason":"veg"},
-              {"date":"{{days[1]:yyyy-MM-dd}}","dishName":"Mushroom risotto","recipeTitle":"Mushroom risotto","sourceUrl":null,"reason":"veg"},
-              {"date":"{{days[2]:yyyy-MM-dd}}","dishName":"Pasta pesto","recipeTitle":"Pasta pesto","sourceUrl":null,"reason":"collection"},
-              {"date":"{{days[3]:yyyy-MM-dd}}","dishName":"Chicken curry","recipeTitle":"Chicken curry","sourceUrl":null,"reason":"as instructed"},
-              {"date":"{{days[4]:yyyy-MM-dd}}","dishName":"Beef stew","recipeTitle":"Beef stew","sourceUrl":null,"reason":"variety"}
+              {"date":"{{days[0]:yyyy-MM-dd}}","dishName":"Vegetable curry","recipeTitle":"Vegetable curry","externalCandidateId":null,"reason":"veg"},
+              {"date":"{{days[1]:yyyy-MM-dd}}","dishName":"Mushroom risotto","recipeTitle":"Mushroom risotto","externalCandidateId":null,"reason":"veg"},
+              {"date":"{{days[2]:yyyy-MM-dd}}","dishName":"Pasta pesto","recipeTitle":"Pasta pesto","externalCandidateId":null,"reason":"collection"},
+              {"date":"{{days[3]:yyyy-MM-dd}}","dishName":"Chicken curry","recipeTitle":"Chicken curry","externalCandidateId":null,"reason":"as instructed"},
+              {"date":"{{days[4]:yyyy-MM-dd}}","dishName":"Beef stew","recipeTitle":"Beef stew","externalCandidateId":null,"reason":"variety"}
             ]}
             """;
     }
@@ -130,11 +156,11 @@ public class AiModelTesterTests
         var days = fixture.Request.DaysToFill;
         var reply = $$"""
             {"suggestions":[
-              {"date":"{{days[0]:yyyy-MM-dd}}","dishName":"Beef stew","recipeTitle":null,"sourceUrl":null,"reason":""},
-              {"date":"{{days[1]:yyyy-MM-dd}}","dishName":"Pork schnitzel","recipeTitle":null,"sourceUrl":null,"reason":""},
-              {"date":"{{days[2]:yyyy-MM-dd}}","dishName":"Salmon teriyaki","recipeTitle":null,"sourceUrl":null,"reason":""},
-              {"date":"{{days[3]:yyyy-MM-dd}}","dishName":"Falafel wraps","recipeTitle":null,"sourceUrl":null,"reason":""},
-              {"date":"{{days[4]:yyyy-MM-dd}}","dishName":"Meatball spaghetti","recipeTitle":null,"sourceUrl":null,"reason":""}
+              {"date":"{{days[0]:yyyy-MM-dd}}","dishName":"Beef stew","recipeTitle":null,"externalCandidateId":null,"reason":""},
+              {"date":"{{days[1]:yyyy-MM-dd}}","dishName":"Pork schnitzel","recipeTitle":null,"externalCandidateId":null,"reason":""},
+              {"date":"{{days[2]:yyyy-MM-dd}}","dishName":"Salmon teriyaki","recipeTitle":null,"externalCandidateId":null,"reason":""},
+              {"date":"{{days[3]:yyyy-MM-dd}}","dishName":"Falafel wraps","recipeTitle":null,"externalCandidateId":null,"reason":""},
+              {"date":"{{days[4]:yyyy-MM-dd}}","dishName":"Meatball spaghetti","recipeTitle":null,"externalCandidateId":null,"reason":""}
             ]}
             """;
         var tester = CreateTester(_ => new ChatResponse(new ChatMessage(ChatRole.Assistant, reply)));
@@ -148,6 +174,21 @@ public class AiModelTesterTests
         result.Checks.Should().Contain(c => c.Name == "Specific dish" && !c.Passed);
         result.Checks.Should().Contain(c => c.Name == "Vegetarian days" && !c.Passed);
         result.Checks.Should().Contain(c => c.Name == "All days filled" && c.Passed);
+    }
+
+    [Fact]
+    public async Task Run_ModelCannotCallTools_ReportsExternalToolWarning()
+    {
+        var tester = CreateTester(
+            _ => new ChatResponse(new ChatMessage(ChatRole.Assistant, CorrectReply())),
+            supportsTools: false);
+
+        var result = await RunAsync(tester);
+
+        result.Viable.Should().BeTrue();
+        result.ToolCallingPassed.Should().BeFalse();
+        result.Verdict.Should().Be("warnings");
+        result.Checks.Should().Contain(c => c.Name == "External recipe tools" && !c.Passed);
     }
 
     [Fact]
@@ -170,7 +211,7 @@ public class AiModelTesterTests
         // The fixture must exercise the real context size: the built prompt should sit
         // at (not far under) the configured budget, and the real recipes must survive
         var fixture = AiModelTester.CreateFixture(new DateOnly(2026, 7, 2));
-        var prompt = LlmMealSuggestionService.BuildUserPrompt(fixture.Request, maxPromptTokens: 800);
+        var prompt = MealSuggestionPromptBuilder.BuildUserPrompt(fixture.Request, maxPromptTokens: 800);
 
         prompt.Length.Should().BeGreaterThan(800 * 4 - 400); // within a line of the char budget
         prompt.Should().Contain("Pasta pesto").And.Contain("Chicken curry");

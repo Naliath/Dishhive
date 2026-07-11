@@ -73,12 +73,16 @@ MealSuggestionRequestBuilder (scoped: DbContext + IFreezyClient)
 IMealSuggestionService
  ├── NoOpMealSuggestionService        (AI unconfigured / Testing)
  └── LlmMealSuggestionService         (AI configured)
-      │ IChatClient (ChatClientFactory) — structured JSON output
+      ├── MealSuggestionPromptBuilder + MealSuggestionResponseContract
+      ├── ExternalRecipeSessionFactory — candidate registry + AI tools
+      ├── MealSuggestionPostProcessor — ids, source scope, freezer and dietary checks
+      │   IChatClient (ChatClientFactory) — structured JSON output
       └─ on ANY failure → RulesMealSuggestionService (freezer-first + favorite rotation)
 ```
 
-- **Proposals only**: nothing is persisted; accepted suggestions go through the normal
-  `POST /api/plannedmeals`. `DaysToFill` = days without a concrete dinner main (vague-only
+- **Proposals only**: generation persists nothing. Selected rows are applied through
+  `POST /api/plannedmeals/suggestions/accept`, which imports external candidates and creates
+  meals with per-item results and idempotency keys. `DaysToFill` = days without a concrete dinner main (vague-only
   days are included — the suggestion resolves the vague text). Suggestions never overwrite
   concretely planned dishes.
 - **Ideas are replaced, not duplicated**: a vague-instruction-only dinner main (an "idea")
@@ -123,18 +127,21 @@ IMealSuggestionService
       source's host (`SourceMentionResolver` → `SourceConstraint`, grammar `@\[([^\[\]\r\n]{1,100})\]`,
       resolved via `RecipeSourceCatalog`: dedicated providers + previously-imported hosts, or a
       bare domain typed by hand).
-    - `get_recipe(url)` → `RecipeImportService.PreviewAsync`: fetch + structured extract (scraper),
+    - `get_recipe(candidateId)` → `RecipeImportService.PreviewAsync`: search results first receive
+      opaque candidate ids; the tool accepts only those ids, then fetches + structured extracts,
       or the cleaned page text when it can't be parsed, so the model verifies the constraints
-      (time, vegetarian, …) before choosing. SSRF-guarded (`UrlGuard`: http/https only, no
-      private/loopback hosts).
-  An external pick comes back with a `sourceUrl` (and resolved `SourceName`); nothing is imported
-  during suggestion. **Import happens on accept**: the review dialog's "Add selected" imports each
-  external pick via `POST /api/recipes/import` (dedup by source URL) and then plans it by recipe id
-  — proposals-only is preserved. Off-source picks are logged but kept (soft enforcement, like
-  collections). Requires a tool-capable model; otherwise it falls back to known-recipe suggestions.
+      (time, vegetarian, …) before choosing. The final model payload carries only
+      `externalCandidateId`; Dishhive resolves the URL from session state and rejects unknown,
+      unfetched, off-host, or wrong-day candidates. The shared safe fetcher bounds response size,
+      validates every redirect and connects only to public addresses.
+  An external pick comes back to the browser with a server-resolved `sourceUrl` and `SourceName`;
+  nothing is imported during generation. **Import happens on accept** through the batch endpoint:
+  imports are deduplicated/sequential, freezer availability is rechecked, and a vague idea is removed
+  in the same database transaction as its successful replacement. Repeating the same batch+suggestion
+  id returns `alreadyApplied` instead of creating a duplicate.
   The agentic path uses `Ai__AgentTimeoutSeconds` and skips the `/no_think` nudge (reasoning helps
   tool use). `ExternalRecipeTools` memoizes `search_recipes`/`get_recipe` per request (keyed by
-  query+site / URL) — some models re-issue an identical call, and re-fetching would waste the
+  query+site / candidate id) — some models re-issue an identical call, and re-fetching would waste the
   shared time budget on a repeat. The autocomplete gains an `@`-trigger alongside `#` (shared
   directive/util).
 - **Day adherence & leftovers**: dishes proposed for a day with a vague instruction must
@@ -217,12 +224,9 @@ IMealSuggestionService
   id. Container logging defaults to `Information`; set compose interpolation variable
   `LOG_LEVEL=Debug` to expose raw responses or `LOG_LEVEL=Warning` to reduce production logs.
   The Development environment uses `Debug` by default.
-- **External source URL recovery**: `get_recipe` returns its canonical `sourceUrl` alongside
-  the recipe fields. The tool set also retains exact fetched-title-to-URL pairs for the one
-  request, so post-processing can restore a missing/malformed final `sourceUrl` when the final
-  dish title uniquely and exactly matches a successfully fetched recipe. It deliberately does
-  not infer a URL from the free-text reason, make a fuzzy title match, or choose between two
-  fetched pages with the same title, any of which could import the wrong page.
+- **External candidate provenance**: search results, fetched previews and final selections are
+  joined by an opaque candidate id. The model never supplies a URL that the application trusts.
+  Structured candidate ingredients also participate in the post-hoc allergy warning net.
 - **Context budgeting**: recipes are **relevance-ranked** by the request builder
   (favorites, ratings, collection membership; recently-eaten pushed down) rather than sent
   alphabetically, and history is two compact lists (recent-to-avoid, liked/disliked). The
@@ -320,7 +324,7 @@ model gets **one real test per process** (`AiModelTester` + `AiModelCapabilitySe
 
 ## Editable system prompt (July 2026)
 
-The system prompt is split in two (`LlmMealSuggestionService`):
+The system prompt is split in two (`MealSuggestionPromptBuilder`):
 
 - **`EditableSystemPromptDefault`** — persona and soft preferences (variety, favorites,
   reason style). The user can replace this section from the settings page: persistent
@@ -411,6 +415,10 @@ to 4000 chars). API: `GET/PUT/DELETE /api/settings/ai-prompt`.
 - [x] Web search seam (`IWebSearchClient` + SearXNG) + `WebSearch__*` config + integrations status
 - [x] Web-search contract health check + actionable settings-page diagnostics for disabled JSON output
 - [x] External-recipe tools (`search_recipes`, `get_recipe`) + `FunctionInvokingChatClient` wiring
+- [x] Opaque external candidate ids + strict fetched/source/date provenance enforcement
+- [x] Shared bounded public-resource fetcher (redirect validation + public-address connection)
+- [x] Idempotent backend suggestion acceptance workflow with per-item outcomes
+- [x] Coordinator refactor: prompt, response contract, external session, and post-processor extracted
 - [x] `@[Source]` mentions (`SourceMentionResolver`, `RecipeSourceCatalog`, `GET /api/recipes/sources`)
 - [x] LLM recipe-extraction fallback for import + `PreviewAsync`; import-on-accept in the review dialog
 - [x] docker-compose `searxng` service + `WebSearch__*` vars + `@` autocomplete

@@ -257,6 +257,7 @@ public class DishhiveDbContext : DbContext
             entity.Property(e => e.DishName).HasMaxLength(200);
             entity.Property(e => e.VagueInstruction).HasMaxLength(500);
             entity.Property(e => e.FreezyItemRef).HasMaxLength(100);
+            entity.Property(e => e.SuggestionKey).HasMaxLength(100);
             entity.Property(e => e.Notes).HasMaxLength(500);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -270,6 +271,7 @@ public class DishhiveDbContext : DbContext
             // of dishes (e.g. lunch plus a dinner with appetizer and dessert)
             entity.HasIndex(e => e.Date);
             entity.HasIndex(e => e.DishName);
+            entity.HasIndex(e => e.SuggestionKey).IsUnique();
         });
 
         // PlannedMealAttendee configuration (composite key join table)

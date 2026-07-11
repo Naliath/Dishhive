@@ -13,7 +13,7 @@ public interface IAiPromptProvider
 
     /// <summary>The full effective system prompt (override or default + protected rules)</summary>
     async Task<string> GetEffectiveSystemPromptAsync(CancellationToken cancellationToken = default)
-        => LlmMealSuggestionService.ComposeSystemPrompt(await GetOverrideAsync(cancellationToken));
+        => MealSuggestionPromptBuilder.ComposeSystemPrompt(await GetOverrideAsync(cancellationToken));
 }
 
 /// <summary>
@@ -45,7 +45,7 @@ public class AiPromptService : IAiPromptProvider
     public async Task SetOverrideAsync(string editablePrompt, CancellationToken cancellationToken = default)
     {
         var trimmed = editablePrompt.Trim();
-        if (trimmed.Length == 0 || trimmed == LlmMealSuggestionService.EditableSystemPromptDefault)
+        if (trimmed.Length == 0 || trimmed == MealSuggestionPromptBuilder.EditableSystemPromptDefault)
         {
             await ResetAsync(cancellationToken);
             return;
@@ -54,7 +54,7 @@ public class AiPromptService : IAiPromptProvider
         await UpsertAsync(UserSettingKeys.AiSystemPrompt, trimmed, cancellationToken);
         await UpsertAsync(
             UserSettingKeys.AiSystemPromptBaseline,
-            LlmMealSuggestionService.EditableSystemPromptDefault,
+            MealSuggestionPromptBuilder.EditableSystemPromptDefault,
             cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -82,7 +82,7 @@ public class AiPromptService : IAiPromptProvider
         var baseline = await _context.UserSettings.AsNoTracking()
             .FirstOrDefaultAsync(s => s.Key == UserSettingKeys.AiSystemPromptBaseline, cancellationToken);
         return baseline is not null
-            && baseline.Value != LlmMealSuggestionService.EditableSystemPromptDefault;
+            && baseline.Value != MealSuggestionPromptBuilder.EditableSystemPromptDefault;
     }
 
     private async Task UpsertAsync(string key, string value, CancellationToken cancellationToken)

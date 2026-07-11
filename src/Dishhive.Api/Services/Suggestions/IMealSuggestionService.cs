@@ -216,6 +216,10 @@ public record MealSuggestion
 
     /// <summary>Friendly source name for an external suggestion (e.g. "Dagelijkse Kost" or the host)</summary>
     public string? SourceName { get; init; }
+
+    /// <summary>Ingredients retained from a verified external candidate for the
+    /// post-hoc allergy warning net; never exposed through the API DTO.</summary>
+    internal IReadOnlyList<string> ExternalIngredients { get; init; } = [];
 }
 
 /// <summary>

@@ -90,13 +90,46 @@ public class MealSuggestionsIntegrationTests : TestBase
         var dto = await response.Content.ReadFromJsonAsync<MealSuggestionsDto>();
 
         dto!.Enabled.Should().BeTrue();
+        dto.BatchId.Should().NotBeEmpty();
         dto.Suggestions.Should().ContainSingle();
+        dto.Suggestions[0].Id.Should().NotBeEmpty();
         dto.Suggestions[0].DishName.Should().Be("Stub dish");
         dto.Suggestions[0].Date.Should().Be(Monday);
 
         // The request builder assembled context and asked to fill the whole (empty) week
         stub.LastRequest.Should().NotBeNull();
         stub.LastRequest!.DaysToFill.Should().HaveCount(7);
+    }
+
+    [Fact]
+    public async Task AcceptSuggestions_RepeatedRequest_IsIdempotent()
+    {
+        var batchId = Guid.NewGuid();
+        var suggestionId = Guid.NewGuid();
+        var request = new AcceptMealSuggestionsRequestDto
+        {
+            BatchId = batchId,
+            Suggestions =
+            [
+                new AcceptMealSuggestionDto
+                {
+                    Id = suggestionId,
+                    Date = Monday,
+                    DishName = "Idempotent soup"
+                }
+            ]
+        };
+
+        var first = await Client.PostAsJsonAsync("/api/plannedmeals/suggestions/accept", request);
+        var second = await Client.PostAsJsonAsync("/api/plannedmeals/suggestions/accept", request);
+        var firstResult = await first.Content.ReadFromJsonAsync<AcceptMealSuggestionsResponseDto>();
+        var secondResult = await second.Content.ReadFromJsonAsync<AcceptMealSuggestionsResponseDto>();
+
+        firstResult!.Results.Should().ContainSingle().Which.Status.Should().Be("created");
+        secondResult!.Results.Should().ContainSingle().Which.Status.Should().Be("alreadyApplied");
+        using var scope = Factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<Data.DishhiveDbContext>();
+        context.PlannedMeals.Count(meal => meal.DishName == "Idempotent soup").Should().Be(1);
     }
 
     [Fact]

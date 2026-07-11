@@ -46,6 +46,9 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5100
+      # Minimum application log level. Override LOG_LEVEL in .env (e.g. Debug while
+      # diagnosing AI output, Warning to reduce production log volume).
+      Logging__LogLevel__Default: "${LOG_LEVEL:-Information}"
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=dishhive;Username=dishhive;Password=dishhive_dev_password"
       # Optional Freezy integration; set to e.g. http://host.docker.internal:5000
       Freezy__BaseUrl: "http://host.docker.internal:5000"

@@ -80,6 +80,11 @@ public class PlannedMeal
     /// </summary>
     public int FreezyItemQuantity { get; set; }
 
+    /// <summary>Idempotency key for a suggestion accepted through the batch endpoint.
+    /// Null for manually created meals.</summary>
+    [MaxLength(100)]
+    public string? SuggestionKey { get; set; }
+
     [MaxLength(500)]
     public string? Notes { get; set; }
 

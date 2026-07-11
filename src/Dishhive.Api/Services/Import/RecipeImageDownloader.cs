@@ -14,31 +14,25 @@ public static class RecipeImageDownloader
     public const int MaxImageBytes = RecipeImageProcessor.MaxSourceBytes;
 
     public static async Task<ProcessedRecipeImage> DownloadAsync(
-        HttpClient httpClient, Uri imageUri, CancellationToken cancellationToken)
+        ISafeHttpFetcher httpFetcher, Uri imageUri, CancellationToken cancellationToken)
     {
-        using var response = await httpClient.GetAsync(
-            imageUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        var contentType = response.Content.Headers.ContentType?.MediaType;
+        var resource = await httpFetcher.GetAsync(
+            imageUri.AbsoluteUri,
+            RecipeImageProcessor.MaxSourceBytes,
+            cancellationToken);
+        var contentType = resource.ContentType;
         if (contentType == null || !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
         {
             throw new RecipeImageException(
                 $"The URL returned '{contentType ?? "no content type"}' instead of an image.");
         }
 
-        if (response.Content.Headers.ContentLength > RecipeImageProcessor.MaxSourceBytes)
-        {
-            throw new RecipeImageException(
-                $"Images may be at most {RecipeImageProcessor.MaxSourceBytes / 1024 / 1024} MB.");
-        }
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await using var stream = new MemoryStream(resource.Content, writable: false);
         return await RecipeImageProcessor.ProcessAsync(stream, cancellationToken);
     }
 
     public static async Task TryDownloadAsync(
-        HttpClient httpClient, Recipe recipe, ILogger logger, CancellationToken cancellationToken)
+        ISafeHttpFetcher httpFetcher, Recipe recipe, ILogger logger, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(recipe.ImageUrl)
             || !Uri.TryCreate(recipe.ImageUrl, UriKind.Absolute, out var imageUri)
@@ -49,7 +43,7 @@ public static class RecipeImageDownloader
 
         try
         {
-            var processed = await DownloadAsync(httpClient, imageUri, cancellationToken);
+            var processed = await DownloadAsync(httpFetcher, imageUri, cancellationToken);
             recipe.ImageData = processed.Data;
             recipe.ImageContentType = processed.ContentType;
         }

@@ -15,7 +15,7 @@ import { CookingLoaderComponent } from '../cooking-loader/cooking-loader';
 import { CollectionMentionDirective } from '../../directives/collection-mention.directive';
 import { MealSuggestionsService } from '../../services/meal-suggestions.service';
 import { IntegrationsService } from '../../services/integrations.service';
-import { MealSuggestion } from '../../models/meal-suggestion.model';
+import { MealSuggestion, SuggestionReviewResult } from '../../models/meal-suggestion.model';
 
 export interface SuggestionReviewDialogData {
   /** ISO date (yyyy-MM-dd) of the week's Monday */
@@ -74,6 +74,7 @@ export class SuggestionReviewDialog implements OnInit {
   readonly selectedIndexes = signal<Set<number>>(new Set());
   /** Recipes kept out of planning for household allergies (visibility for false positives) */
   readonly excludedForAllergies = signal(0);
+  readonly batchId = signal<string | null>(null);
 
   readonly selectedCount = computed(() => this.selectedIndexes().size);
 
@@ -104,7 +105,7 @@ export class SuggestionReviewDialog implements OnInit {
 
   constructor(
     @Inject(MAT_DIALOG_DATA) private data: SuggestionReviewDialogData,
-    private dialogRef: MatDialogRef<SuggestionReviewDialog, MealSuggestion[]>,
+    private dialogRef: MatDialogRef<SuggestionReviewDialog, SuggestionReviewResult>,
     private suggestionsService: MealSuggestionsService,
     private integrationsService: IntegrationsService
   ) {}
@@ -119,7 +120,7 @@ export class SuggestionReviewDialog implements OnInit {
       .subscribe(status => {
         const aiUp = (status?.ai.reachable ?? false) && status?.ai.modelTestVerdict !== 'failed';
         this.aiAvailable.set(aiUp);
-        this.webSearchAvailable.set(status?.webSearch?.reachable ?? false);
+        this.webSearchAvailable.set(status?.webSearch?.operational ?? false);
         if (aiUp) {
           this.phase.set('compose');
         } else {
@@ -141,6 +142,7 @@ export class SuggestionReviewDialog implements OnInit {
       .subscribe({
         next: result => {
           this.suggestions.set(result.suggestions);
+          this.batchId.set(result.batchId);
           this.excludedForAllergies.set(result.excludedForAllergies ?? 0);
           this.selectedIndexes.set(new Set(result.suggestions.map((_, index) => index)));
           this.phase.set('review');
@@ -170,6 +172,9 @@ export class SuggestionReviewDialog implements OnInit {
 
   addSelected(): void {
     const selected = this.suggestions().filter((_, index) => this.isSelected(index));
-    this.dialogRef.close(selected);
+    const batchId = this.batchId();
+    if (batchId) {
+      this.dialogRef.close({ batchId, suggestions: selected });
+    }
   }
 }

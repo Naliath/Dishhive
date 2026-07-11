@@ -7,6 +7,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Dishhive.Api.Tests.Integration;
 
@@ -44,8 +45,10 @@ public class RecipeImportEndpointIntegrationTests : IDisposable
             base.ConfigureWebHost(builder);
             builder.ConfigureTestServices(services =>
             {
-                services.AddHttpClient<IRecipeImportService, RecipeImportService>()
-                    .ConfigurePrimaryHttpMessageHandler(() => handler);
+                services.RemoveAll<ISafeHttpFetcher>();
+                services.AddSingleton<ISafeHttpFetcher>(new SafeHttpFetcher(
+                    new HttpClient(handler),
+                    new AllowAllPublicUrlValidator()));
             });
         }
     }

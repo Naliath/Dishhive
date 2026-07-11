@@ -50,7 +50,7 @@ public class RecipeImportServiceTests : IDisposable
     private RecipeImportService CreateService(MockHttpMessageHandler handler)
     {
         return new RecipeImportService(
-            new HttpClient(handler),
+            new SafeHttpFetcher(new HttpClient(handler), new AllowAllPublicUrlValidator()),
             [new DagelijkseKostProvider()],
             _context,
             new NoOpLlmRecipeExtractor(),
@@ -148,6 +148,19 @@ public class RecipeImportServiceTests : IDisposable
         await act.Should().ThrowAsync<UnsupportedRecipeSourceException>();
     }
 
+    [Fact]
+    public async Task Import_SupportedUrlReturnsNonHtml_ThrowsExtractionFailure()
+    {
+        var handler = new MockHttpMessageHandler()
+            .RespondWith(FixtureUrl, "{}", "application/json");
+        var service = CreateService(handler);
+
+        var act = () => service.ImportAsync(FixtureUrl);
+
+        await act.Should().ThrowAsync<RecipeExtractionFailedException>()
+            .WithMessage("*instead of an HTML page*");
+    }
+
     // -------------------------------------------------------------------------
     // Provider precedence: dedicated providers win over the recipe-scrapers
     // sidecar fallback; the fallback only sees sites nobody else handles
@@ -173,7 +186,7 @@ public class RecipeImportServiceTests : IDisposable
             NullLogger<RecipeScrapersFallbackProvider>.Instance);
 
         return new RecipeImportService(
-            new HttpClient(handler),
+            new SafeHttpFetcher(new HttpClient(handler), new AllowAllPublicUrlValidator()),
             [new DagelijkseKostProvider(), fallback],
             _context,
             new NoOpLlmRecipeExtractor(),
@@ -223,7 +236,7 @@ public class RecipeImportServiceTests : IDisposable
             Steps = ["Cook it."]
         });
         var service = new RecipeImportService(
-            new HttpClient(handler),
+            new SafeHttpFetcher(new HttpClient(handler), new AllowAllPublicUrlValidator()),
             [new DagelijkseKostProvider()], // does not handle blog.example
             _context,
             extractor,

@@ -2,7 +2,12 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { MealSuggestions, SuggestionStatus } from '../models/meal-suggestion.model';
+import {
+  AcceptSuggestionsResponse,
+  MealSuggestion,
+  MealSuggestions,
+  SuggestionStatus
+} from '../models/meal-suggestion.model';
 
 @Injectable({ providedIn: 'root' })
 export class MealSuggestionsService {
@@ -22,6 +27,21 @@ export class MealSuggestionsService {
       weekStart,
       attendeeIds,
       instructions: instructions?.trim() || undefined
+    });
+  }
+
+  acceptSuggestions(batchId: string, suggestions: MealSuggestion[]): Observable<AcceptSuggestionsResponse> {
+    return this.http.post<AcceptSuggestionsResponse>(`${this.apiUrl}/accept`, {
+      batchId,
+      suggestions: suggestions.map(suggestion => ({
+        id: suggestion.id,
+        date: suggestion.date,
+        recipeId: suggestion.recipeId,
+        dishName: suggestion.dishName,
+        freezyItemRef: suggestion.freezyItemRef,
+        freezyItemQuantity: suggestion.freezyItemQuantity,
+        sourceUrl: suggestion.sourceUrl
+      }))
     });
   }
 }

@@ -146,4 +146,6 @@ feature. See [ai-week-planning.md](ai-week-planning.md).
       labels only shown when deviating from dinner main)
 - [x] Phase 4 seam hardening: `IsEnabled` + widened `MealSuggestionRequest`, real providers
       (see ai-week-planning.md); "Suggest week" button when AI is configured
+- [x] Backend suggestion acceptance batch: per-item outcomes, idempotency, transactional
+      idea replacement, import deduplication and freezer revalidation
 - [x] Eaten checkmark on past day cards (see meal-feedback.md)

@@ -21,7 +21,7 @@ public class RecipesController : ControllerBase
     private readonly IRecipeImportService _importService;
     private readonly IRecipeExchangeService _exchangeService;
     private readonly RecipeFactsAssessmentService _factsQueue;
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ISafeHttpFetcher _httpFetcher;
     private readonly ILogger<RecipesController> _logger;
 
     public RecipesController(
@@ -29,14 +29,14 @@ public class RecipesController : ControllerBase
         IRecipeImportService importService,
         IRecipeExchangeService exchangeService,
         RecipeFactsAssessmentService factsQueue,
-        IHttpClientFactory httpClientFactory,
+        ISafeHttpFetcher httpFetcher,
         ILogger<RecipesController> logger)
     {
         _context = context;
         _importService = importService;
         _exchangeService = exchangeService;
         _factsQueue = factsQueue;
-        _httpClientFactory = httpClientFactory;
+        _httpFetcher = httpFetcher;
         _logger = logger;
     }
 
@@ -515,11 +515,13 @@ public class RecipesController : ControllerBase
     [ProducesResponseType(typeof(RecipeDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
-    public async Task<ActionResult<RecipeDto>> ImportRecipe(ImportRecipeRequestDto dto)
+    public async Task<ActionResult<RecipeDto>> ImportRecipe(
+        ImportRecipeRequestDto dto,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var recipe = await _importService.ImportAsync(dto.Url);
+            var recipe = await _importService.ImportAsync(dto.Url, cancellationToken);
             return CreatedAtAction(nameof(GetRecipe), new { id = recipe.Id }, ToDto(recipe));
         }
         catch (UnsupportedRecipeSourceException ex)
@@ -888,8 +890,7 @@ public class RecipesController : ControllerBase
 
         try
         {
-            var httpClient = _httpClientFactory.CreateClient("RecipeImages");
-            var processed = await RecipeImageDownloader.DownloadAsync(httpClient, imageUri, cancellationToken);
+            var processed = await RecipeImageDownloader.DownloadAsync(_httpFetcher, imageUri, cancellationToken);
             recipe.ImageData = processed.Data;
             recipe.ImageContentType = processed.ContentType;
             recipe.ImageUrl = imageUri.AbsoluteUri;

@@ -1,4 +1,5 @@
 export interface MealSuggestion {
+  id: string;
   /** ISO date (yyyy-MM-dd) */
   date: string;
   recipeId?: string;
@@ -23,10 +24,36 @@ export interface MealSuggestion {
 }
 
 export interface MealSuggestions {
+  batchId: string;
   enabled: boolean;
   suggestions: MealSuggestion[];
   /** Known recipes kept out of planning because their facts conflict with a household allergy */
   excludedForAllergies?: number;
+}
+
+export interface SuggestionReviewResult {
+  batchId: string;
+  suggestions: MealSuggestion[];
+}
+
+export type AcceptSuggestionStatus =
+  | 'created'
+  | 'alreadyApplied'
+  | 'importFailed'
+  | 'planningFailed'
+  | 'stockUnavailable';
+
+export interface AcceptSuggestionResult {
+  suggestionId: string;
+  status: AcceptSuggestionStatus;
+  dishName: string;
+  plannedMealId?: string;
+  recipeId?: string;
+  error?: string;
+}
+
+export interface AcceptSuggestionsResponse {
+  results: AcceptSuggestionResult[];
 }
 
 export interface SuggestionStatus {

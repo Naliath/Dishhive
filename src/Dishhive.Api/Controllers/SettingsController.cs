@@ -94,9 +94,9 @@ public class SettingsController : ControllerBase
     {
         var overrideText = await promptService.GetOverrideAsync(cancellationToken);
         return new AiPromptDto(
-            EditablePrompt: overrideText ?? LlmMealSuggestionService.EditableSystemPromptDefault,
-            DefaultPrompt: LlmMealSuggestionService.EditableSystemPromptDefault,
-            ProtectedPrompt: LlmMealSuggestionService.ProtectedSystemPrompt,
+            EditablePrompt: overrideText ?? MealSuggestionPromptBuilder.EditableSystemPromptDefault,
+            DefaultPrompt: MealSuggestionPromptBuilder.EditableSystemPromptDefault,
+            ProtectedPrompt: MealSuggestionPromptBuilder.ProtectedSystemPrompt,
             IsCustomized: overrideText != null,
             DefaultChangedSinceCustomized: await promptService.DefaultChangedSinceCustomizedAsync(cancellationToken));
     }

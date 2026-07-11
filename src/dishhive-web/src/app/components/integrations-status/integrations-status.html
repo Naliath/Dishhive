@@ -38,7 +38,11 @@
                     @for (check of result.checks; track check.name) {
                       <li [class.warn]="!check.passed">
                         <mat-icon>{{ check.passed ? 'check_circle' : 'error_outline' }}</mat-icon>
-                        <span>{{ check.detail }}</span>
+                        @let feature = aiFeature(check);
+                        <span class="ai-test-check-copy">
+                          <span class="ai-test-check-name">{{ feature.name }}</span>
+                          <span>{{ feature.detail }}</span>
+                        </span>
                       </li>
                     }
                   </ul>

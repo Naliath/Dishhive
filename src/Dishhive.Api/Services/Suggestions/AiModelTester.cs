@@ -37,6 +37,9 @@ public record AiModelTestResult
     /// <summary>Whether the medium-complexity evaluation passed; null when never reached</summary>
     public bool? EvaluationPassed { get; init; }
 
+    /// <summary>Whether the model completed a synthetic get_recipe tool round-trip.</summary>
+    public bool? ToolCallingPassed { get; init; }
+
     public IReadOnlyList<AiModelTestCheck> Checks { get; init; } = [];
 
     /// <summary>Rough output speed of the successful completion, for expectation-setting</summary>
@@ -50,7 +53,7 @@ public record AiModelTestResult
     /// <summary>failed | warnings | passed — the settings page headline</summary>
     public string Verdict => !Viable
         ? "failed"
-        : EvaluationPassed == true && ModelListed != false ? "passed" : "warnings";
+        : EvaluationPassed == true && ModelListed != false && ToolCallingPassed != false ? "passed" : "warnings";
 }
 
 /// <summary>
@@ -97,36 +100,6 @@ public class AiModelTester
     /// <summary>JSON schema for the suggestions payload (strict style: all fields required,
     /// nullability via type unions, no extra properties) — shared with the LLM service
     /// when schema mode is verified.</summary>
-    public static ChatResponseFormat JsonSchemaFormat { get; } = ChatResponseFormat.ForJsonSchema(
-        JsonDocument.Parse(
-            """
-            {
-              "type": "object",
-              "properties": {
-                "suggestions": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "date": { "type": "string", "description": "yyyy-MM-dd" },
-                      "dishName": { "type": "string" },
-                      "recipeTitle": { "type": ["string", "null"] },
-                      "freezerItemId": { "type": ["string", "null"], "description": "exact id from the freezer items list, or null" },
-                      "sourceUrl": { "type": ["string", "null"] },
-                      "reason": { "type": "string" }
-                    },
-                    "required": ["date", "dishName", "recipeTitle", "freezerItemId", "sourceUrl", "reason"],
-                    "additionalProperties": false
-                  }
-                }
-              },
-              "required": ["suggestions"],
-              "additionalProperties": false
-            }
-            """).RootElement,
-        schemaName: "week_suggestions",
-        schemaDescription: "A dinner suggestion per requested date");
-
     /// <summary>
     /// Runs the capability test under the given effective system prompt — the same
     /// composed prompt production uses, including any user override, so the verdict
@@ -152,7 +125,7 @@ public class AiModelTester
             }));
 
             var fixture = CreateFixture(DateOnly.FromDateTime(DateTime.Today));
-            var userPrompt = LlmMealSuggestionService.BuildUserPrompt(fixture.Request, _options.MaxPromptTokens);
+            var userPrompt = MealSuggestionPromptBuilder.BuildUserPrompt(fixture.Request, _options.MaxPromptTokens);
             var systemPrompt = _options.DisableThinking
                 ? "/no_think\n" + effectiveSystemPrompt
                 : effectiveSystemPrompt;
@@ -162,7 +135,7 @@ public class AiModelTester
             // the production response mode.
             var mode = AiResponseMode.None;
             var (payload, tokensPerSecond) = await TryCompleteAsync(
-                systemPrompt, userPrompt, JsonSchemaFormat, "json_schema", cancellationToken);
+                systemPrompt, userPrompt, MealSuggestionResponseContract.JsonSchemaFormat, "json_schema", cancellationToken);
             if (payload?.Suggestions is not null)
             {
                 mode = AiResponseMode.JsonSchema;
@@ -185,11 +158,23 @@ public class AiModelTester
             }));
 
             bool? evaluationPassed = null;
+            bool? toolCallingPassed = null;
             if (payload?.Suggestions is not null)
             {
                 var evaluation = Evaluate(payload, fixture);
                 checks.AddRange(evaluation);
                 evaluationPassed = evaluation.All(c => c.Passed);
+
+                toolCallingPassed = await TestToolCallingAsync(
+                    effectiveSystemPrompt,
+                    mode == AiResponseMode.JsonSchema ? MealSuggestionResponseContract.JsonSchemaFormat : null,
+                    cancellationToken);
+                checks.Add(new AiModelTestCheck(
+                    "External recipe tools",
+                    toolCallingPassed.Value,
+                    toolCallingPassed.Value
+                        ? "The model called get_recipe and copied its candidateId into the final response"
+                        : "The model did not complete a tool call round-trip; @[Source] requests will use the rules fallback"));
             }
 
             stopwatch.Stop();
@@ -202,6 +187,7 @@ public class AiModelTester
                 ModelListed = modelListed,
                 ResponseMode = mode,
                 EvaluationPassed = evaluationPassed,
+                ToolCallingPassed = toolCallingPassed,
                 Checks = checks,
                 TokensPerSecond = tokensPerSecond,
                 ElapsedMs = stopwatch.ElapsedMilliseconds
@@ -232,8 +218,65 @@ public class AiModelTester
         }
     }
 
+    private async Task<bool> TestToolCallingAsync(
+        string systemPrompt,
+        ChatResponseFormat? responseFormat,
+        CancellationToken cancellationToken)
+    {
+        const string expectedCandidateId = "c-test";
+        var invoked = false;
+        var tool = AIFunctionFactory.Create(
+            (string candidateId) =>
+            {
+                invoked = candidateId == expectedCandidateId;
+                return new
+                {
+                    candidateId,
+                    scrapable = true,
+                    title = "Tool test soup",
+                    ingredients = new[] { "1 onion" },
+                    instructions = new[] { "Cook." }
+                };
+            },
+            name: "get_recipe");
+        var client = _chatClient.AsBuilder()
+            .UseFunctionInvocation(configure: options => options.MaximumIterationsPerRequest = 3)
+            .Build();
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+        try
+        {
+            var response = await client.GetResponseAsync(
+                [
+                    new ChatMessage(ChatRole.System, systemPrompt),
+                    new ChatMessage(ChatRole.User,
+                        $"Capability check: call get_recipe with candidateId '{expectedCandidateId}', then reply with one suggestion for 2099-01-01 using externalCandidateId '{expectedCandidateId}'.")
+                ],
+                new ChatOptions
+                {
+                    MaxOutputTokens = Math.Min(_options.MaxOutputTokens, 1000),
+                    Temperature = 0,
+                    Tools = [tool],
+                    ResponseFormat = responseFormat
+                },
+                timeout.Token);
+            var payload = MealSuggestionResponseContract.Parse(response.Text);
+            return invoked && payload?.Suggestions?.Any(s => s.ExternalCandidateId == expectedCandidateId) == true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogInformation(ex, "AI external-tool capability check failed");
+            return false;
+        }
+    }
+
     /// <summary>One completion attempt under the plain-path timeout; null payload on any failure.</summary>
-    private async Task<(LlmMealSuggestionService.WeekSuggestionsPayload? Payload, double? TokensPerSecond)> TryCompleteAsync(
+    private async Task<(WeekSuggestionsPayload? Payload, double? TokensPerSecond)> TryCompleteAsync(
         string systemPrompt, string userPrompt, ChatResponseFormat? responseFormat,
         string attemptName, CancellationToken cancellationToken)
     {
@@ -258,7 +301,7 @@ public class AiModelTester
                 ? output / attemptStopwatch.Elapsed.TotalSeconds
                 : null;
 
-            var payload = LlmMealSuggestionService.ParsePayload(response.Text);
+            var payload = MealSuggestionResponseContract.Parse(response.Text);
             _logger.LogInformation(
                 "AI model test {Attempt} attempt: parseable={Parseable} in {ElapsedMs}ms (finish={Finish})",
                 attemptName, payload?.Suggestions is not null, attemptStopwatch.ElapsedMilliseconds, response.FinishReason);
@@ -422,7 +465,7 @@ public class AiModelTester
 
     /// <summary>Scores the model's reply against the fixture's known-correct answers.</summary>
     internal static List<AiModelTestCheck> Evaluate(
-        LlmMealSuggestionService.WeekSuggestionsPayload payload, AiModelTestFixture fixture)
+        WeekSuggestionsPayload payload, AiModelTestFixture fixture)
     {
         var suggestions = (payload.Suggestions ?? [])
             .Where(s => !string.IsNullOrWhiteSpace(s.DishName)

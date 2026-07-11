@@ -8,15 +8,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { HttpErrorResponse } from '@angular/common/http';
-import { forkJoin, of } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { forkJoin } from 'rxjs';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { FreezerService } from '../../services/freezer.service';
 import { MealSuggestionsService } from '../../services/meal-suggestions.service';
-import { RecipesService } from '../../services/recipes.service';
 import { SettingsService } from '../../services/settings.service';
-import { MealSuggestion } from '../../models/meal-suggestion.model';
+import { SuggestionReviewResult } from '../../models/meal-suggestion.model';
 import {
   COURSE_LABELS,
   COURSE_ORDER,
@@ -120,7 +118,6 @@ export class WeekPlannerPage implements OnInit {
     private familyMembersService: FamilyMembersService,
     private freezerService: FreezerService,
     private mealSuggestionsService: MealSuggestionsService,
-    private recipesService: RecipesService,
     private settingsService: SettingsService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar
@@ -240,71 +237,31 @@ export class WeekPlannerPage implements OnInit {
   /** Opens the AI suggestion review dialog; accepted proposals become planned meals */
   suggestWeek(): void {
     const data: SuggestionReviewDialogData = { weekStart: toIso(this.weekStart()) };
-    this.dialog.open<SuggestionReviewDialog, SuggestionReviewDialogData, MealSuggestion[]>(
+    this.dialog.open<SuggestionReviewDialog, SuggestionReviewDialogData, SuggestionReviewResult>(
       SuggestionReviewDialog, { data })
-      .afterClosed().subscribe(selected => {
-        if (!selected || selected.length === 0) {
+      .afterClosed().subscribe(selection => {
+        if (!selection || selection.suggestions.length === 0) {
           return;
         }
 
-        const householdIds = this.members().filter(m => !m.isGuest).map(m => m.id);
-
-        // A planned day replaces its "idea": once a suggested dish lands on a date
-        // that only held a vague-instruction dinner main, that idea meal is removed
-        // (it was input for the AI; it shouldn't linger next to the concrete dish).
-        const plannedDates = new Set(selected.map(s => s.date));
-        const ideasToRemove = this.meals().filter(m =>
-          plannedDates.has(m.date)
-          && m.mealType === MealType.Dinner
-          && m.course === Course.Main
-          && !!m.vagueInstruction
-          && !m.dishName
-          && !m.recipeId);
-
-        const removals = ideasToRemove.length > 0
-          ? forkJoin(ideasToRemove.map(m => this.plannedMealsService.deleteMeal(m.id)))
-          : of([]);
-
-        // Each accepted suggestion becomes a planned meal. An external suggestion
-        // (found online, no recipe yet) is imported first, then planned by recipe id.
-        // Per-suggestion catchError keeps a single failed import from dropping the rest.
-        const creations = selected.map(suggestion => {
-          const plan = (recipeId?: string, dishName?: string) => this.plannedMealsService.createMeal({
-            date: suggestion.date,
-            mealType: MealType.Dinner,
-            course: Course.Main,
-            recipeId: recipeId ?? suggestion.recipeId,
-            dishName: dishName ?? suggestion.dishName,
-            // Carry the freezer reservation through so accepted freezer dishes draw down stock
-            freezyItemRef: suggestion.freezyItemRef,
-            freezyItemQuantity: suggestion.freezyItemQuantity,
-            familyMemberIds: householdIds
-          });
-
-          const operation = suggestion.sourceUrl && !suggestion.recipeId
-            ? this.recipesService.importRecipe(suggestion.sourceUrl).pipe(
-                switchMap(recipe => plan(recipe.id, recipe.title)))
-            : plan();
-
-          return operation.pipe(
-            map(() => ({ ok: true })),
-            catchError(() => of({ ok: false, dish: suggestion.dishName }))
-          );
-        });
-
-        removals.pipe(switchMap(() => forkJoin(creations))).subscribe({
-          next: results => {
+        this.mealSuggestionsService
+          .acceptSuggestions(selection.batchId, selection.suggestions)
+          .subscribe({
+          next: response => {
             this.loadWeek();
-            const added = results.filter(r => r.ok).length;
-            const failed = results.length - added;
-            const message = failed === 0
+            const added = response.results.filter(result =>
+              result.status === 'created' || result.status === 'alreadyApplied').length;
+            const failed = response.results.filter(result =>
+              result.status !== 'created' && result.status !== 'alreadyApplied');
+            const failedNames = failed.slice(0, 2).map(result => result.dishName).join(', ');
+            const message = failed.length === 0
               ? `Added ${added} suggested dinner${added === 1 ? '' : 's'}`
-              : `Added ${added}; ${failed} could not be imported`;
-            this.snackBar.open(message, 'Dismiss', { duration: failed === 0 ? 3000 : 5000 });
+              : `Added ${added}; could not apply ${failedNames}${failed.length > 2 ? ` and ${failed.length - 2} more` : ''}`;
+            this.snackBar.open(message, 'Dismiss', { duration: failed.length === 0 ? 3000 : 5000 });
           },
           error: () => {
             this.loadWeek();
-            this.snackBar.open('Could not add all suggestions', 'Dismiss', { duration: 4000 });
+            this.snackBar.open('Could not apply the selected suggestions', 'Dismiss', { duration: 4000 });
           }
         });
       });

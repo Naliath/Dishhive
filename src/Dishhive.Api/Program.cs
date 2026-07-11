@@ -64,30 +64,19 @@ builder.Services.AddHttpClient<IRecipeScrapersClient, RecipeScrapersClient>(clie
     client.Timeout = TimeSpan.FromMinutes(6);
 });
 builder.Services.AddTransient<IRecipeSourceProvider, RecipeScrapersFallbackProvider>();
-builder.Services.AddHttpClient<IRecipeImportService, RecipeImportService>((serviceProvider, client) =>
+builder.Services.AddSingleton<IPublicUrlValidator, PublicUrlValidator>();
+builder.Services.AddHttpClient<ISafeHttpFetcher, SafeHttpFetcher>(client =>
 {
     var userAgent = builder.Configuration["RecipeImport:UserAgent"] ?? "Dishhive/1.0";
     client.DefaultRequestHeaders.Add("User-Agent", userAgent);
     client.Timeout = TimeSpan.FromSeconds(15);
-});
+})
+    .ConfigurePrimaryHttpMessageHandler(PublicHttpMessageHandler.Create);
+builder.Services.AddScoped<IRecipeImportService, RecipeImportService>();
 
 // Recipe library exchange: schema.org JSON export + file import (image downloads reuse
 // the same outbound HTTP configuration as URL import)
-builder.Services.AddHttpClient<IRecipeExchangeService, RecipeExchangeService>((serviceProvider, client) =>
-{
-    var userAgent = builder.Configuration["RecipeImport:UserAgent"] ?? "Dishhive/1.0";
-    client.DefaultRequestHeaders.Add("User-Agent", userAgent);
-    client.Timeout = TimeSpan.FromSeconds(15);
-});
-
-// Manual image URLs use the same fetch posture, but a separate named client keeps
-// recipe CRUD independent from the import services' typed clients.
-builder.Services.AddHttpClient("RecipeImages", client =>
-{
-    var userAgent = builder.Configuration["RecipeImport:UserAgent"] ?? "Dishhive/1.0";
-    client.DefaultRequestHeaders.Add("User-Agent", userAgent);
-    client.Timeout = TimeSpan.FromSeconds(15);
-});
+builder.Services.AddScoped<IRecipeExchangeService, RecipeExchangeService>();
 
 // Freezy integration (optional; disabled when Freezy:BaseUrl is empty)
 builder.Services.AddHttpClient<IFreezyClient, FreezyHttpClient>(client =>
@@ -171,6 +160,9 @@ builder.Services.AddScoped<CollectionMentionResolver>();
 builder.Services.AddScoped<SourceMentionResolver>();
 builder.Services.AddScoped<RecipeSourceCatalog>();
 builder.Services.AddScoped<MealSuggestionRequestBuilder>();
+builder.Services.AddScoped<MealSuggestionAcceptanceService>();
+builder.Services.AddScoped<IExternalRecipeSessionFactory, ExternalRecipeSessionFactory>();
+builder.Services.AddScoped<MealSuggestionPostProcessor>();
 
 // Demo mode: seed Dagelijkse Kost recipes and a demo household into an empty
 // database when Demo:Enabled is set (see docs/features/demo-mode.md)

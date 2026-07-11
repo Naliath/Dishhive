@@ -22,7 +22,7 @@ public class AiPromptServiceTests
 
         (await service.GetOverrideAsync()).Should().BeNull();
         (await service.GetEffectiveSystemPromptAsync())
-            .Should().StartWith(LlmMealSuggestionService.EditableSystemPromptDefault)
+            .Should().StartWith(MealSuggestionPromptBuilder.EditableSystemPromptDefault)
             .And.Contain("Reply with ONLY a JSON object");
     }
 
@@ -38,7 +38,7 @@ public class AiPromptServiceTests
         var effective = await ((IAiPromptProvider)service).GetEffectiveSystemPromptAsync();
         effective.Should().StartWith("You are a vegan chef.");
         effective.Should().Contain("NEVER suggest dishes that conflict");
-        effective.Should().NotContain(LlmMealSuggestionService.EditableSystemPromptDefault);
+        effective.Should().NotContain(MealSuggestionPromptBuilder.EditableSystemPromptDefault);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class AiPromptServiceTests
         await service.SetOverrideAsync("custom");
 
         // Pasting the default back should not leave the user flagged as customized
-        await service.SetOverrideAsync(LlmMealSuggestionService.EditableSystemPromptDefault);
+        await service.SetOverrideAsync(MealSuggestionPromptBuilder.EditableSystemPromptDefault);
 
         (await service.GetOverrideAsync()).Should().BeNull();
         (await service.DefaultChangedSinceCustomizedAsync()).Should().BeFalse();

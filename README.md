@@ -256,6 +256,7 @@ unconfigured the tools are simply not offered and suggestions behave as before.
 |----------|---------|-------------|
 | `ConnectionStrings__DefaultConnection` | See docker-compose | PostgreSQL connection string |
 | `ASPNETCORE_ENVIRONMENT` | Production | Environment (Development/Production) |
+| `LOG_LEVEL` | `Information` in docker-compose | Minimum app-container log level; use `Debug` for raw AI responses or `Warning` to reduce volume |
 | `Freezy__BaseUrl` | empty (disabled) | Base URL of a Freezy instance |
 | `RecipeImport__UserAgent` | `Dishhive/0.1` | User-Agent for outbound recipe fetches |
 | `Demo__Enabled` | `false` (`true` in docker-compose) | Seed an empty database with demo recipes and household |

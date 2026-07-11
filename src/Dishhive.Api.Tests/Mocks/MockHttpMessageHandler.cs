@@ -8,7 +8,11 @@ namespace Dishhive.Api.Tests.Mocks;
 /// </summary>
 public class MockHttpMessageHandler : HttpMessageHandler
 {
-    private sealed record CannedResponse(HttpStatusCode StatusCode, byte[] Content, string ContentType);
+    private sealed record CannedResponse(
+        HttpStatusCode StatusCode,
+        byte[] Content,
+        string ContentType,
+        string? Location = null);
 
     private readonly List<(string UrlPrefix, CannedResponse Response)> _responses = new();
 
@@ -31,6 +35,12 @@ public class MockHttpMessageHandler : HttpMessageHandler
         return this;
     }
 
+    public MockHttpMessageHandler Redirect(string urlPrefix, string location, HttpStatusCode statusCode = HttpStatusCode.Found)
+    {
+        _responses.Add((urlPrefix, new CannedResponse(statusCode, [], "text/plain", location)));
+        return this;
+    }
+
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Requests.Add(request.RequestUri!);
@@ -48,6 +58,10 @@ public class MockHttpMessageHandler : HttpMessageHandler
             Content = new ByteArrayContent(match.Response.Content)
         };
         response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(match.Response.ContentType);
+        if (match.Response.Location != null)
+        {
+            response.Headers.Location = new Uri(match.Response.Location, UriKind.RelativeOrAbsolute);
+        }
         return Task.FromResult(response);
     }
 }

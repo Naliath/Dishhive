@@ -20,17 +20,20 @@ public class PlannedMealsController : ControllerBase
     private readonly DishhiveDbContext _context;
     private readonly IMealSuggestionService _suggestionService;
     private readonly MealSuggestionRequestBuilder _suggestionRequestBuilder;
+    private readonly MealSuggestionAcceptanceService _suggestionAcceptance;
     private readonly ILogger<PlannedMealsController> _logger;
 
     public PlannedMealsController(
         DishhiveDbContext context,
         IMealSuggestionService suggestionService,
         MealSuggestionRequestBuilder suggestionRequestBuilder,
+        MealSuggestionAcceptanceService suggestionAcceptance,
         ILogger<PlannedMealsController> logger)
     {
         _context = context;
         _suggestionService = suggestionService;
         _suggestionRequestBuilder = suggestionRequestBuilder;
+        _suggestionAcceptance = suggestionAcceptance;
         _logger = logger;
     }
 
@@ -246,10 +249,12 @@ public class PlannedMealsController : ControllerBase
 
         return Ok(new MealSuggestionsDto
         {
+            BatchId = Guid.NewGuid(),
             Enabled = true,
             ExcludedForAllergies = request.AllergyExcludedRecipeIds.Count,
             Suggestions = suggestions.Select(s => new MealSuggestionDto
             {
+                Id = Guid.NewGuid(),
                 Date = s.Date,
                 RecipeId = s.RecipeId,
                 RecipeTitle = s.RecipeId.HasValue ? recipeTitles.GetValueOrDefault(s.RecipeId.Value) : null,
@@ -264,6 +269,32 @@ public class PlannedMealsController : ControllerBase
                 SourceName = s.SourceName
             }).ToList()
         });
+    }
+
+    /// <summary>
+    /// Imports and plans selected suggestions as one idempotent backend workflow.
+    /// Each item reports its own outcome; vague ideas are removed only when their
+    /// replacement is successfully created.
+    /// </summary>
+    [HttpPost("suggestions/accept")]
+    [ProducesResponseType(typeof(AcceptMealSuggestionsResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<AcceptMealSuggestionsResponseDto>> AcceptSuggestions(
+        AcceptMealSuggestionsRequestDto dto,
+        CancellationToken cancellationToken)
+    {
+        if (dto.BatchId == Guid.Empty
+            || dto.Suggestions.Count == 0
+            || dto.Suggestions.Any(item => item.Id == Guid.Empty))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid suggestion selection",
+                Detail = "A batch id and at least one identified suggestion are required."
+            });
+        }
+
+        return Ok(await _suggestionAcceptance.AcceptAsync(dto, cancellationToken));
     }
 
     /// <summary>

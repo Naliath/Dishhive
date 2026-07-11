@@ -7,79 +7,108 @@ using NSubstitute;
 
 namespace Dishhive.Api.Tests.Services;
 
-/// <summary>
-/// The external-recipe tools memoize per suggestion request: a model sometimes
-/// re-issues an identical search_recipes/get_recipe call, and re-fetching would waste
-/// the shared agent time budget on a repeat (observed in production logs — a duplicate
-/// get_recipe call on the same URL contributed to an agentic request timing out).
-/// </summary>
 public class ExternalRecipeToolsTests
 {
-    private static ExternalRecipeTools CreateTools(IWebSearchClient webSearch, IRecipeImportService importService)
-        => new(webSearch, importService, maxResults: 5, defaultSite: null, requestId: "test", NullLogger.Instance);
+    private static ExternalRecipeTools CreateTools(
+        IWebSearchClient webSearch,
+        IRecipeImportService importService,
+        IReadOnlyCollection<string>? allowedHosts = null)
+        => new(webSearch, importService, 5,
+            allowedHosts?.Count == 1 ? allowedHosts.Single() : null,
+            allowedHosts,
+            "test",
+            NullLogger.Instance);
+
+    private static IWebSearchClient SearchReturning(params WebSearchResult[] results)
+    {
+        var search = Substitute.For<IWebSearchClient>();
+        search.SearchAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<WebSearchResult>>(results));
+        return search;
+    }
 
     [Fact]
-    public async Task GetRecipe_SameUrlTwice_OnlyFetchesOnce()
+    public async Task SearchRecipes_AssignsOpaqueCandidateId()
     {
-        var importService = Substitute.For<IRecipeImportService>();
-        importService.PreviewAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(new RecipePreview(true, new ImportedRecipe { Title = "Dish" }, null, null)));
-        var tools = CreateTools(Substitute.For<IWebSearchClient>(), importService);
+        var tools = CreateTools(
+            SearchReturning(new WebSearchResult("Dish", "https://example.com/dish", "snippet")),
+            Substitute.For<IRecipeImportService>(),
+            ["example.com"]);
 
+        var result = await tools.SearchRecipesAsync("dish", "example.com");
+
+        var hit = result.Should().ContainSingle().Subject;
+        hit.CandidateId.Should().Be("c1");
+        hit.Title.Should().Be("Dish");
+    }
+
+    [Fact]
+    public async Task GetRecipe_SameCandidateTwice_OnlyFetchesOnceAndBecomesResolvable()
+    {
         const string url = "https://dagelijksekost.vrt.be/gerechten/vegetarische-wok";
-        var first = await tools.GetRecipeAsync(url);
-        var second = await tools.GetRecipeAsync(url);
+        var importService = Substitute.For<IRecipeImportService>();
+        importService.PreviewAsync(url, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new RecipePreview(
+                true,
+                new ImportedRecipe { Title = "Dish", SourceUrl = url, IngredientLines = ["1 onion"] },
+                null,
+                null)));
+        var tools = CreateTools(
+            SearchReturning(new WebSearchResult("Dish", url, null)),
+            importService,
+            ["dagelijksekost.vrt.be"]);
+        var candidateId = (await tools.SearchRecipesAsync("dish", null)).Single().CandidateId;
 
+        var first = await tools.GetRecipeAsync(candidateId);
+        var second = await tools.GetRecipeAsync(candidateId);
+
+        first.CandidateId.Should().Be(candidateId);
         first.Title.Should().Be("Dish");
-        second.Title.Should().Be("Dish");
+        second.Should().BeSameAs(first);
+        tools.TryResolveCandidate(candidateId, out var candidate).Should().BeTrue();
+        candidate!.SourceUrl.Should().Be(url);
+        candidate.Ingredients.Should().ContainSingle("1 onion");
         await importService.Received(1).PreviewAsync(url, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task GetRecipe_DifferentUrls_FetchesEach()
+    public async Task GetRecipe_UnknownCandidate_IsRejectedWithoutFetch()
     {
         var importService = Substitute.For<IRecipeImportService>();
-        importService.PreviewAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(new RecipePreview(true, new ImportedRecipe { Title = "Dish" }, null, null)));
-        var tools = CreateTools(Substitute.For<IWebSearchClient>(), importService);
+        var tools = CreateTools(Substitute.For<IWebSearchClient>(), importService, ["allowed.example"]);
 
-        await tools.GetRecipeAsync("https://example.com/a");
-        await tools.GetRecipeAsync("https://example.com/b");
+        var result = await tools.GetRecipeAsync("c999");
 
-        await importService.Received(1).PreviewAsync("https://example.com/a", Arg.Any<CancellationToken>());
-        await importService.Received(1).PreviewAsync("https://example.com/b", Arg.Any<CancellationToken>());
+        result.Error.Should().Contain("Unknown candidateId");
+        await importService.DidNotReceive().PreviewAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SearchRecipes_ResultOutsideReferencedHosts_IsDiscarded()
+    {
+        var tools = CreateTools(
+            SearchReturning(new WebSearchResult("Wrong host", "https://other.example/dish", null)),
+            Substitute.For<IRecipeImportService>(),
+            ["allowed.example"]);
+
+        var result = await tools.SearchRecipesAsync("dish", "allowed.example");
+
+        result.Should().BeEmpty();
     }
 
     [Fact]
     public async Task SearchRecipes_SameQueryAndSiteTwice_OnlySearchesOnce()
     {
-        var webSearch = Substitute.For<IWebSearchClient>();
-        webSearch.SearchAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<WebSearchResult>>(
-                [new WebSearchResult("Title", "https://example.com/x", "snippet")]));
-        var tools = CreateTools(webSearch, Substitute.For<IRecipeImportService>());
+        var webSearch = SearchReturning(new WebSearchResult("Title", "https://example.com/x", "snippet"));
+        var tools = CreateTools(webSearch, Substitute.For<IRecipeImportService>(), ["example.com"]);
 
         var first = await tools.SearchRecipesAsync("vegetarian pasta", "example.com");
         var second = await tools.SearchRecipesAsync("vegetarian pasta", "example.com");
 
         first.Should().ContainSingle();
         second.Should().ContainSingle();
+        second.Single().CandidateId.Should().Be(first.Single().CandidateId);
         await webSearch.Received(1).SearchAsync(
             "vegetarian pasta", "example.com", Arg.Any<int>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task SearchRecipes_SameQueryDifferentSite_SearchesEach()
-    {
-        var webSearch = Substitute.For<IWebSearchClient>();
-        webSearch.SearchAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<WebSearchResult>>([]));
-        var tools = CreateTools(webSearch, Substitute.For<IRecipeImportService>());
-
-        await tools.SearchRecipesAsync("pasta", "a.example");
-        await tools.SearchRecipesAsync("pasta", "b.example");
-
-        await webSearch.Received(1).SearchAsync("pasta", "a.example", Arg.Any<int>(), Arg.Any<CancellationToken>());
-        await webSearch.Received(1).SearchAsync("pasta", "b.example", Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 }

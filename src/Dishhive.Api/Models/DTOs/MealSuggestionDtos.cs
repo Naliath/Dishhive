@@ -20,6 +20,7 @@ public class SuggestWeekRequestDto
 
 public class MealSuggestionDto
 {
+    public Guid Id { get; set; }
     public DateOnly Date { get; set; }
     public Guid? RecipeId { get; set; }
 
@@ -68,6 +69,7 @@ public class MealSuggestionDto
 /// </summary>
 public class MealSuggestionsDto
 {
+    public Guid BatchId { get; set; }
     public bool Enabled { get; set; }
     public List<MealSuggestionDto> Suggestions { get; set; } = new();
 
@@ -78,6 +80,47 @@ public class MealSuggestionsDto
     /// recipe silently never appearing again.
     /// </summary>
     public int ExcludedForAllergies { get; set; }
+}
+
+public class AcceptMealSuggestionsRequestDto
+{
+    public Guid BatchId { get; set; }
+
+    [MinLength(1)]
+    public List<AcceptMealSuggestionDto> Suggestions { get; set; } = new();
+}
+
+public class AcceptMealSuggestionDto
+{
+    public Guid Id { get; set; }
+    public DateOnly Date { get; set; }
+    public Guid? RecipeId { get; set; }
+
+    [Required, MaxLength(200)]
+    public string DishName { get; set; } = string.Empty;
+
+    [MaxLength(100)]
+    public string? FreezyItemRef { get; set; }
+
+    public int FreezyItemQuantity { get; set; }
+
+    [MaxLength(1000), Url]
+    public string? SourceUrl { get; set; }
+}
+
+public class AcceptMealSuggestionsResponseDto
+{
+    public List<AcceptMealSuggestionResultDto> Results { get; set; } = new();
+}
+
+public class AcceptMealSuggestionResultDto
+{
+    public Guid SuggestionId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string DishName { get; set; } = string.Empty;
+    public Guid? PlannedMealId { get; set; }
+    public Guid? RecipeId { get; set; }
+    public string? Error { get; set; }
 }
 
 public class SuggestionStatusDto

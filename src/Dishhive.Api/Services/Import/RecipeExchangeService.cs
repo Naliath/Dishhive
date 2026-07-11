@@ -49,20 +49,20 @@ public partial class RecipeExchangeService : IRecipeExchangeService
     [GeneratedRegex(@"^data:(?<type>image/[a-zA-Z0-9.+-]+);base64,(?<payload>.+)$", RegexOptions.Singleline)]
     private static partial Regex ImageDataUriRegex();
 
-    private readonly HttpClient _httpClient;
+    private readonly ISafeHttpFetcher _httpFetcher;
     private readonly DishhiveDbContext _context;
     private readonly AutoCollectionProvider _autoCollections;
     private readonly RecipeFactsAssessmentService _factsQueue;
     private readonly ILogger<RecipeExchangeService> _logger;
 
     public RecipeExchangeService(
-        HttpClient httpClient,
+        ISafeHttpFetcher httpFetcher,
         DishhiveDbContext context,
         AutoCollectionProvider autoCollections,
         RecipeFactsAssessmentService factsQueue,
         ILogger<RecipeExchangeService> logger)
     {
-        _httpClient = httpClient;
+        _httpFetcher = httpFetcher;
         _context = context;
         _autoCollections = autoCollections;
         _factsQueue = factsQueue;
@@ -185,7 +185,7 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             await ApplyImageAsync(recipe, imported.ImageUrl, cancellationToken);
             if (recipe.ImageData == null)
             {
-                await RecipeImageDownloader.TryDownloadAsync(_httpClient, recipe, _logger, cancellationToken);
+                await RecipeImageDownloader.TryDownloadAsync(_httpFetcher, recipe, _logger, cancellationToken);
             }
             SyncTags(recipe, ReadDishhiveTags(node), allTags);
             await SyncCollectionsAsync(recipe, ReadDishhiveCollections(node), allCookbooks, cancellationToken);

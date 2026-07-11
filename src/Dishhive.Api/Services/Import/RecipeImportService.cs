@@ -37,7 +37,9 @@ public record RecipePreview(bool Scrapable, ImportedRecipe? Recipe, string? Text
 
 public class RecipeImportService : IRecipeImportService
 {
-    private readonly HttpClient _httpClient;
+    internal const int MaxPageBytes = 4 * 1024 * 1024;
+
+    private readonly ISafeHttpFetcher _httpFetcher;
     private readonly IEnumerable<IRecipeSourceProvider> _providers;
     private readonly DishhiveDbContext _context;
     private readonly ILlmRecipeExtractor _llmExtractor;
@@ -45,14 +47,14 @@ public class RecipeImportService : IRecipeImportService
     private readonly ILogger<RecipeImportService> _logger;
 
     public RecipeImportService(
-        HttpClient httpClient,
+        ISafeHttpFetcher httpFetcher,
         IEnumerable<IRecipeSourceProvider> providers,
         DishhiveDbContext context,
         ILlmRecipeExtractor llmExtractor,
         RecipeFactsAssessmentService factsQueue,
         ILogger<RecipeImportService> logger)
     {
-        _httpClient = httpClient;
+        _httpFetcher = httpFetcher;
         _providers = providers;
         _context = context;
         _llmExtractor = llmExtractor;
@@ -68,13 +70,30 @@ public class RecipeImportService : IRecipeImportService
             throw new UnsupportedRecipeSourceException(url);
         }
 
-        var provider = _providers.FirstOrDefault(p => p.CanHandle(uri));
-        if (provider == null && !_llmExtractor.IsAvailable)
+        var initialProvider = _providers.FirstOrDefault(p => p.CanHandle(uri));
+        if (initialProvider == null && !_llmExtractor.IsAvailable)
         {
             throw new UnsupportedRecipeSourceException(url);
         }
 
-        var html = await _httpClient.GetStringAsync(uri, cancellationToken);
+        FetchedHttpResource resource;
+        try
+        {
+            resource = await _httpFetcher.GetAsync(uri.AbsoluteUri, MaxPageBytes, cancellationToken);
+        }
+        catch (SafeHttpFetchException ex) when (ex.UnsafeUrl)
+        {
+            throw new UnsupportedRecipeSourceException(url);
+        }
+
+        uri = resource.FinalUri;
+        EnsureHtmlContent(resource, uri);
+        var html = resource.ReadText();
+        var provider = _providers.FirstOrDefault(p => p.CanHandle(uri));
+        if (provider == null && !_llmExtractor.IsAvailable)
+        {
+            throw new UnsupportedRecipeSourceException(uri.AbsoluteUri);
+        }
 
         ImportedRecipe imported;
         string providerKey;
@@ -122,7 +141,7 @@ public class RecipeImportService : IRecipeImportService
         }
 
         ApplyImportedRecipe(recipe, imported, sourceUrl, providerKey);
-        await RecipeImageDownloader.TryDownloadAsync(_httpClient, recipe, _logger, cancellationToken);
+        await RecipeImageDownloader.TryDownloadAsync(_httpFetcher, recipe, _logger, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
         // Fire-and-forget dietary-facts assessment (no-op when AI is unconfigured).
@@ -144,26 +163,30 @@ public class RecipeImportService : IRecipeImportService
     public async Task<RecipePreview> PreviewAsync(string url, CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
-        var (ok, uri, error) = await UrlGuard.ValidateAsync(url, cancellationToken);
-        if (!ok || uri == null)
-        {
-            return new RecipePreview(false, null, null, error);
-        }
-
-        string html;
         var fetchStopwatch = Stopwatch.StartNew();
+        FetchedHttpResource resource;
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(15));
-            html = await _httpClient.GetStringAsync(uri, cts.Token);
+            resource = await _httpFetcher.GetAsync(url, MaxPageBytes, cts.Token);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             _logger.LogInformation(ex, "Recipe preview could not fetch {Url} after {ElapsedMs}ms",
-                uri, fetchStopwatch.ElapsedMilliseconds);
-            return new RecipePreview(false, null, null, $"Could not fetch '{uri}'.");
+                url, fetchStopwatch.ElapsedMilliseconds);
+            return new RecipePreview(false, null, null, ex.Message);
         }
+        var uri = resource.FinalUri;
+        try
+        {
+            EnsureHtmlContent(resource, uri);
+        }
+        catch (RecipeExtractionFailedException ex)
+        {
+            return new RecipePreview(false, null, null, ex.Message);
+        }
+        var html = resource.ReadText();
         var fetchElapsedMs = fetchStopwatch.ElapsedMilliseconds;
 
         // Try the structured providers (no persistence); on failure, hand back the page
@@ -239,6 +262,17 @@ public class RecipeImportService : IRecipeImportService
                 StepNumber = stepNumber++,
                 Instruction = step
             });
+        }
+    }
+
+    private static void EnsureHtmlContent(FetchedHttpResource resource, Uri uri)
+    {
+        if (resource.ContentType != null
+            && !resource.ContentType.Equals("text/html", StringComparison.OrdinalIgnoreCase)
+            && !resource.ContentType.Equals("application/xhtml+xml", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new RecipeExtractionFailedException(
+                $"'{uri}' returned '{resource.ContentType}' instead of an HTML page.");
         }
     }
 }

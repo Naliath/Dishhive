@@ -33,4 +33,29 @@ describe('IntegrationsStatusComponent', () => {
 
     expect(component.webSearchChipLabel(status)).toBe('Active');
   });
+
+  it('presents model checks as product features without exposing test fixtures', () => {
+    const feature = component.aiFeature({
+      name: 'Specific dish',
+      passed: true,
+      detail: "'Chicken curry' was planned on Thursday as instructed"
+    });
+
+    expect(feature).toEqual({
+      name: 'Specific meal instructions',
+      detail: 'The model can place a requested meal on the requested day.'
+    });
+    expect(JSON.stringify(feature)).not.toContain('Chicken curry');
+  });
+
+  it('explains unavailable external recipe discovery as a feature limitation', () => {
+    expect(component.aiFeature({
+      name: 'External recipe tools',
+      passed: false,
+      detail: 'Diagnostic tool-call evidence'
+    })).toEqual({
+      name: 'External recipe discovery',
+      detail: 'External recipe requests will use the built-in rules fallback.'
+    });
+  });
 });

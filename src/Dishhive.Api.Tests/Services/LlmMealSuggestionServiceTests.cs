@@ -5,6 +5,7 @@ using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.WebSearch;
 using FluentAssertions;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
@@ -67,14 +68,44 @@ public class LlmMealSuggestionServiceTests
         public Task<AiModelTestResult> RetestAsync() => Task.FromResult(Result);
     }
 
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add((logLevel, formatter(state, exception)));
+        }
+    }
+
     private static LlmMealSuggestionService CreateService(
         FakeChatClient chatClient, IWebSearchClient? webSearch = null,
         AiResponseMode capabilityMode = AiResponseMode.PromptedJson,
-        string? promptOverride = null)
-        => new(chatClient, new RulesMealSuggestionService(), new AiOptions { Provider = "ollama", Model = "test" },
-            webSearch ?? new NoOpWebSearchClient(), Substitute.For<IRecipeImportService>(), new WebSearchOptions(),
-            new StubCapability(capabilityMode), new StubPromptProvider(promptOverride),
-            NullLogger<LlmMealSuggestionService>.Instance);
+        string? promptOverride = null,
+        ILogger<LlmMealSuggestionService>? logger = null,
+        IRecipeImportService? importService = null)
+    {
+        var search = webSearch ?? new NoOpWebSearchClient();
+        var importer = importService ?? Substitute.For<IRecipeImportService>();
+        return new LlmMealSuggestionService(
+            chatClient,
+            new RulesMealSuggestionService(),
+            new AiOptions { Provider = "ollama", Model = "test" },
+            new StubCapability(capabilityMode),
+            new StubPromptProvider(promptOverride),
+            new ExternalRecipeSessionFactory(search, importer, new WebSearchOptions()),
+            new MealSuggestionPostProcessor(NullLogger<MealSuggestionPostProcessor>.Instance),
+            logger ?? NullLogger<LlmMealSuggestionService>.Instance);
+    }
 
     /// <summary>A web-search client that reports configured (unlike the NoOp default) so
     /// tests can isolate the SourceConstraints-gating behavior from configuration state</summary>
@@ -115,6 +146,21 @@ public class LlmMealSuggestionServiceTests
         suggestions[0].DishName.Should().Be("Spaghetti");
         suggestions[0].Date.Should().Be(WeekStart);
         suggestions[1].Reason.Should().Be("Variety");
+    }
+
+    [Fact]
+    public async Task Suggest_LogsRawAiOutputAtDebugLevel()
+    {
+        const string response =
+            "{\"suggestions\":[{\"date\":\"2026-06-15\",\"dishName\":\"Debug dish\"}]}";
+        var logger = new CapturingLogger<LlmMealSuggestionService>();
+
+        await CreateService(new FakeChatClient(response), logger: logger)
+            .SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        logger.Entries.Should().Contain(entry =>
+            entry.Level == LogLevel.Debug
+            && entry.Message.Contains(response, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -299,7 +345,7 @@ public class LlmMealSuggestionServiceTests
             ]
         };
 
-        var prompt = LlmMealSuggestionService.BuildUserPrompt(request);
+        var prompt = MealSuggestionPromptBuilder.BuildUserPrompt(request);
 
         prompt.Should().Contain("Referenced collections:");
         prompt.Should().Contain("\"Easy Weekday Dishes\" (for 2026-06-19): \"Wrap\", \"Pasta pesto\"");
@@ -350,7 +396,7 @@ public class LlmMealSuggestionServiceTests
     [Fact]
     public void ParsePayload_StripsThinkBlock_AndIgnoresBracesInside()
     {
-        var payload = LlmMealSuggestionService.ParsePayload(
+        var payload = MealSuggestionResponseContract.Parse(
             "<think>I could use {curry} here</think>\n```json\n{\"suggestions\":[{\"date\":\"2026-06-15\",\"dishName\":\"Curry\"}]}\n```");
 
         payload!.Suggestions.Should().ContainSingle().Which.DishName.Should().Be("Curry");
@@ -359,7 +405,7 @@ public class LlmMealSuggestionServiceTests
     [Fact]
     public void ParsePayload_AcceptsBareArray()
     {
-        var payload = LlmMealSuggestionService.ParsePayload(
+        var payload = MealSuggestionResponseContract.Parse(
             """[{"date":"2026-06-15","dishName":"Soup"}]""");
 
         payload!.Suggestions.Should().ContainSingle().Which.DishName.Should().Be("Soup");
@@ -574,7 +620,7 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
-    public async Task Suggest_ExternalSourceUrl_IsMappedWithSourceName()
+    public async Task Suggest_LegacyModelSourceUrl_OnSourceConstrainedDay_IsRejected()
     {
         var chatClient = new FakeChatClient(
             """
@@ -594,14 +640,149 @@ public class LlmMealSuggestionServiceTests
 
         var suggestions = await CreateService(chatClient).SuggestAsync(request);
 
-        var suggestion = suggestions.Should().ContainSingle().Subject;
-        suggestion.SourceUrl.Should().Be("https://dagelijksekost.vrt.be/recepten/lasagne");
-        suggestion.SourceName.Should().Be("Dagelijkse Kost");
-        suggestion.RecipeId.Should().BeNull();
+        suggestions.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task Suggest_InvalidSourceUrl_IsIgnored()
+    public async Task PostProcess_ExternalCandidateId_ResolvesVerifiedSource()
+    {
+        const string url = "https://dagelijksekost.vrt.be/recepten/vegetarische-lasagne";
+        var importService = Substitute.For<IRecipeImportService>();
+        importService.PreviewAsync(url, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new RecipePreview(
+                true,
+                new ImportedRecipe
+                {
+                    Title = "Vegetarische lasagne",
+                    SourceUrl = url,
+                    IngredientLines = ["1 onion"]
+                },
+                null,
+                null)));
+        var webSearch = ConfiguredWebSearch();
+        webSearch.SearchAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<WebSearchResult>>(
+                [new WebSearchResult("Vegetarische lasagne", url, null)]));
+        var tools = new ExternalRecipeTools(
+            webSearch, importService, 5, "dagelijksekost.vrt.be",
+            ["dagelijksekost.vrt.be"], "test", NullLogger.Instance);
+        var candidateId = (await tools.SearchRecipesAsync("lasagne", null)).Single().CandidateId;
+        await tools.GetRecipeAsync(candidateId);
+
+        var request = Request(daysToFill: [WeekStart]) with
+        {
+            Members =
+            [
+                new MemberProfile
+                {
+                    Name = "Alex",
+                    Allergies = [new DietaryTagProfile { Name = "onion" }]
+                }
+            ],
+            SourceConstraints =
+            [
+                new SourceConstraint
+                {
+                    Name = "Dagelijkse Kost",
+                    Host = "dagelijksekost.vrt.be",
+                    Dates = [WeekStart]
+                }
+            ]
+        };
+        var payload = MealSuggestionResponseContract.Parse(
+            $$"""{"suggestions":[{"date":"2026-06-15","dishName":"Vegetarische lasagne","externalCandidateId":"{{candidateId}}"}]}""")!;
+
+        var suggestions = new MealSuggestionPostProcessor(NullLogger<MealSuggestionPostProcessor>.Instance)
+            .Process(payload, request, tools);
+
+        var suggestion = suggestions.Should().ContainSingle().Subject;
+        suggestion.SourceUrl.Should().Be(url);
+        suggestion.SourceName.Should().Be("Dagelijkse Kost");
+        suggestion.ExternalIngredients.Should().ContainSingle("1 onion");
+    }
+
+    [Fact]
+    public async Task Suggest_AgenticToolLoop_ResolvesCandidateIdWithoutTrustingModelUrl()
+    {
+        const string url = "https://dagelijksekost.vrt.be/gerechten/vegetarische-lasagne";
+        var responses = new Queue<ChatResponse>(
+        [
+            ToolCall("call-search", "search_recipes", new Dictionary<string, object?>
+            {
+                ["query"] = "vegetarische lasagne",
+                ["site"] = "dagelijksekost.vrt.be"
+            }),
+            ToolCall("call-get", "get_recipe", new Dictionary<string, object?>
+            {
+                ["candidateId"] = "c1"
+            }),
+            new ChatResponse(new ChatMessage(ChatRole.Assistant,
+                """{"suggestions":[{"date":"2026-06-15","dishName":"model title","recipeTitle":null,"externalCandidateId":"c1","reason":"verified"}]}"""))
+        ]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
+        var webSearch = ConfiguredWebSearch();
+        webSearch.SearchAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<WebSearchResult>>(
+                [new WebSearchResult("Vegetarische lasagne", url, null)]));
+        var importService = Substitute.For<IRecipeImportService>();
+        importService.PreviewAsync(url, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new RecipePreview(
+                true,
+                new ImportedRecipe
+                {
+                    Title = "Vegetarische lasagne",
+                    SourceUrl = url,
+                    IngredientLines = ["1 onion"]
+                },
+                null,
+                null)));
+        var request = Request(daysToFill: [WeekStart]) with
+        {
+            Members =
+            [
+                new MemberProfile
+                {
+                    Name = "Alex",
+                    Allergies = [new DietaryTagProfile { Name = "onion" }]
+                }
+            ],
+            SourceConstraints =
+            [
+                new SourceConstraint
+                {
+                    Name = "Dagelijkse Kost",
+                    Host = "dagelijksekost.vrt.be",
+                    Dates = [WeekStart]
+                }
+            ]
+        };
+
+        var suggestions = await CreateService(
+            chatClient,
+            webSearch,
+            importService: importService).SuggestAsync(request);
+
+        var suggestion = suggestions.Should().ContainSingle().Subject;
+        suggestion.DishName.Should().Be("Vegetarische lasagne");
+        suggestion.SourceUrl.Should().Be(url);
+        suggestion.SourceName.Should().Be("Dagelijkse Kost");
+        suggestion.AllergyWarning.Should().Contain("onion");
+        chatClient.Calls.Should().Be(3);
+    }
+
+    private static ChatResponse ToolCall(
+        string callId,
+        string name,
+        IDictionary<string, object?> arguments)
+        => new(new ChatMessage(
+            ChatRole.Assistant,
+            [new FunctionCallContent(callId, name, arguments)]))
+        {
+            FinishReason = ChatFinishReason.ToolCalls
+        };
+
+    [Fact]
+    public async Task Suggest_InvalidLegacySourceUrl_IsNeverTrustedAsImportSource()
     {
         var chatClient = new FakeChatClient(
             """{"suggestions":[{"date":"2026-06-15","dishName":"Something","sourceUrl":"not-a-url"}]}""");
@@ -610,7 +791,6 @@ public class LlmMealSuggestionServiceTests
 
         var suggestion = suggestions.Should().ContainSingle().Subject;
         suggestion.SourceUrl.Should().BeNull();
-        suggestion.DishName.Should().Be("Something");
     }
 
     [Fact]
@@ -809,7 +989,7 @@ public class LlmMealSuggestionServiceTests
             AllergyExcludedRecipeIds = new HashSet<Guid> { excludedId }
         };
 
-        var prompt = LlmMealSuggestionService.BuildUserPrompt(request);
+        var prompt = MealSuggestionPromptBuilder.BuildUserPrompt(request);
 
         prompt.Should().NotContain("Peanut stew");
         prompt.Should().Contain("Safe soup");
@@ -834,7 +1014,7 @@ public class LlmMealSuggestionServiceTests
             new RecipeOption { Id = Guid.NewGuid(), Title = "Mystery dish" }
         ]);
 
-        var prompt = LlmMealSuggestionService.BuildUserPrompt(request);
+        var prompt = MealSuggestionPromptBuilder.BuildUserPrompt(request);
 
         prompt.Should().Contain("\"Choco cake\" [contains: Milk, Gluten]");
         prompt.Should().Contain("\"Fruit salad\" [contains: none]");
@@ -857,7 +1037,7 @@ public class LlmMealSuggestionServiceTests
             ]
         };
 
-        var prompt = LlmMealSuggestionService.BuildUserPrompt(request);
+        var prompt = MealSuggestionPromptBuilder.BuildUserPrompt(request);
 
         prompt.Should().Contain("Noten [excludes: TreeNuts]");
         prompt.Should().Contain("Koosjer").And.NotContain("Koosjer [excludes");

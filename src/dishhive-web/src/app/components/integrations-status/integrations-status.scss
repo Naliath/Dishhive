@@ -129,6 +129,16 @@
       margin-block-start: 1px;
       flex-shrink: 0;
     }
+
+    .ai-test-check-copy {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .ai-test-check-name {
+      color: var(--mat-sys-on-surface, inherit);
+      font-weight: 500;
+    }
   }
 }
 

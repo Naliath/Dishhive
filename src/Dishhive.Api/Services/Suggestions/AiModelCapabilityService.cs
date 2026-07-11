@@ -204,7 +204,7 @@ public class AiModelCapabilityService : IAiModelCapabilityService
         }
         catch
         {
-            prompt = LlmMealSuggestionService.ComposeSystemPrompt(null);
+            prompt = MealSuggestionPromptBuilder.ComposeSystemPrompt(null);
         }
 
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(prompt)))[..16];
@@ -254,6 +254,7 @@ public class AiModelCapabilityService : IAiModelCapabilityService
             ModelListed = record.ModelListed,
             ResponseMode = mode,
             EvaluationPassed = record.EvaluationPassed,
+            ToolCallingPassed = checks?.FirstOrDefault(c => c.Name == "External recipe tools")?.Passed,
             Checks = checks ?? [],
             TokensPerSecond = record.TokensPerSecond,
             ElapsedMs = record.ElapsedMs

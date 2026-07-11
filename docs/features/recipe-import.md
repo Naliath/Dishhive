@@ -85,6 +85,11 @@ IngredientLineParser (quantity/unit/name, locale-aware: "0,5" decimal comma)
 mapped to Recipe + RecipeIngredient + RecipeStep, SourceRawData = raw JSON-LD
 ```
 
+All remote page and image reads go through `ISafeHttpFetcher`: only public HTTP(S)
+addresses are allowed, redirects are validated one hop at a time, production connections
+are made to a validated public address, and page/image byte limits are enforced before
+parsing. `PreviewAsync` and persisted `ImportAsync` therefore share the same network boundary.
+
 **LLM extraction fallback** (July 2026): when the selected provider (dedicated or the
 recipe-scrapers sidecar) can't parse a page **and** AI is configured, `RecipeImportService`
 hands the page to `ILlmRecipeExtractor` (`LlmRecipeExtractor` → the configured `IChatClient`)
@@ -205,6 +210,7 @@ Plus `IngredientLineParser` unit tests. Tests are offline — no network depende
 - [x] Local image download at import (tolerant of failures; original URL kept as a reference,
       display never falls back remotely) + resize/normalization tests
 - [x] Import pipeline tests with mocked HTTP (`RecipeImportServiceTests`)
+- [x] Shared SSRF-safe bounded fetcher for preview, import and image downloads
 - [x] Import endpoint integration test (full HTTP pipeline, mocked outbound fetch:
       created recipe, local image serving, unsupported source, unreachable page)
 - [x] Import form on recipes page (URL input + navigate to imported recipe)

@@ -48,7 +48,7 @@ public static class UrlGuard
     }
 
     /// <summary>Whether an address is loopback, private, link-local or otherwise not publicly routable</summary>
-    private static bool IsBlocked(IPAddress address)
+    internal static bool IsBlocked(IPAddress address)
     {
         if (IPAddress.IsLoopback(address))
         {
@@ -59,8 +59,14 @@ public static class UrlGuard
         {
             var b = address.GetAddressBytes();
             return b[0] == 10                              // 10.0.0.0/8
+                || b[0] == 127                             // 127.0.0.0/8
+                || (b[0] == 100 && b[1] >= 64 && b[1] <= 127) // carrier-grade NAT
                 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) // 172.16.0.0/12
                 || (b[0] == 192 && b[1] == 168)              // 192.168.0.0/16
+                || (b[0] == 192 && b[1] == 0)                // IETF protocol/reserved
+                || (b[0] == 198 && (b[1] == 18 || b[1] == 19)) // benchmark networks
+                || (b[0] == 198 && b[1] == 51 && b[2] == 100) // documentation
+                || (b[0] == 203 && b[1] == 0 && b[2] == 113)  // documentation
                 || (b[0] == 169 && b[1] == 254)              // 169.254.0.0/16 link-local
                 || b[0] == 0                                 // 0.0.0.0/8
                 || b[0] >= 224;                              // multicast / reserved
@@ -68,7 +74,13 @@ public static class UrlGuard
 
         if (address.AddressFamily == AddressFamily.InterNetworkV6)
         {
-            return address.IsIPv6LinkLocal
+            if (address.IsIPv4MappedToIPv6)
+            {
+                return IsBlocked(address.MapToIPv4());
+            }
+
+            return address.Equals(IPAddress.IPv6Any)
+                || address.IsIPv6LinkLocal
                 || address.IsIPv6SiteLocal
                 || address.IsIPv6UniqueLocal
                 || address.IsIPv6Multicast;

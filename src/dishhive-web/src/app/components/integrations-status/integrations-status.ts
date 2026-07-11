@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { CookingLoaderComponent } from '../cooking-loader/cooking-loader';
 import { IntegrationsService } from '../../services/integrations.service';
 import {
+  AiModelTestCheck,
   AiModelTestStatus,
   AiModelTestVerdict,
   IntegrationStatusResponse,
@@ -76,10 +77,68 @@ export class IntegrationsStatusComponent implements OnInit {
 
   aiVerdictLabel(verdict: AiModelTestVerdict): string {
     switch (verdict) {
-      case 'passed': return 'Model test passed';
-      case 'warnings': return 'Model works, with warnings';
-      case 'failed': return 'Model test failed — suggestions will use the rules fallback';
+      case 'passed': return 'All tested AI planning features are available';
+      case 'warnings': return 'AI planning works, but some features are unavailable';
+      case 'failed': return 'AI planning is unavailable — suggestions will use the rules fallback';
     }
+  }
+
+  /** Translate diagnostic test checks into stable, user-facing product features. */
+  aiFeature(check: AiModelTestCheck): { name: string; detail: string } {
+    const features: Record<string, { name: string; supported: string; unsupported: string }> = {
+      Endpoint: {
+        name: 'AI service connection',
+        supported: 'Dishhive can connect to the configured AI service.',
+        unsupported: 'Dishhive cannot connect to the configured AI service.'
+      },
+      'Model available': {
+        name: 'Configured model',
+        supported: 'The configured model is available for meal planning.',
+        unsupported: 'The configured model is not available from the AI service.'
+      },
+      'Structured JSON reply': {
+        name: 'Structured meal plans',
+        supported: 'The model returns meal plans in a format Dishhive can use.',
+        unsupported: 'The model does not return meal plans in a usable format.'
+      },
+      'All days filled': {
+        name: 'Complete week planning',
+        supported: 'The model can propose meals for every requested day.',
+        unsupported: 'The model may leave requested days without a meal suggestion.'
+      },
+      'Collection day': {
+        name: 'Recipe collection instructions',
+        supported: 'The model can choose recipes from a requested collection.',
+        unsupported: 'The model does not reliably follow recipe collection requests.'
+      },
+      'Specific dish': {
+        name: 'Specific meal instructions',
+        supported: 'The model can place a requested meal on the requested day.',
+        unsupported: 'The model does not reliably follow meal and day instructions.'
+      },
+      'Vegetarian days': {
+        name: 'Dietary planning instructions',
+        supported: 'The model can follow dietary planning instructions across the week.',
+        unsupported: 'The model does not reliably follow dietary planning instructions.'
+      },
+      'External recipe tools': {
+        name: 'External recipe discovery',
+        supported: 'The model can search for and verify external recipes.',
+        unsupported: 'External recipe requests will use the built-in rules fallback.'
+      },
+      'Test run': {
+        name: 'Capability test',
+        supported: 'The model capability test completed successfully.',
+        unsupported: 'The model capability test could not be completed.'
+      }
+    };
+    const feature = features[check.name];
+    return feature
+      ? { name: feature.name, detail: check.passed ? feature.supported : feature.unsupported }
+      : {
+          name: check.name,
+          detail: check.passed ? 'This capability is supported.' : 'This capability is not supported.'
+        };
   }
 
   private pollAiTest(attemptsLeft: number): void {

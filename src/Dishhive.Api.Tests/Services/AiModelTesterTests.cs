@@ -20,24 +20,13 @@ public class AiModelTesterTests
         public Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            if (supportsTools && options?.Tools?.Count > 0)
+            if (messages.Any(message => message.Text.Contains(
+                    "Interpret source-specific recipe research requests", StringComparison.Ordinal)))
             {
-                var hasToolResult = messages
-                    .SelectMany(message => message.Contents)
-                    .OfType<FunctionResultContent>()
-                    .Any();
-                return Task.FromResult(hasToolResult
-                    ? new ChatResponse(new ChatMessage(ChatRole.Assistant,
-                        """{"suggestions":[{"date":"2099-01-01","dishName":"Tool test soup","recipeTitle":null,"freezerItemId":null,"externalCandidateId":"c-test","reason":"tool test"}]}"""))
-                    : new ChatResponse(new ChatMessage(
-                        ChatRole.Assistant,
-                        [new FunctionCallContent("test-call", "get_recipe", new Dictionary<string, object?>
-                        {
-                            ["candidateId"] = "c-test"
-                        })]))
-                    {
-                        FinishReason = ChatFinishReason.ToolCalls
-                    });
+                var text = supportsTools
+                    ? """{"requests":[{"query":"dessert","site":"recipes.example","candidateCount":2,"dates":["2099-01-05","2099-01-11"],"course":"dessert"}]}"""
+                    : "{}";
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, text)));
             }
 
             return Task.FromResult(respond(options));
@@ -177,7 +166,7 @@ public class AiModelTesterTests
     }
 
     [Fact]
-    public async Task Run_ModelCannotCallTools_ReportsExternalToolWarning()
+    public async Task Run_ModelCannotInterpretResearchIntent_ReportsExternalDiscoveryWarning()
     {
         var tester = CreateTester(
             _ => new ChatResponse(new ChatMessage(ChatRole.Assistant, CorrectReply())),
@@ -188,7 +177,7 @@ public class AiModelTesterTests
         result.Viable.Should().BeTrue();
         result.ToolCallingPassed.Should().BeFalse();
         result.Verdict.Should().Be("warnings");
-        result.Checks.Should().Contain(c => c.Name == "External recipe tools" && !c.Passed);
+        result.Checks.Should().Contain(c => c.Name == "External recipe intent" && !c.Passed);
     }
 
     [Fact]

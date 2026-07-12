@@ -109,6 +109,11 @@
   color: var(--mat-sys-on-surface-variant);
 }
 
+.suggestion-context {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 12px;
+}
+
 .suggestion-allergy {
   display: flex;
   align-items: center;

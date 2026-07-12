@@ -42,6 +42,10 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/settings/settings.page').then(m => m.SettingsPage)
   },
   {
+    path: 'settings/ai-stats',
+    loadComponent: () => import('./pages/ai-planning-stats/ai-planning-stats.page').then(m => m.AiPlanningStatsPage)
+  },
+  {
     path: '**',
     redirectTo: ''
   }

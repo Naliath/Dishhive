@@ -46,17 +46,17 @@ public class AiOptions
     /// scraping). Much longer than <see cref="TimeoutSeconds"/>: a tool loop makes
     /// several round-trips — each one a full model completion — and both local models
     /// and cloud APIs under load can take tens of seconds per turn. Applies only on the
-    /// agentic path.
+    /// external-research path.
     /// </summary>
     public int AgentTimeoutSeconds { get; set; } = 300;
 
-    /// <summary>Upper bound on tool-call iterations per agentic suggestion request</summary>
+    /// <summary>Legacy compatibility cap retained for existing configuration.</summary>
     public int MaxToolIterations { get; set; } = 8;
 
     /// <summary>
-    /// Prepends the /no_think soft switch to the prompt. Local reasoning models
-    /// (Qwen3 family and friends) otherwise spend the whole output window thinking
-    /// and never emit the JSON; other models ignore the token. Default on.
+    /// Sends provider-level reasoning effort "none" for planning completions. Local
+    /// reasoning models may otherwise spend the whole output allowance thinking and
+    /// never emit JSON. Default on.
     /// </summary>
     public bool DisableThinking { get; set; } = true;
 

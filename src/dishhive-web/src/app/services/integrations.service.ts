@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import {
+  AiPlanningMetricsResponse,
   AiModelTestStatus,
   IntegrationStatusResponse,
   ScraperUpdateResponse,
@@ -30,6 +31,12 @@ export class IntegrationsService {
     return this.http.post<AiModelTestStatus>('/api/integrations/ai/test', {}).pipe(
       catchError(() => of(null))
     );
+  }
+
+  getAiPlanningMetrics(count = 30): Observable<AiPlanningMetricsResponse> {
+    return this.http.get<AiPlanningMetricsResponse>('/api/integrations/ai/planning-runs', {
+      params: { count }
+    });
   }
 
   checkScraperVersion(): Observable<ScraperVersionCheck | null> {

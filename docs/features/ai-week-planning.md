@@ -45,7 +45,7 @@ factory covers every provider (no per-provider SDK/parsing quirks to maintain):
 | `Ai__Temperature` | Default 0.3 — low, for steadier structured output and less random regeneration |
 | `Ai__MaxRetries` | Default 1 — extra corrective reprompts when a reply can't be parsed before falling back |
 | `Ai__MaxPromptTokens` | Default 6000 — rough budget (~4 chars/token) sizing the recipe + history blocks to the model's context window |
-| `Ai__AgentTimeoutSeconds` / `Ai__MaxToolIterations` | Defaults 300 / 8 — timeout and tool-call cap for the agentic (external-recipe) path only; a tool loop is several full model round-trips, so it needs much more headroom than a plain suggestion call |
+| `Ai__AgentTimeoutSeconds` / `Ai__MaxToolIterations` | External-research timeout and retained compatibility cap. Research is server-orchestrated rather than an open-ended model tool loop |
 
 ### Web search (optional, for external-recipe discovery)
 
@@ -119,31 +119,24 @@ IMealSuggestionService
   completion) for something the planner never asked for. The system prompt reinforces the
   same boundary: only the day(s)/wish tied to a `@[Source]` reference may use the tools;
   every other day must come from the known-recipes list or a plain dish name. When
-  `useTools` is true, `LlmMealSuggestionService` attaches two read-only tools
-  (Microsoft.Extensions.AI `FunctionInvokingChatClient` + `AIFunctionFactory`) and the model
-  drives a tool loop:
-    - `search_recipes(query, site)` → app-provided web search (`IWebSearchClient`, SearXNG),
-      so models without native search can still browse; the site defaults to the referenced
-      source's host (`SourceMentionResolver` → `SourceConstraint`, grammar `@\[([^\[\]\r\n]{1,100})\]`,
-      resolved via `RecipeSourceCatalog`: dedicated providers + previously-imported hosts, or a
-      bare domain typed by hand).
-    - `get_recipe(candidateId)` → `RecipeImportService.PreviewAsync`: search results first receive
-      opaque candidate ids; the tool accepts only those ids, then fetches + structured extracts,
-      or the cleaned page text when it can't be parsed, so the model verifies the constraints
-      (time, vegetarian, …) before choosing. The final model payload carries only
-      `externalCandidateId`; Dishhive resolves the URL from session state and rejects unknown,
-      unfetched, off-host, or wrong-day candidates. The shared safe fetcher bounds response size,
-      validates every redirect and connects only to public addresses.
+  `useTools` is true, a small no-reasoning LLM pass translates the fuzzy/multilingual
+  instructions into one bounded request per referenced source (query, count, dates and
+  course). Ordinary code then searches and verifies the candidate pages before the final
+  planner call. SearXNG is tried first; when it has no results, a safe locally ranked source
+  sitemap is used. The planner only receives compact, source-labelled verified candidates.
+  A deterministic quality gate checks distinct source counts and explicit dates/courses,
+  and permits one focused correction pass without re-searching. It also catches obvious
+  meat/fish assignments that conflict with attendee exclusions and requests a same-date
+  alternative. This replaces the former open-ended model tool loop, which could skip
+  research, invent ids, or accumulate tens of thousands of context tokens.
   An external pick comes back to the browser with a server-resolved `sourceUrl` and `SourceName`;
   nothing is imported during generation. **Import happens on accept** through the batch endpoint:
   imports are deduplicated/sequential, freezer availability is rechecked, and a vague idea is removed
   in the same database transaction as its successful replacement. Repeating the same batch+suggestion
   id returns `alreadyApplied` instead of creating a duplicate.
-  The agentic path uses `Ai__AgentTimeoutSeconds` and skips the `/no_think` nudge (reasoning helps
-  tool use). `ExternalRecipeTools` memoizes `search_recipes`/`get_recipe` per request (keyed by
-  query+site / candidate id) — some models re-issue an identical call, and re-fetching would waste the
-  shared time budget on a repeat. The autocomplete gains an `@`-trigger alongside `#` (shared
-  directive/util).
+  The external path uses `Ai__AgentTimeoutSeconds`. `Ai__DisableThinking` uses the
+  provider-level `reasoning_effort=none` control; a prompt `/no_think` hint was empirically
+  ignored by LM Studio. The autocomplete gains an `@`-trigger alongside `#`.
 - **Day adherence & leftovers**: dishes proposed for a day with a vague instruction must
   all satisfy it (a "vegetarian" day gets only vegetarian proposals). Freezer leftovers
   carry their Freezy notes in the prompt (portion hints); the goal is **enough food for
@@ -214,16 +207,20 @@ IMealSuggestionService
   per call for tuning.
 - **Timing/monitoring** (July 2026): every `SuggestAsync` call gets a short correlation id
   (`[abcd1234]` prefix) logged at start, on each completion attempt (with elapsed ms and
-  token usage), on each `search_recipes`/`get_recipe` tool call (with elapsed ms), and at
+  token usage), on research-intent extraction, each source search and recipe resolution
+  (with elapsed ms), and at
   every exit (success/malformed/exception/cancelled, each with total elapsed ms) — the tool
   loop interleaves with its own `HttpClient` request logging, so the id is what makes one
   suggestion's full back-and-forth traceable in the merged log stream. `LlmRecipeExtractor`
   and `RecipeImportService.PreviewAsync` (fetch vs. extract broken out separately) log their
-  own timings the same way, since they're reachable both from `get_recipe` and from a normal
+  own timings the same way, since they're reachable both from research preview and from a normal
   import. Every raw final model response is logged at `Debug`, correlated by the same request
   id. Container logging defaults to `Information`; set compose interpolation variable
   `LOG_LEVEL=Debug` to expose raw responses or `LOG_LEVEL=Warning` to reduce production logs.
-  The Development environment uses `Debug` by default.
+  The Development environment uses `Debug` by default. Each run is persisted with its
+  outcome, token totals, parse failures, search/result/resolution counts, fallback count
+  and timing breakdown. `GET /api/integrations/ai/planning-runs` powers the technical
+  `/settings/ai-stats` page opened by the stats icon beside **AI Week Suggestions**.
 - **External candidate provenance**: search results, fetched previews and final selections are
   joined by an opaque candidate id. The model never supplies a URL that the application trusts.
   Structured candidate ingredients also participate in the post-hoc allergy warning net.
@@ -319,8 +316,50 @@ model gets **one real test per process** (`AiModelTester` + `AiModelCapabilitySe
   both directions (LM Studio rejects `json_object`, local reasoning models emit their
   answer into the reasoning channel under a schema — while capable cloud models offer
   guaranteed-valid JSON for free). The test decides empirically per configured model:
-  verified `json_schema` → production calls set `ChatOptions.ResponseFormat` and the
-  parse/retry machinery becomes a safety net; otherwise prompted JSON as before.
+verified `json_schema` → production calls set `ChatOptions.ResponseFormat` and the
+parse/retry machinery becomes a safety net; otherwise prompted JSON as before.
+
+## Development evaluation corpus
+
+Live-model regressions are stored as data in
+`src/Dishhive.Api.Tests/Fixtures/AiWeekPlanning/scenarios.json`. Each scenario contains
+the prompt, repeat count, advisory performance budget, and hard assertions for distinct
+recipes, source hosts, courses, dates, and attendee behavior. Keep this file as the source
+of truth so CI, developers, and AI-assisted review all evaluate the same cases.
+
+Run one quick pass against the local Compose app:
+
+```powershell
+./scripts/run-ai-week-planning-evals.ps1 -Iterations 1
+```
+
+Run a named scenario repeatedly while tuning:
+
+```powershell
+./scripts/run-ai-week-planning-evals.ps1 `
+  -ScenarioId distinct-vegetarian-source -Iterations 5
+```
+
+Scenarios with `status: "known-limitation"` preserve unsupported or unreliable behavior
+without turning the normal development suite into an expected-failure test. They are skipped
+by default, remain runnable by explicit `-ScenarioId`, and can all be included with
+`-IncludeKnownLimitations`.
+
+Deterministic sitemap matching currently ranks normalized URL tokens but does not provide
+language-aware stemming, spelling variants, transliteration, or fuzzy matching. A prompt such
+as `pannekoeken` may therefore work when the configured search provider corrects it and fail
+when the source sitemap only contains `pannenkoeken`. This is intentionally recorded as a known
+limitation rather than handled with word-specific branches. A future deterministic solution
+would need a designed multilingual normalization layer: detected locale, versioned lexical
+resources per language, explicit fallback rules, and broad cross-language evaluation. Until
+then, fuzzy matching quality belongs to the configured search provider and is not guaranteed.
+
+Reports, including raw suggestions and per-iteration failures, are written under the
+git-ignored `artifacts/ai-evals/` directory. Accuracy failures return a non-zero exit code;
+performance budgets are warnings unless `-FailOnPerformance` is supplied. The scenario
+corpus has a normal unit test that validates ids and required expectations without calling
+an AI provider. Qualitative AI judging can consume the report later, but it supplements
+rather than replaces these deterministic assertions.
 
 ## Editable system prompt (July 2026)
 
@@ -385,13 +424,10 @@ to 4000 chars). API: `GET/PUT/DELETE /api/settings/ai-prompt`.
 
 ## Risks / Notes
 
-- **Local reasoning models need a large context window.** Qwen3-style models think inside
-  the output budget; with LM Studio's default 4096-token context the prompt + reasoning
-  exceed the window before any JSON appears and every call lands on the rules fallback.
-  Load the model with ≥16k context (`lms load <model> --context-length 16384`). Verified
-  June 2026 with `qwen/qwen3.6-35b-a3b` (4096 → always fallback; 16384 → real suggestions).
-  The capability test's budget-padded evaluation catches this on the settings page
-  instead of in the logs.
+- **Local reasoning models still need enough input context.** Dishhive disables completion
+  reasoning through the provider API by default, independently from `Ai__MaxPromptTokens`
+  (which only trims the input recipe/history blocks). The capability test's budget-padded
+  evaluation catches an undersized context window on the settings page.
 - Small local models may ignore the JSON shape → malformed-output path lands on the rules
   fallback by design; a model that never produces JSON fails the capability test and is
   not called at all. Local models being unfit is an accepted outcome — the point is that
@@ -414,7 +450,9 @@ to 4000 chars). API: `GET/PUT/DELETE /api/settings/ai-prompt`.
 - [x] docker-compose `Ai__*` vars + README provider table
 - [x] Web search seam (`IWebSearchClient` + SearXNG) + `WebSearch__*` config + integrations status
 - [x] Web-search contract health check + actionable settings-page diagnostics for disabled JSON output
-- [x] External-recipe tools (`search_recipes`, `get_recipe`) + `FunctionInvokingChatClient` wiring
+- [x] Bounded research-intent extraction + deterministic batched search/preview orchestration
+- [x] Source-count/date/course and attendee-assignment validation with focused correction
+- [x] Persisted planning-run metrics + technical settings stats page
 - [x] Opaque external candidate ids + strict fetched/source/date provenance enforcement
 - [x] Shared bounded public-resource fetcher (redirect validation + public-address connection)
 - [x] Idempotent backend suggestion acceptance workflow with per-item outcomes

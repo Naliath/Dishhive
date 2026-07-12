@@ -50,12 +50,12 @@ describe('IntegrationsStatusComponent', () => {
 
   it('explains unavailable external recipe discovery as a feature limitation', () => {
     expect(component.aiFeature({
-      name: 'External recipe tools',
+      name: 'External recipe intent',
       passed: false,
-      detail: 'Diagnostic tool-call evidence'
+      detail: 'Diagnostic research-intent evidence'
     })).toEqual({
       name: 'External recipe discovery',
-      detail: 'External recipe requests will use the built-in rules fallback.'
+      detail: 'The model cannot reliably interpret external recipe requests.'
     });
   });
 });

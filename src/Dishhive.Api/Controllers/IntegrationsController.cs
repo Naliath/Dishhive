@@ -1,9 +1,11 @@
+using Dishhive.Api.Data;
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.WebSearch;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -21,6 +23,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
         [FromServices] IRecipeScrapersClient scrapersClient,
         [FromServices] WebSearchOptions webSearchOptions,
         [FromServices] IAiModelCapabilityService aiCapability,
+        [FromServices] ILogger<LlmMealSuggestionService> llmSuggestionLogger,
         CancellationToken cancellationToken)
     {
         var aiReachable = aiOptions.IsConfigured
@@ -42,6 +45,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
                 Model: aiOptions.IsConfigured ? aiOptions.Model : null,
                 BaseUrl: aiOptions.IsConfigured && !string.IsNullOrEmpty(aiOptions.BaseUrl)
                     ? aiOptions.BaseUrl : null,
+                StatsEnabled: llmSuggestionLogger.IsEnabled(LogLevel.Debug),
                 ModelTestState: StateString(aiCapability.State),
                 ModelTestVerdict: aiCapability.Result?.Verdict
             ),
@@ -235,6 +239,46 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
         // Fire-and-forget: the capability service owns the (never-throwing) run task
         _ = aiCapability.RetestAsync();
         return Accepted(value: ToDto(aiCapability));
+    }
+
+    [HttpGet("ai/planning-runs")]
+    [ProducesResponseType(typeof(AiPlanningMetricsResponseDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AiPlanningMetricsResponseDto>> GetAiPlanningRuns(
+        [FromServices] DishhiveDbContext context,
+        [FromQuery] int count = 30,
+        CancellationToken cancellationToken = default)
+    {
+        count = Math.Clamp(count, 1, 100);
+        var runs = await context.AiPlanningRuns
+            .AsNoTracking()
+            .OrderByDescending(run => run.StartedAt)
+            .Take(count)
+            .ToListAsync(cancellationToken);
+        var summary = new AiPlanningMetricsDto(
+            RunCount: runs.Count,
+            SuccessfulRuns: runs.Count(run => run.Outcome is "success" or "partialFallback"),
+            FallbackRuns: runs.Count(run => run.Outcome.EndsWith("Fallback", StringComparison.Ordinal)),
+            AverageTotalDurationMs: runs.Count == 0 ? 0 : runs.Average(run => run.TotalDurationMs),
+            AverageCompletionDurationMs: runs.Count == 0 ? 0 : runs.Average(run => run.CompletionDurationMs),
+            TotalInputTokens: runs.Sum(run => run.InputTokens),
+            TotalOutputTokens: runs.Sum(run => run.OutputTokens),
+            TotalReasoningTokens: runs.Sum(run => run.ReasoningTokens),
+            TotalSearches: runs.Sum(run => run.SearchCount),
+            TotalEmptySearches: runs.Sum(run => run.EmptySearchCount),
+            TotalRecipeResolutions: runs.Sum(run => run.RecipeResolutionCount),
+            TotalResolutionFailures: runs.Sum(run => run.RecipeResolutionFailureCount),
+            TotalParseFailures: runs.Sum(run => run.ParseFailures));
+
+        return Ok(new AiPlanningMetricsResponseDto(summary, runs.Select(run => new AiPlanningRunDto(
+            run.Id, run.RequestId, run.StartedAt, run.Outcome, run.Provider, run.Model,
+            run.Instructions, run.Error, run.RequestedDays, run.SuggestedItems,
+            run.ExternalSuggestions, run.FallbackSuggestions, run.UsedExternalResearch,
+            run.CompletionAttempts, run.ParseFailures, run.ModelTurns, run.InputTokens,
+            run.OutputTokens, run.ReasoningTokens, run.TotalTokens, run.ResearchCalls,
+            run.SearchCount, run.EmptySearchCount, run.SearchResultCount,
+            run.RecipeResolutionCount, run.RecipeResolutionFailureCount,
+            run.CapabilityWaitMs, run.CompletionDurationMs, run.SearchDurationMs,
+            run.RecipeResolutionDurationMs, run.TotalDurationMs)).ToList()));
     }
 
     private static AiModelTestStatusDto ToDto(IAiModelCapabilityService capability)

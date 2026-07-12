@@ -32,6 +32,31 @@
   line-height: 1.4;
 }
 
+.integration-name-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.stats-link {
+  --mdc-icon-button-state-layer-size: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  opacity: 0.55;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+  }
+}
+
 .integration-detail {
   font-size: 12px;
   margin-block-start: 3px;

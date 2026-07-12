@@ -19,7 +19,21 @@ public static class MealSuggestionPromptBuilder
     public const string ProtectedSystemPrompt =
         """
         Rules that ALWAYS apply, regardless of the guidance above:
-        - NEVER suggest dishes that conflict with the listed allergies or dietary constraints.
+        - Default every proposal to mealType="dinner" and course="main". Only add a
+          different meal type or course when the planner explicitly asks for it (for
+          example soup/appetizer, lunch, or dessert). Multiple courses and alternative
+          mains on the same date must be separate suggestion entries.
+        - attendeeIds=[] means the dish is for everyone. Treat a dish the planner explicitly
+          requests for a date as one shared dish for all attendees, even when it appears to
+          conflict with a diet (for example chicken while a vegetarian attends). Do not split
+          attendees or invent an alternative; the review UI warns the planner so they can
+          replace individual portions manually. Allergies remain hard constraints.
+        - Never repeat a dish or external recipe on another date in the same week unless the
+          planner explicitly asks for that repetition. A requested count means that many
+          distinct recipes, not one recipe scheduled that many times.
+        - NEVER suggest dishes that conflict with allergies. Respect dietary constraints
+          for dishes you choose yourself; the explicit-request exception above applies only
+          when the planner named the dish/type for that date.
         - Household tags may carry exact ingredient classes in brackets, e.g.
           "Vegetarisch [excludes: RedMeat, Poultry, Pork, Fish, ...]", and known
           recipes may carry "[contains: ...]" with the same class names ("[contains:
@@ -58,18 +72,25 @@ public static class MealSuggestionPromptBuilder
           below, treat the reference as a plain-text hint.
         - Instructions may reference an EXTERNAL website as @[Source] (listed under
           "Referenced sources" with its host). ONLY for the day(s)/wish tied to such a
-          reference, use the tools to find and verify a real page there:
-            * search_recipes(query, site) — pass the referenced source's host as site,
-            * get_recipe(candidateId) — read a candidate and CHECK it meets every constraint
-              (time limit, vegetarian, etc.) before choosing it.
+          reference, call research_recipes ONCE with every source/query requirement in
+          its requests array. Use broad queries in the source site's language and pass
+          the referenced host as site. Dishhive searches and verifies a bounded set of
+          candidates; CHECK their ingredients, time and type against every constraint
+          before choosing them. Set candidateCount to at least the number of distinct
+          recipes the instruction requests (maximum 6). Do not retry searches.
           When you propose such an external recipe, copy the candidateId returned by the
-          successful get_recipe call into "externalCandidateId", use the recipe's real title
+          successful research result into "externalCandidateId", use the recipe's real title
           as dishName, and leave recipeTitle null (it is not in the store yet — it will be
           imported when accepted). Do NOT use these tools for any other day or wish — every
           day without a @[Source] reference must be filled from the known-recipes list below
           or a plain dish name, never a web search.
         - When the planner gives additional instructions, they override the other
           preferences (never the allergies/constraints).
+        - Treat the explicit weekday/date table in the request as authoritative. Never
+          calculate weekday dates yourself or shift a weekday request to another date.
+        - When recipe research returns verified candidates for a requested source, every
+          requested source-backed dish must use one of those candidates. Never silently
+          substitute a known/local recipe while describing it as coming from that source.
         - Prefer recipes from the known-recipes list; when you use one, copy its exact title
           into recipeTitle.
 
@@ -91,11 +112,16 @@ public static class MealSuggestionPromptBuilder
         var sb = new StringBuilder();
         var culture = CultureInfo.InvariantCulture;
         sb.AppendLine($"Week starting: {request.WeekStart:yyyy-MM-dd}");
+        sb.AppendLine("Authoritative weekday/date mapping (weekday words in instructions map exactly to these dates):");
+        foreach (var date in Enumerable.Range(0, 7).Select(request.WeekStart.AddDays))
+        {
+            sb.AppendLine($"- {date.DayOfWeek}: {date:yyyy-MM-dd}");
+        }
 
         sb.AppendLine("Household:");
         foreach (var member in request.Members)
         {
-            sb.Append($"- {member.Name}");
+            sb.Append($"- id={member.Id}: {member.Name}");
             if (member.Allergies.Count > 0)
             {
                 sb.Append($"; allergies: {string.Join(", ", member.Allergies.Select(FormatTag))}");
@@ -155,7 +181,7 @@ public static class MealSuggestionPromptBuilder
 
         if (request.SourceConstraints.Count > 0)
         {
-            sb.AppendLine("Referenced sources (external websites — use search_recipes with the host, then get_recipe):");
+            sb.AppendLine("Referenced sources (external websites — include all needed searches in one research_recipes call):");
             foreach (var constraint in request.SourceConstraints)
             {
                 var scope = constraint.Dates.Count > 0
@@ -175,8 +201,8 @@ public static class MealSuggestionPromptBuilder
             foreach (var meal in existing)
             {
                 sb.AppendLine(meal.DishName != null
-                    ? $"- {meal.Date:yyyy-MM-dd}: \"{meal.DishName}\""
-                    : $"- {meal.Date:yyyy-MM-dd}: vague: \"{meal.VagueInstruction}\"");
+                    ? $"- {meal.Date:yyyy-MM-dd} {meal.MealType}/{meal.Course}: \"{meal.DishName}\""
+                    : $"- {meal.Date:yyyy-MM-dd} {meal.MealType}/{meal.Course}: vague: \"{meal.VagueInstruction}\"");
             }
         }
 
@@ -232,7 +258,7 @@ public static class MealSuggestionPromptBuilder
             unlimited ? int.MaxValue : Math.Max(0, budgetChars - sb.Length),
             minLines: 10);
 
-        sb.AppendLine($"Propose dinners for: {string.Join(", ", request.DaysToFill.Select(date => date.ToString("yyyy-MM-dd")))}");
+        sb.AppendLine($"Ensure every date has a dinner/main proposal unless one is already planned: {string.Join(", ", request.DaysToFill.Select(date => date.ToString("yyyy-MM-dd")))}");
         return sb.ToString();
     }
 

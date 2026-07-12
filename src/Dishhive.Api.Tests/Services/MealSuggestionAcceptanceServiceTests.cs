@@ -186,6 +186,31 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
         (await _context.PlannedMeals.SingleAsync()).DishName.Should().Be(recipe.Title);
     }
 
+    [Fact]
+    public async Task Accept_DessertForSelectedAttendee_PreservesCourseAndAudience()
+    {
+        var selected = new FamilyMember { Name = "Alex", IsActive = true };
+        var other = new FamilyMember { Name = "Naomi", IsActive = true };
+        _context.FamilyMembers.AddRange(selected, other);
+        await _context.SaveChangesAsync();
+
+        var response = await _service.AcceptAsync(Request(new AcceptMealSuggestionDto
+        {
+            Id = Guid.NewGuid(),
+            Date = new DateOnly(2026, 7, 17),
+            MealType = MealType.Dinner,
+            Course = Course.Dessert,
+            AttendeeIds = [selected.Id],
+            DishName = "Fruit tart"
+        }));
+
+        response.Results.Single().Status.Should().Be("created");
+        var meal = await _context.PlannedMeals.Include(item => item.Attendees).SingleAsync();
+        meal.MealType.Should().Be(MealType.Dinner);
+        meal.Course.Should().Be(Course.Dessert);
+        meal.Attendees.Select(attendee => attendee.FamilyMemberId).Should().Equal(selected.Id);
+    }
+
     private static AcceptMealSuggestionsRequestDto Request(AcceptMealSuggestionDto item) => new()
     {
         BatchId = Guid.NewGuid(),

@@ -16,6 +16,7 @@ import { CollectionMentionDirective } from '../../directives/collection-mention.
 import { MealSuggestionsService } from '../../services/meal-suggestions.service';
 import { IntegrationsService } from '../../services/integrations.service';
 import { MealSuggestion, SuggestionReviewResult } from '../../models/meal-suggestion.model';
+import { COURSE_LABELS, Course, MEAL_TYPE_LABELS, MealType } from '../../models/planned-meal.model';
 
 export interface SuggestionReviewDialogData {
   /** ISO date (yyyy-MM-dd) of the week's Monday */
@@ -168,6 +169,20 @@ export class SuggestionReviewDialog implements OnInit {
       }
       return next;
     });
+  }
+
+  suggestionContext(suggestion: MealSuggestion): string | null {
+    const parts: string[] = [];
+    if (suggestion.mealType !== MealType.Dinner) {
+      parts.push(MEAL_TYPE_LABELS[suggestion.mealType]);
+    }
+    if (suggestion.course !== Course.Main) {
+      parts.push(COURSE_LABELS[suggestion.course]);
+    }
+    if (suggestion.attendeeNames.length > 0) {
+      parts.push(suggestion.attendeeNames.join(', '));
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
   }
 
   addSelected(): void {

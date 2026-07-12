@@ -1,7 +1,13 @@
+import { Course, MealType } from './planned-meal.model';
+
 export interface MealSuggestion {
   id: string;
   /** ISO date (yyyy-MM-dd) */
   date: string;
+  mealType: MealType;
+  course: Course;
+  attendeeIds: string[];
+  attendeeNames: string[];
   recipeId?: string;
   recipeTitle?: string;
   dishName: string;

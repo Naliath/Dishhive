@@ -11,7 +11,15 @@
         <div class="integration-row">
           <mat-icon class="integration-icon">auto_awesome</mat-icon>
           <div class="integration-info">
-            <div class="integration-name">AI Week Suggestions</div>
+            <div class="integration-name-row">
+              <div class="integration-name">AI Week Suggestions</div>
+              @if (status.ai.statsEnabled) {
+                <a mat-icon-button class="stats-link" routerLink="/settings/ai-stats"
+                   matTooltip="AI planning diagnostics" aria-label="Open AI planning diagnostics">
+                  <mat-icon>monitoring</mat-icon>
+                </a>
+              }
+            </div>
             @if (status.ai.configured) {
               <div class="integration-detail">{{ status.ai.provider }} &middot; {{ status.ai.model }}</div>
               @if (status.ai.baseUrl) {

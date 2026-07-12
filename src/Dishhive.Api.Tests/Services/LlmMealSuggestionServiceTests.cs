@@ -160,7 +160,37 @@ public class LlmMealSuggestionServiceTests
 
         logger.Entries.Should().Contain(entry =>
             entry.Level == LogLevel.Debug
-            && entry.Message.Contains(response, StringComparison.Ordinal));
+            && entry.Message.Contains("Debug dish", StringComparison.Ordinal)
+            && entry.Message.Contains("visible=", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Suggest_UnparseableWhitespace_LogsEscapedOutputAndReasoning()
+    {
+        var responses = new Queue<ChatResponse>(
+        [
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+            {
+                new TextReasoningContent("I kept reasoning until the output limit."),
+                new TextContent(" \r\n\t ")
+            })) { FinishReason = ChatFinishReason.Length },
+            new ChatResponse(new ChatMessage(ChatRole.Assistant,
+                """{"suggestions":[{"date":"2026-06-15","dishName":"Recovered"}]}"""))
+        ]);
+        var logger = new CapturingLogger<LlmMealSuggestionService>();
+
+        await CreateService(new FakeChatClient(() => responses.Dequeue()), logger: logger)
+            .SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        logger.Entries.Should().Contain(entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains("\\r\\n\\t", StringComparison.Ordinal)
+            && entry.Message.Contains("reasoningChars=40", StringComparison.Ordinal)
+            && entry.Message.Contains("reasoning likely consumed the output budget", StringComparison.Ordinal));
+        logger.Entries.Should().Contain(entry =>
+            entry.Level == LogLevel.Debug
+            && entry.Message.Contains("I kept reasoning until the output limit.", StringComparison.Ordinal)
+            && entry.Message.Contains("TextReasoningContent", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -273,6 +303,74 @@ public class LlmMealSuggestionServiceTests
         await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
 
         chatClient.LastOptions!.ResponseFormat.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Suggest_DisableThinking_UsesProviderReasoningControl()
+    {
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Spaghetti"}]}""");
+
+        await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
+
+        chatClient.LastOptions!.Reasoning.Should().NotBeNull();
+        chatClient.LastOptions.Reasoning!.Effort.Should().Be(ReasoningEffort.None);
+        chatClient.LastOptions.Reasoning.Output.Should().Be(ReasoningOutput.None);
+    }
+
+    [Fact]
+    public async Task Suggest_ExplicitChicken_RemainsSharedAndGetsDietReviewWarning()
+    {
+        var omnivoreId = Guid.NewGuid();
+        var vegetarianId = Guid.NewGuid();
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Chicken curry","attendeeIds":[]}]}""");
+        var request = Request(daysToFill: [WeekStart]) with
+        {
+            Members =
+            [
+                new MemberProfile { Id = omnivoreId, Name = "Alex" },
+                new MemberProfile
+                {
+                    Id = vegetarianId,
+                    Name = "Naomi",
+                    Diets = [new DietaryTagProfile { Name = "Vegetarian", ExcludedClasses = [IngredientClass.Poultry] }]
+                }
+            ],
+            Instructions = "Chicken on Monday"
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        chatClient.Calls.Should().Be(1);
+        var suggestion = suggestions.Should().ContainSingle().Subject;
+        suggestion.DishName.Should().Be("Chicken curry");
+        suggestion.AttendeeIds.Should().BeEquivalentTo(new[] { omnivoreId, vegetarianId });
+        suggestion.DietWarning.Should().Contain("Poultry").And.Contain("Naomi");
+    }
+
+    [Fact]
+    public async Task Suggest_ModelDisplacesExplicitFridayChicken_RestoresKnownChickenRecipe()
+    {
+        var friday = WeekStart.AddDays(4);
+        var chatClient = new FakeChatClient(
+            $$"""{"suggestions":[{"date":"{{friday:yyyy-MM-dd}}","dishName":"Vegetable curry","attendeeIds":[]}]}""");
+        var request = Request(daysToFill: [friday]) with
+        {
+            Instructions = "Get one with chicken for Friday.",
+            KnownRecipes =
+            [
+                new RecipeOption { Id = Guid.NewGuid(), Title = "Chicken curry" }
+            ]
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        chatClient.Calls.Should().BeGreaterThan(1);
+        var suggestion = suggestions.Should().ContainSingle().Subject;
+        suggestion.Date.Should().Be(friday);
+        suggestion.DishName.Should().Be("Chicken curry");
+        suggestion.AttendeeIds.Should().HaveCount(request.Members.Count);
     }
 
     [Fact]
@@ -394,6 +492,45 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
+    public async Task Suggest_RepeatedDishAcrossDays_IsRemovedAndMissingDayBackfilled()
+    {
+        var chatClient = new FakeChatClient(
+            """
+            {"suggestions":[
+              {"date":"2026-06-15","dishName":"Same curry"},
+              {"date":"2026-06-16","dishName":"Same curry"}
+            ]}
+            """);
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(Request(
+            daysToFill: [WeekStart, WeekStart.AddDays(1)],
+            favorites: [new FavoriteDish { MemberName = "Anna", DishName = "Tacos" }]));
+
+        chatClient.Calls.Should().Be(2);
+        suggestions.Select(item => item.DishName).Should().BeEquivalentTo("Same curry", "Tacos");
+        suggestions.Select(item => item.DishName).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public async Task Suggest_ExplicitRepeatInstruction_AllowsDishOnMultipleDays()
+    {
+        var chatClient = new FakeChatClient(
+            """
+            {"suggestions":[
+              {"date":"2026-06-15","dishName":"Same curry"},
+              {"date":"2026-06-16","dishName":"Same curry"}
+            ]}
+            """);
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(Request(
+            daysToFill: [WeekStart, WeekStart.AddDays(1)],
+            instructions: "Serve the same curry every day"));
+
+        chatClient.Calls.Should().Be(1);
+        suggestions.Should().HaveCount(2).And.OnlyContain(item => item.DishName == "Same curry");
+    }
+
+    [Fact]
     public void ParsePayload_StripsThinkBlock_AndIgnoresBracesInside()
     {
         var payload = MealSuggestionResponseContract.Parse(
@@ -483,10 +620,9 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
-    public async Task Suggest_FreezerDishMatchingAvailableItem_IsLinkedAndCappedByQuantity()
+    public async Task Suggest_RepeatedFreezerDishWithoutExplicitRepeat_IsKeptOnce()
     {
-        // One lasagna in the freezer; the model proposes it on two days. Only the first
-        // links to the freezer item (reserving the single unit); the second must not.
+        // One lasagna in the freezer; an unsolicited duplicate on another day is removed.
         var chatClient = new FakeChatClient(
             """
             {"suggestions":[
@@ -505,9 +641,8 @@ public class LlmMealSuggestionServiceTests
 
         var suggestions = await CreateService(chatClient).SuggestAsync(request);
 
-        suggestions.Should().HaveCount(2);
-        suggestions.Should().ContainSingle(s => s.FreezyItemRef == "lasagna-1" && s.FreezyItemQuantity == 1);
-        suggestions.Count(s => s.FreezyItemRef == "lasagna-1").Should().Be(1);
+        suggestions.Should().ContainSingle(s =>
+            s.FreezyItemRef == "lasagna-1" && s.FreezyItemQuantity == 1);
     }
 
     [Fact]
@@ -537,7 +672,7 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
-    public async Task Suggest_FreezerItemId_CappedByQuantityAcrossDays_UnlinksWithoutDroppingTheDish()
+    public async Task Suggest_ExplicitRepeatedFreezerItem_IsCappedWithoutDroppingTheSecondDish()
     {
         // Same id proposed for two days but only one unit available: the second day
         // must lose the freezer link (so stock isn't double-reserved) while remaining
@@ -550,7 +685,9 @@ public class LlmMealSuggestionServiceTests
             ]}
             """);
 
-        var request = Request(daysToFill: [WeekStart, WeekStart.AddDays(1)]) with
+        var request = Request(
+            daysToFill: [WeekStart, WeekStart.AddDays(1)],
+            instructions: "Serve the same frozen lasagna both days") with
         {
             AvailableFrozenItems =
             [
@@ -702,20 +839,64 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
-    public async Task Suggest_AgenticToolLoop_ResolvesCandidateIdWithoutTrustingModelUrl()
+    public async Task ExternalResearch_CollectionPage_IsRejectedAsRecipeCandidate()
+    {
+        const string url = "https://www.laurasbakery.nl/category/zoet-bakken/zonder-oven/";
+        var importService = Substitute.For<IRecipeImportService>();
+        importService.PreviewAsync(url, Arg.Any<CancellationToken>())
+            .Returns(new RecipePreview(
+                true,
+                new ImportedRecipe { Title = "106+ recepten zonder oven", SourceUrl = url },
+                null,
+                null));
+        var webSearch = ConfiguredWebSearch();
+        webSearch.SearchAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<WebSearchResult>>(
+                [new WebSearchResult("Desserts", url, null)]));
+        var tools = new ExternalRecipeTools(
+            webSearch, importService, 5, "laurasbakery.nl",
+            ["laurasbakery.nl"], "test", NullLogger.Instance);
+        var candidateId = (await tools.SearchRecipesAsync("dessert", null)).Single().CandidateId;
+
+        var result = await tools.GetRecipeAsync(candidateId);
+
+        result.Error.Should().Contain("collection/article");
+        tools.TryResolveCandidate(candidateId, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PostProcess_ExplicitDessertAndAttendees_ArePreserved()
+    {
+        var alex = Guid.NewGuid();
+        var naomi = Guid.NewGuid();
+        var request = Request(daysToFill: [WeekStart]) with
+        {
+            Members =
+            [
+                new MemberProfile { Id = alex, Name = "Alex" },
+                new MemberProfile { Id = naomi, Name = "Naomi" }
+            ]
+        };
+        var payload = MealSuggestionResponseContract.Parse(
+            $$"""{"suggestions":[{"date":"2026-06-15","mealType":"dinner","course":"dessert","attendeeIds":["{{alex}}"],"dishName":"Fruit tart"}]}""")!;
+
+        var suggestion = new MealSuggestionPostProcessor(NullLogger<MealSuggestionPostProcessor>.Instance)
+            .Process(payload, request, null)
+            .Should().ContainSingle().Subject;
+
+        suggestion.MealType.Should().Be(MealType.Dinner);
+        suggestion.Course.Should().Be(Course.Dessert);
+        suggestion.AttendeeIds.Should().Equal(alex);
+    }
+
+    [Fact]
+    public async Task Suggest_ResearchIntentPass_ResolvesCandidateIdWithoutTrustingModelUrl()
     {
         const string url = "https://dagelijksekost.vrt.be/gerechten/vegetarische-lasagne";
         var responses = new Queue<ChatResponse>(
         [
-            ToolCall("call-search", "search_recipes", new Dictionary<string, object?>
-            {
-                ["query"] = "vegetarische lasagne",
-                ["site"] = "dagelijksekost.vrt.be"
-            }),
-            ToolCall("call-get", "get_recipe", new Dictionary<string, object?>
-            {
-                ["candidateId"] = "c1"
-            }),
+            new ChatResponse(new ChatMessage(ChatRole.Assistant,
+                """{"requests":[{"query":"vegetarische lasagne","site":"dagelijksekost.vrt.be","candidateCount":1,"dates":["2026-06-15"],"course":"main"}]}""")),
             new ChatResponse(new ChatMessage(ChatRole.Assistant,
                 """{"suggestions":[{"date":"2026-06-15","dishName":"model title","recipeTitle":null,"externalCandidateId":"c1","reason":"verified"}]}"""))
         ]);
@@ -757,29 +938,21 @@ public class LlmMealSuggestionServiceTests
             ]
         };
 
+        var logger = new CapturingLogger<LlmMealSuggestionService>();
         var suggestions = await CreateService(
             chatClient,
             webSearch,
+            logger: logger,
             importService: importService).SuggestAsync(request);
 
-        var suggestion = suggestions.Should().ContainSingle().Subject;
+        var suggestion = suggestions.Should().ContainSingle(
+            because: string.Join(" | ", logger.Entries.Select(entry => entry.Message))).Subject;
         suggestion.DishName.Should().Be("Vegetarische lasagne");
         suggestion.SourceUrl.Should().Be(url);
         suggestion.SourceName.Should().Be("Dagelijkse Kost");
         suggestion.AllergyWarning.Should().Contain("onion");
-        chatClient.Calls.Should().Be(3);
+        chatClient.Calls.Should().Be(2);
     }
-
-    private static ChatResponse ToolCall(
-        string callId,
-        string name,
-        IDictionary<string, object?> arguments)
-        => new(new ChatMessage(
-            ChatRole.Assistant,
-            [new FunctionCallContent(callId, name, arguments)]))
-        {
-            FinishReason = ChatFinishReason.ToolCalls
-        };
 
     [Fact]
     public async Task Suggest_InvalidLegacySourceUrl_IsNeverTrustedAsImportSource()
@@ -809,7 +982,7 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
-    public async Task Suggest_SourceMentionPresent_AttachesExternalTools()
+    public async Task Suggest_SourceMentionPresent_UsesSeparateResearchIntentPass()
     {
         var chatClient = new FakeChatClient("""{"suggestions":[]}""");
 
@@ -820,7 +993,8 @@ public class LlmMealSuggestionServiceTests
 
         await CreateService(chatClient, ConfiguredWebSearch()).SuggestAsync(request);
 
-        chatClient.LastOptions!.Tools.Should().NotBeNullOrEmpty();
+        chatClient.Calls.Should().BeGreaterThan(1);
+        chatClient.LastOptions!.Tools.Should().BeNullOrEmpty();
     }
 
     [Fact]

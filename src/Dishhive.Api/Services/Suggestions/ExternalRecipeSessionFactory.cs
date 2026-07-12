@@ -7,8 +7,22 @@ namespace Dishhive.Api.Services.Suggestions;
 public interface IExternalRecipeSession
 {
     IList<AITool> BuildTools();
+    Task<IReadOnlyList<ExternalRecipeTools.GetRecipeResult>> ResearchAsync(
+        List<ExternalRecipeTools.RecipeResearchRequest> requests,
+        CancellationToken cancellationToken = default);
     bool TryResolveCandidate(string? candidateId, out ExternalRecipeCandidate? candidate);
+    ExternalRecipeSessionMetrics GetMetrics();
 }
+
+public sealed record ExternalRecipeSessionMetrics(
+    int ResearchCalls,
+    int SearchCount,
+    int EmptySearchCount,
+    int SearchResultCount,
+    int ResolutionCount,
+    int ResolutionFailureCount,
+    long SearchDurationMs,
+    long ResolutionDurationMs);
 
 public interface IExternalRecipeSessionFactory
 {

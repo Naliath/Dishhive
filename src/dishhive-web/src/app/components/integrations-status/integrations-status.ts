@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { CookingLoaderComponent } from '../cooking-loader/cooking-loader';
 import { IntegrationsService } from '../../services/integrations.service';
 import {
@@ -16,7 +18,8 @@ import {
 @Component({
   selector: 'app-integrations-status',
   standalone: true,
-  imports: [CookingLoaderComponent, DatePipe, DecimalPipe, MatButtonModule, MatCardModule, MatIconModule],
+  imports: [CookingLoaderComponent, DatePipe, DecimalPipe, MatButtonModule, MatCardModule, MatIconModule,
+    MatTooltipModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './integrations-status.html',
   styleUrl: './integrations-status.scss'
@@ -121,10 +124,10 @@ export class IntegrationsStatusComponent implements OnInit {
         supported: 'The model can follow dietary planning instructions across the week.',
         unsupported: 'The model does not reliably follow dietary planning instructions.'
       },
-      'External recipe tools': {
+      'External recipe intent': {
         name: 'External recipe discovery',
-        supported: 'The model can search for and verify external recipes.',
-        unsupported: 'External recipe requests will use the built-in rules fallback.'
+        supported: 'The model can interpret source, count, date, and course requests for verified recipe research.',
+        unsupported: 'The model cannot reliably interpret external recipe requests.'
       },
       'Test run': {
         name: 'Capability test',

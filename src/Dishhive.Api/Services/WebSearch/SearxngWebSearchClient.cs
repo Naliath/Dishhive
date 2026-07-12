@@ -15,11 +15,16 @@ public class SearxngWebSearchClient : IWebSearchClient
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _httpClient;
+    private readonly ISitemapRecipeSearch _sitemapSearch;
     private readonly ILogger<SearxngWebSearchClient> _logger;
 
-    public SearxngWebSearchClient(HttpClient httpClient, ILogger<SearxngWebSearchClient> logger)
+    public SearxngWebSearchClient(
+        HttpClient httpClient,
+        ISitemapRecipeSearch sitemapSearch,
+        ILogger<SearxngWebSearchClient> logger)
     {
         _httpClient = httpClient;
+        _sitemapSearch = sitemapSearch;
         _logger = logger;
     }
 
@@ -49,18 +54,59 @@ public class SearxngWebSearchClient : IWebSearchClient
             var response = await _httpClient.GetFromJsonAsync<SearxngResponse>(url, JsonOptions, cts.Token);
             var results = response?.Results ?? [];
 
-            return results
+            var mapped = results
                 .Where(r => !string.IsNullOrWhiteSpace(r.Url) && !string.IsNullOrWhiteSpace(r.Title))
-                .Take(Math.Max(1, count))
                 .Select(r => new WebSearchResult(r.Title!.Trim(), r.Url!.Trim(), r.Content?.Trim()))
+                .Where(IsLikelyRecipePage)
+                .Take(Math.Max(1, count))
                 .ToList();
+            if (!string.IsNullOrWhiteSpace(site))
+            {
+                var sitemap = await _sitemapSearch.SearchAsync(query, site, count, cancellationToken) ?? [];
+                if (mapped.Count < Math.Max(1, count))
+                {
+                    _logger.LogWarning(
+                        "SearXNG returned only {Count}/{Requested} likely recipe pages for {Query}; supplementing from the source sitemap",
+                        mapped.Count, count, effectiveQuery);
+                }
+                // A source sitemap is deterministic and generally contains fewer category/
+                // article false positives than metasearch. Prefer it, then use SearXNG to
+                // fill any remaining slots for sites with incomplete sitemaps.
+                mapped = sitemap.Where(IsLikelyRecipePage)
+                    .Concat(mapped)
+                    .DistinctBy(result => result.Url, StringComparer.OrdinalIgnoreCase)
+                    .Take(Math.Max(1, count))
+                    .ToList();
+            }
+            return mapped;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
             // Search failures must never break planning — the model just gets no hits
             _logger.LogWarning(ex, "SearXNG search failed for query {Query}", effectiveQuery);
-            return [];
+            return string.IsNullOrWhiteSpace(site)
+                ? []
+                : await _sitemapSearch.SearchAsync(query, site, count, cancellationToken);
         }
+    }
+
+    private static bool IsLikelyRecipePage(WebSearchResult result)
+    {
+        if (!Uri.TryCreate(result.Url, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+        var path = uri.AbsolutePath.ToLowerInvariant();
+        if (new[] { "/category/", "/tag/", "/author/", "/search/", "/kookmagazine/" }
+            .Any(path.Contains))
+        {
+            return false;
+        }
+        var title = $" {result.Title.ToLowerInvariant()} ";
+        return !System.Text.RegularExpressions.Regex.IsMatch(
+                result.Title.Trim(), @"^\d+\+?x?\s", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            && !new[] { " recepten ", " inspiratie ", " verzameld ", " tips ", " review " }
+                .Any(title.Contains);
     }
 
     private sealed record SearxngResponse([property: JsonPropertyName("results")] List<SearxngResult>? Results);

@@ -14,7 +14,11 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
         MealSuggestionRequest request,
         IExternalRecipeSession? externalRecipeSession)
     {
-        var validDates = request.DaysToFill.ToHashSet();
+        var validDates = Enumerable.Range(0, 7).Select(request.WeekStart.AddDays).ToHashSet();
+        var memberIds = request.Members
+            .Where(member => member.Id != Guid.Empty)
+            .Select(member => member.Id)
+            .ToHashSet();
         var recipesByTitle = request.KnownRecipes
             .GroupBy(recipe => recipe.Title, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().Id, StringComparer.OrdinalIgnoreCase);
@@ -30,6 +34,31 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
                 || !validDates.Contains(date))
             {
                 continue;
+            }
+
+            var mealType = ParseEnum(item.MealType, MealType.Dinner);
+            var course = ParseEnum(item.Course, Course.Main);
+            if (request.WeekPlan.Any(meal => meal.Date == date
+                    && meal.MealType == mealType
+                    && meal.Course == course
+                    && meal.DishName != null))
+            {
+                continue;
+            }
+
+            var attendeeIds = (item.AttendeeIds ?? [])
+                .Select(value => Guid.TryParse(value, out var id) ? id : Guid.Empty)
+                .Where(memberIds.Contains)
+                .Distinct()
+                .ToList();
+            if (item.AttendeeIds is { Count: > 0 } && attendeeIds.Count == 0)
+            {
+                logger.LogWarning("AI proposed only unknown attendee ids for {Date}; dropping that suggestion", date);
+                continue;
+            }
+            if (item.AttendeeIds is not { Count: > 0 })
+            {
+                attendeeIds = memberIds.ToList();
             }
 
             FrozenItem? freezerItem = null;
@@ -98,6 +127,9 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
             suggestions.Add(new MealSuggestion
             {
                 Date = date,
+                MealType = mealType,
+                Course = course,
+                AttendeeIds = attendeeIds,
                 RecipeId = recipeId,
                 DishName = dishName,
                 Reason = string.IsNullOrWhiteSpace(item.Reason) ? null : item.Reason.Trim(),
@@ -121,15 +153,52 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
         }
 
         var result = suggestions
-            .GroupBy(suggestion => (suggestion.Date, Dish: suggestion.DishName!.ToLowerInvariant()))
+            .GroupBy(suggestion => (suggestion.Date, suggestion.MealType, suggestion.Course,
+                Dish: suggestion.DishName!.ToLowerInvariant()))
             .Select(group => group.First())
             .GroupBy(suggestion => suggestion.Date)
-            .SelectMany(group => group.Take(3))
+            .SelectMany(group => group.Take(6))
             .OrderBy(suggestion => suggestion.Date)
+            .ThenBy(suggestion => suggestion.MealType)
+            .ThenBy(suggestion => suggestion.Course)
             .ToList();
+        if (!InstructionsAllowRepeats(request.Instructions))
+        {
+            var unique = new List<MealSuggestion>();
+            var seenAcrossDates = new Dictionary<string, DateOnly>(StringComparer.OrdinalIgnoreCase);
+            foreach (var suggestion in result)
+            {
+                var key = !string.IsNullOrWhiteSpace(suggestion.SourceUrl)
+                    ? $"url:{suggestion.SourceUrl}"
+                    : $"dish:{suggestion.DishName?.Trim()}";
+                if (seenAcrossDates.TryGetValue(key, out var firstDate)
+                    && firstDate != suggestion.Date)
+                {
+                    logger.LogWarning(
+                        "Dropped repeated dish {Dish} on {Date}; it was already proposed on {FirstDate}",
+                        suggestion.DishName, suggestion.Date, firstDate);
+                    continue;
+                }
+                seenAcrossDates.TryAdd(key, suggestion.Date);
+                unique.Add(suggestion);
+            }
+            result = unique;
+        }
         LinkFreezerItems(result, request);
         return result;
     }
+
+    private static T ParseEnum<T>(string? value, T fallback) where T : struct, Enum =>
+        Enum.TryParse<T>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
+            ? parsed
+            : fallback;
+
+    private static bool InstructionsAllowRepeats(string? instructions)
+        => !string.IsNullOrWhiteSpace(instructions)
+            && System.Text.RegularExpressions.Regex.IsMatch(instructions,
+                @"\b(same|repeat|again|every\s+day|each\s+day|elke\s+dag|iedere\s+dag|herhaal|opnieuw)\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     public IReadOnlyList<MealSuggestion> Finalize(
         IReadOnlyList<MealSuggestion> suggestions,
@@ -233,43 +302,41 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
         List<MealSuggestion> suggestions,
         MealSuggestionRequest request)
     {
-        var allergyByClass = new Dictionary<IngredientClass, string>();
-        var dietByClass = new Dictionary<IngredientClass, string>();
-        foreach (var member in request.Members)
-        {
-            foreach (var (tags, byClass) in new[]
-                     {
-                         (member.Allergies, allergyByClass),
-                         (member.Diets, dietByClass)
-                     })
-            {
-                foreach (var tag in tags)
-                {
-                    foreach (var ingredientClass in tag.ExcludedClasses)
-                    {
-                        byClass.TryAdd(ingredientClass, $"{member.Name}'s \"{tag.Name}\"");
-                    }
-                }
-            }
-        }
-
-        var allergyTerms = request.Members
-            .SelectMany(member => member.Allergies.Select(allergy => allergy.Name))
-            .Select(allergy => allergy.Trim())
-            .Where(allergy => allergy.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (allergyByClass.Count == 0 && dietByClass.Count == 0 && allergyTerms.Count == 0)
-        {
-            return;
-        }
-
         var recipesById = request.KnownRecipes
             .GroupBy(recipe => recipe.Id)
             .ToDictionary(group => group.Key, group => group.First());
         for (var index = 0; index < suggestions.Count; index++)
         {
             var suggestion = suggestions[index];
+            var attendees = suggestion.AttendeeIds.Count == 0
+                ? request.Members
+                : request.Members.Where(member => suggestion.AttendeeIds.Contains(member.Id)).ToList();
+            var allergyByClass = BuildExclusions(attendees, member => member.Allergies);
+            var dietByClass = BuildExclusions(attendees, member => member.Diets);
+            var allergyTerms = attendees
+                .SelectMany(member => member.Allergies.Select(allergy => allergy.Name.Trim()))
+                .Where(allergy => allergy.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (allergyByClass.Count == 0 && dietByClass.Count == 0 && allergyTerms.Count == 0)
+            {
+                continue;
+            }
+            var inferredClasses = InferClassesFromDishName(suggestion.DishName);
+            var inferredAllergyHits = inferredClasses.Where(allergyByClass.ContainsKey).ToList();
+            var inferredDietHits = inferredClasses.Where(dietByClass.ContainsKey).ToList();
+            if (inferredAllergyHits.Count > 0 || inferredDietHits.Count > 0)
+            {
+                suggestions[index] = suggestion = suggestion with
+                {
+                    AllergyWarning = inferredAllergyHits.Count == 0
+                        ? suggestion.AllergyWarning
+                        : $"Appears to contain {string.Join(", ", inferredAllergyHits)} — review {allergyByClass[inferredAllergyHits[0]]} allergy",
+                    DietWarning = inferredDietHits.Count == 0
+                        ? suggestion.DietWarning
+                        : $"Appears to contain {string.Join(", ", inferredDietHits)} — review or replace portions for {dietByClass[inferredDietHits[0]]} diet"
+                };
+            }
             if (suggestion.RecipeId is null)
             {
                 var externalHit = allergyTerms.FirstOrDefault(term =>
@@ -336,5 +403,34 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
                     suggestion.DishName, suggestion.Date, hit);
             }
         }
+    }
+
+    private static HashSet<IngredientClass> InferClassesFromDishName(string? dishName)
+    {
+        var result = new HashSet<IngredientClass>();
+        var text = $" {dishName} ".ToLowerInvariant();
+        if (new[] { "chicken", "kip", "poulet" }.Any(text.Contains)) result.Add(IngredientClass.Poultry);
+        if (new[] { "beef", "rund", "steak", "hamburger" }.Any(text.Contains)) result.Add(IngredientClass.RedMeat);
+        if (new[] { "pork", "varken", "ham", "bacon" }.Any(text.Contains)) result.Add(IngredientClass.Pork);
+        if (new[] { "fish", "vis", "salmon", "zalm", "tuna", "tonijn" }.Any(text.Contains)) result.Add(IngredientClass.Fish);
+        return result;
+    }
+
+    private static Dictionary<IngredientClass, string> BuildExclusions(
+        IEnumerable<MemberProfile> members,
+        Func<MemberProfile, IReadOnlyList<DietaryTagProfile>> selectTags)
+    {
+        var result = new Dictionary<IngredientClass, string>();
+        foreach (var member in members)
+        {
+            foreach (var tag in selectTags(member))
+            {
+                foreach (var ingredientClass in tag.ExcludedClasses)
+                {
+                    result.TryAdd(ingredientClass, $"{member.Name}'s \"{tag.Name}\"");
+                }
+            }
+        }
+        return result;
     }
 }

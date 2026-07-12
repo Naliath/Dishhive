@@ -4,6 +4,15 @@
 
 /* You can add global styles to this file, and also import other style files */
 
+// Angular Material defaults to the legacy Material Icons font. Dishhive uses
+// Google's current Material Symbols set so newer ligatures render consistently.
+.mat-icon {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
 // Global utility classes following Material Design patterns
 // These are reusable patterns used across multiple components
 

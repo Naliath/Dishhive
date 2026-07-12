@@ -46,6 +46,14 @@ public class SourceMentionResolverTests : IDisposable
     }
 
     [Fact]
+    public void ExtractMentions_AcceptsHandTypedBareDomain()
+    {
+        SourceMentionResolver.ExtractMentions(
+                "dessert from @laurasbakery.nl, but contact cook@example.com for questions")
+            .Should().Equal("laurasbakery.nl");
+    }
+
+    [Fact]
     public async Task Resolve_KnownProviderName_ResolvesToHost()
     {
         var constraints = await _resolver.ResolveAsync(
@@ -63,6 +71,14 @@ public class SourceMentionResolverTests : IDisposable
 
         var constraint = constraints.Should().ContainSingle().Subject;
         constraint.Host.Should().Be("15gram.be"); // www. stripped
+    }
+
+    [Fact]
+    public async Task Resolve_AtPrefixedBareDomain_IsTakenAsItsOwnHost()
+    {
+        var constraints = await _resolver.ResolveAsync([(null, "find one on @laurasbakery.nl")]);
+
+        constraints.Should().ContainSingle().Which.Host.Should().Be("laurasbakery.nl");
     }
 
     [Fact]

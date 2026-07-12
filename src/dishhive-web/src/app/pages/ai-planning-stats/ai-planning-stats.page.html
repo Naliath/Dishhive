@@ -1,0 +1,57 @@
+<div class="page-header">
+  <div>
+    <h1 class="mat-headline-medium">AI planning diagnostics</h1>
+    <p>Technical timing, token, search and recipe-resolution data for recent week suggestions.</p>
+  </div>
+  <div class="page-actions">
+    <button mat-stroked-button (click)="refresh()"><mat-icon>refresh</mat-icon>Refresh</button>
+    <a mat-button routerLink="/settings"><mat-icon>arrow_back</mat-icon>Settings</a>
+  </div>
+</div>
+
+@if (metrics(); as data) {
+  <div class="summary-grid">
+    <mat-card appearance="outlined"><span>Recent runs</span><strong>{{ data.summary.runCount }}</strong></mat-card>
+    <mat-card appearance="outlined"><span>Successful</span><strong>{{ data.summary.successfulRuns }}</strong></mat-card>
+    <mat-card appearance="outlined"><span>Average total</span><strong>{{ seconds(data.summary.averageTotalDurationMs) }}</strong></mat-card>
+    <mat-card appearance="outlined"><span>Average completion</span><strong>{{ seconds(data.summary.averageCompletionDurationMs) }}</strong></mat-card>
+    <mat-card appearance="outlined"><span>Searches / empty</span><strong>{{ data.summary.totalSearches }} / {{ data.summary.totalEmptySearches }}</strong></mat-card>
+    <mat-card appearance="outlined"><span>Resolutions / failed</span><strong>{{ data.summary.totalRecipeResolutions }} / {{ data.summary.totalResolutionFailures }}</strong></mat-card>
+    <mat-card appearance="outlined"><span>Parse failures</span><strong>{{ data.summary.totalParseFailures }}</strong></mat-card>
+    <mat-card appearance="outlined"><span>Reasoning tokens</span><strong>{{ data.summary.totalReasoningTokens | number }}</strong></mat-card>
+  </div>
+
+  <div class="run-list">
+    @for (run of data.runs; track run.id) {
+      <mat-card appearance="outlined" class="run-card">
+        <mat-card-header>
+          <mat-card-title><code>{{ run.requestId }}</code> · {{ run.outcome }}</mat-card-title>
+          <mat-card-subtitle>{{ run.startedAt | date:'medium' }} · {{ run.provider }}/{{ run.model }}</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          @if (run.instructions) { <p class="instructions">{{ run.instructions }}</p> }
+          @if (run.error) { <p class="error">{{ run.error }}</p> }
+          <div class="metric-grid">
+            <span>Total <strong>{{ seconds(run.totalDurationMs) }}</strong></span>
+            <span>Completion <strong>{{ seconds(run.completionDurationMs) }}</strong></span>
+            <span>Capability wait <strong>{{ seconds(run.capabilityWaitMs) }}</strong></span>
+            <span>Turns / attempts <strong>{{ run.modelTurns }} / {{ run.completionAttempts }}</strong></span>
+            <span>Tokens in / out / reasoning <strong>{{ run.inputTokens | number }} / {{ run.outputTokens | number }} / {{ run.reasoningTokens | number }}</strong></span>
+            <span>Research / searches <strong>{{ run.researchCalls }} / {{ run.searchCount }}</strong></span>
+            <span>Search results / empty <strong>{{ run.searchResultCount }} / {{ run.emptySearchCount }}</strong></span>
+            <span>Recipe resolutions / failed <strong>{{ run.recipeResolutionCount }} / {{ run.recipeResolutionFailureCount }}</strong></span>
+            <span>Search / resolution time <strong>{{ seconds(run.searchDurationMs) }} / {{ seconds(run.recipeResolutionDurationMs) }}</strong></span>
+            <span>Suggestions external / fallback <strong>{{ run.suggestedItems }} · {{ run.externalSuggestions }} / {{ run.fallbackSuggestions }}</strong></span>
+            <span>Parse failures <strong>{{ run.parseFailures }}</strong></span>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    } @empty {
+      <p>No planning runs have been recorded yet.</p>
+    }
+  </div>
+} @else if (failed()) {
+  <p class="error">Could not load AI planning diagnostics.</p>
+} @else {
+  <p>Loading diagnostics…</p>
+}

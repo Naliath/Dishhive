@@ -37,7 +37,7 @@ public record AiModelTestResult
     /// <summary>Whether the medium-complexity evaluation passed; null when never reached</summary>
     public bool? EvaluationPassed { get; init; }
 
-    /// <summary>Whether the model completed a synthetic get_recipe tool round-trip.</summary>
+    /// <summary>Whether the model can turn a fuzzy source request into a bounded research plan.</summary>
     public bool? ToolCallingPassed { get; init; }
 
     public IReadOnlyList<AiModelTestCheck> Checks { get; init; } = [];
@@ -126,9 +126,7 @@ public class AiModelTester
 
             var fixture = CreateFixture(DateOnly.FromDateTime(DateTime.Today));
             var userPrompt = MealSuggestionPromptBuilder.BuildUserPrompt(fixture.Request, _options.MaxPromptTokens);
-            var systemPrompt = _options.DisableThinking
-                ? "/no_think\n" + effectiveSystemPrompt
-                : effectiveSystemPrompt;
+            var systemPrompt = effectiveSystemPrompt;
 
             // Native schema enforcement first (hard guarantee when it works), prompted
             // JSON second (the broadly-compatible default). Whichever succeeds becomes
@@ -165,16 +163,13 @@ public class AiModelTester
                 checks.AddRange(evaluation);
                 evaluationPassed = evaluation.All(c => c.Passed);
 
-                toolCallingPassed = await TestToolCallingAsync(
-                    effectiveSystemPrompt,
-                    mode == AiResponseMode.JsonSchema ? MealSuggestionResponseContract.JsonSchemaFormat : null,
-                    cancellationToken);
+                toolCallingPassed = await TestResearchIntentAsync(cancellationToken);
                 checks.Add(new AiModelTestCheck(
-                    "External recipe tools",
+                    "External recipe intent",
                     toolCallingPassed.Value,
                     toolCallingPassed.Value
-                        ? "The model called get_recipe and copied its candidateId into the final response"
-                        : "The model did not complete a tool call round-trip; @[Source] requests will use the rules fallback"));
+                        ? "The model translated a fuzzy source request into the required count, dates and course"
+                        : "The model could not produce a usable external-recipe research plan"));
             }
 
             stopwatch.Stop();
@@ -218,51 +213,44 @@ public class AiModelTester
         }
     }
 
-    private async Task<bool> TestToolCallingAsync(
-        string systemPrompt,
-        ChatResponseFormat? responseFormat,
-        CancellationToken cancellationToken)
+    private async Task<bool> TestResearchIntentAsync(CancellationToken cancellationToken)
     {
-        const string expectedCandidateId = "c-test";
-        var invoked = false;
-        var tool = AIFunctionFactory.Create(
-            (string candidateId) =>
-            {
-                invoked = candidateId == expectedCandidateId;
-                return new
-                {
-                    candidateId,
-                    scrapable = true,
-                    title = "Tool test soup",
-                    ingredients = new[] { "1 onion" },
-                    instructions = new[] { "Cook." }
-                };
-            },
-            name: "get_recipe");
-        var client = _chatClient.AsBuilder()
-            .UseFunctionInvocation(configure: options => options.MaximumIterationsPerRequest = 3)
-            .Build();
-
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
         try
         {
-            var response = await client.GetResponseAsync(
+            var response = await _chatClient.GetResponseAsync(
                 [
-                    new ChatMessage(ChatRole.System, systemPrompt),
+                    new ChatMessage(ChatRole.System,
+                        "Interpret source-specific recipe research requests. Reply only as JSON: {\"requests\":[{\"query\":\"terms\",\"site\":\"host\",\"candidateCount\":2,\"dates\":[\"yyyy-MM-dd\"],\"course\":\"dessert\"}]}"),
                     new ChatMessage(ChatRole.User,
-                        $"Capability check: call get_recipe with candidateId '{expectedCandidateId}', then reply with one suggestion for 2099-01-01 using externalCandidateId '{expectedCandidateId}'.")
+                        "Source: recipes.example. Monday is 2099-01-05 and Sunday is 2099-01-11. Get 2 desserts from @recipes.example, one Monday and one Sunday.")
                 ],
                 new ChatOptions
                 {
-                    MaxOutputTokens = Math.Min(_options.MaxOutputTokens, 1000),
+                    MaxOutputTokens = Math.Min(_options.MaxOutputTokens, 800),
                     Temperature = 0,
-                    Tools = [tool],
-                    ResponseFormat = responseFormat
+                    Reasoning = _options.DisableThinking
+                        ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None }
+                        : null
                 },
                 timeout.Token);
-            var payload = MealSuggestionResponseContract.Parse(response.Text);
-            return invoked && payload?.Suggestions?.Any(s => s.ExternalCandidateId == expectedCandidateId) == true;
+            var start = response.Text.IndexOf('{');
+            var end = response.Text.LastIndexOf('}');
+            if (start < 0 || end <= start)
+            {
+                return false;
+            }
+
+            using var document = JsonDocument.Parse(response.Text[start..(end + 1)]);
+            var request = document.RootElement.GetProperty("requests").EnumerateArray().First();
+            var dates = request.GetProperty("dates").EnumerateArray()
+                .Select(value => value.GetString()).ToList();
+            return request.GetProperty("site").GetString() == "recipes.example"
+                && request.GetProperty("candidateCount").GetInt32() == 2
+                && request.GetProperty("course").GetString() == "dessert"
+                && dates.Contains("2099-01-05")
+                && dates.Contains("2099-01-11");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -270,7 +258,7 @@ public class AiModelTester
         }
         catch (Exception ex)
         {
-            _logger.LogInformation(ex, "AI external-tool capability check failed");
+            _logger.LogInformation(ex, "AI external-recipe intent capability check failed");
             return false;
         }
     }
@@ -292,6 +280,9 @@ public class AiModelTester
                 {
                     MaxOutputTokens = _options.MaxOutputTokens,
                     Temperature = (float)_options.Temperature,
+                    Reasoning = _options.DisableThinking
+                        ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None }
+                        : null,
                     ResponseFormat = responseFormat
                 },
                 cancellationToken: timeout.Token);

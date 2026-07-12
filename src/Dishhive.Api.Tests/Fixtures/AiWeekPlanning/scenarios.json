@@ -1,0 +1,122 @@
+[
+  {
+    "id": "distinct-vegetarian-source",
+    "description": "A count tied to an external source means distinct new recipes, never one recipe repeated.",
+    "prompt": "Get some new vegetarian dishes from @[Dagelijkse Kost] for 4 days.",
+    "iterations": 3,
+    "leadWeeks": 8,
+    "performanceBudgetMs": 60000,
+    "expectations": {
+      "uniqueDishes": true,
+      "rejectCollectionPages": true,
+      "sources": [
+        {
+          "host": "dagelijksekost.vrt.be",
+          "course": "main",
+          "minDistinctRecipes": 4,
+          "maxDistinctRecipes": 4,
+          "requiredDayOffsets": [],
+          "forbiddenDishKeywords": ["fish", "vis", "zalm", "salmon", "chicken", "kip", "beef", "rund", "pork", "varken", "gehakt", "vlees"]
+        }
+      ],
+      "slots": []
+    }
+  },
+  {
+    "id": "multi-source-courses-and-explicit-chicken",
+    "description": "Preserves the original regression prompt with distinct sources, dessert dates, and one shared Friday chicken main.",
+    "prompt": "Get some new vegetarian dishes from @[Dagelijkse Kost] for 4 days, and 1 with chicken for friday. Get 2 deserts form @laurasbakery.nl, 1 for friday and one on sunday.",
+    "iterations": 3,
+    "leadWeeks": 9,
+    "performanceBudgetMs": 90000,
+    "expectations": {
+      "uniqueDishes": true,
+      "rejectCollectionPages": true,
+      "sources": [
+        {
+          "host": "dagelijksekost.vrt.be",
+          "course": "main",
+          "minDistinctRecipes": 4,
+          "maxDistinctRecipes": 4,
+          "requiredDayOffsets": [],
+          "forbiddenDishKeywords": ["fish", "vis", "zalm", "salmon", "chicken", "kip", "beef", "rund", "pork", "varken", "gehakt", "vlees"]
+        },
+        {
+          "host": "laurasbakery.nl",
+          "course": "dessert",
+          "minDistinctRecipes": 2,
+          "maxDistinctRecipes": 2,
+          "requiredDayOffsets": [4, 6],
+          "forbiddenDishKeywords": []
+        }
+      ],
+      "slots": [
+        {
+          "dayOffset": 4,
+          "course": "main",
+          "minCount": 1,
+          "maxCount": 1,
+          "dishKeywords": ["chicken", "kip"],
+          "allAttendees": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "dutch-distinct-source-request",
+    "description": "Checks fuzzy count and source interpretation in Dutch.",
+    "prompt": "Plan voor vier dagen telkens een ander nieuw vegetarisch gerecht van @[Dagelijkse Kost].",
+    "iterations": 3,
+    "leadWeeks": 10,
+    "performanceBudgetMs": 60000,
+    "expectations": {
+      "uniqueDishes": true,
+      "rejectCollectionPages": true,
+      "sources": [
+        {
+          "host": "dagelijksekost.vrt.be",
+          "course": "main",
+          "minDistinctRecipes": 4,
+          "maxDistinctRecipes": 4,
+          "requiredDayOffsets": [],
+          "forbiddenDishKeywords": ["fish", "vis", "zalm", "salmon", "chicken", "kip", "beef", "rund", "pork", "varken", "gehakt", "vlees"]
+        }
+      ],
+      "slots": []
+    }
+  },
+  {
+    "id": "dutch-friday-pancakes-from-source",
+    "description": "Checks a Dutch, explicitly dated source request with a common spelling variant and course written as two words.",
+    "prompt": "Op vrijdag pannekoeken van @[Dagelijkse Kost] als hoofd maaltijd",
+    "status": "known-limitation",
+    "limitation": "Fuzzy multilingual recipe search is not supported deterministically. Results currently depend on whether the configured search provider corrects or matches the user's wording.",
+    "iterations": 3,
+    "leadWeeks": 11,
+    "performanceBudgetMs": 60000,
+    "expectations": {
+      "uniqueDishes": true,
+      "rejectCollectionPages": true,
+      "sources": [
+        {
+          "host": "dagelijksekost.vrt.be",
+          "course": "main",
+          "minDistinctRecipes": 1,
+          "maxDistinctRecipes": 1,
+          "requiredDayOffsets": [4],
+          "forbiddenDishKeywords": []
+        }
+      ],
+      "slots": [
+        {
+          "dayOffset": 4,
+          "course": "main",
+          "minCount": 1,
+          "maxCount": 1,
+          "dishKeywords": ["pannekoek", "pannekoeken", "pannenkoek", "pannenkoeken"],
+          "allAttendees": true
+        }
+      ]
+    }
+  }
+]

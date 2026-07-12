@@ -106,6 +106,8 @@ public class MealSuggestionRequestBuilder
             .Select(m => new ExistingMeal
             {
                 Date = m.Date,
+                MealType = m.MealType,
+                Course = m.Course,
                 DishName = m.DishName,
                 VagueInstruction = m.VagueInstruction
             })
@@ -249,6 +251,7 @@ public class MealSuggestionRequestBuilder
             WeekStart = weekStart,
             Members = members.Select(m => new MemberProfile
             {
+                Id = m.Id,
                 Name = m.Name,
                 Allergies = TagProfiles(m, DietaryTagKind.Allergy),
                 Diets = TagProfiles(m, DietaryTagKind.Diet),

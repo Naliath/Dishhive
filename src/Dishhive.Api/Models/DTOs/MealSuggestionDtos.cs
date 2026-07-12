@@ -22,6 +22,10 @@ public class MealSuggestionDto
 {
     public Guid Id { get; set; }
     public DateOnly Date { get; set; }
+    public MealType MealType { get; set; } = MealType.Dinner;
+    public Course Course { get; set; } = Course.Main;
+    public List<Guid> AttendeeIds { get; set; } = new();
+    public List<string> AttendeeNames { get; set; } = new();
     public Guid? RecipeId { get; set; }
 
     /// <summary>Title of the matched recipe, when the suggestion links to one</summary>
@@ -94,6 +98,9 @@ public class AcceptMealSuggestionDto
 {
     public Guid Id { get; set; }
     public DateOnly Date { get; set; }
+    public MealType MealType { get; set; } = MealType.Dinner;
+    public Course Course { get; set; } = Course.Main;
+    public List<Guid> AttendeeIds { get; set; } = new();
     public Guid? RecipeId { get; set; }
 
     [Required, MaxLength(200)]

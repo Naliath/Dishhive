@@ -100,6 +100,7 @@ builder.Services.AddScoped<FreezerAvailabilityService>();
 var webSearchOptions = builder.Configuration.GetSection(WebSearchOptions.SectionName).Get<WebSearchOptions>()
     ?? new WebSearchOptions();
 builder.Services.AddSingleton(webSearchOptions);
+builder.Services.AddScoped<ISitemapRecipeSearch, SitemapRecipeSearch>();
 if (webSearchOptions.IsConfigured)
 {
     builder.Services.AddHttpClient<IWebSearchClient, SearxngWebSearchClient>(client =>
@@ -163,6 +164,7 @@ builder.Services.AddScoped<MealSuggestionRequestBuilder>();
 builder.Services.AddScoped<MealSuggestionAcceptanceService>();
 builder.Services.AddScoped<IExternalRecipeSessionFactory, ExternalRecipeSessionFactory>();
 builder.Services.AddScoped<MealSuggestionPostProcessor>();
+builder.Services.AddScoped<AiPlanningMetricsStore>();
 
 // Demo mode: seed Dagelijkse Kost recipes and a demo household into an empty
 // database when Demo:Enabled is set (see docs/features/demo-mode.md)

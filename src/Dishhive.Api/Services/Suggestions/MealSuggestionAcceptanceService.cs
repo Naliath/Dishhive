@@ -47,6 +47,14 @@ public class MealSuggestionAcceptanceService(
             return Result(item, "alreadyApplied", existing.Id, existing.RecipeId);
         }
 
+        var requestedAttendees = item.AttendeeIds.Count == 0
+            ? attendeeIds.ToList()
+            : item.AttendeeIds.Where(attendeeIds.Contains).Distinct().ToList();
+        if (item.AttendeeIds.Count > 0 && requestedAttendees.Count == 0)
+        {
+            return Result(item, "planningFailed", error: "None of the selected attendees are active household members.");
+        }
+
         var quantity = Math.Max(1, item.FreezyItemQuantity);
         if (!string.IsNullOrWhiteSpace(item.FreezyItemRef))
         {
@@ -101,8 +109,8 @@ public class MealSuggestionAcceptanceService(
             {
                 var ideas = await context.PlannedMeals
                     .Where(meal => meal.Date == item.Date
-                        && meal.MealType == MealType.Dinner
-                        && meal.Course == Course.Main
+                        && meal.MealType == item.MealType
+                        && meal.Course == item.Course
                         && meal.VagueInstruction != null
                         && meal.DishName == null
                         && meal.RecipeId == null)
@@ -112,14 +120,14 @@ public class MealSuggestionAcceptanceService(
                 var meal = new PlannedMeal
                 {
                     Date = item.Date,
-                    MealType = MealType.Dinner,
-                    Course = Course.Main,
+                    MealType = item.MealType,
+                    Course = item.Course,
                     RecipeId = recipe?.Id,
                     DishName = recipe?.Title ?? item.DishName.Trim(),
                     FreezyItemRef = string.IsNullOrWhiteSpace(item.FreezyItemRef) ? null : item.FreezyItemRef.Trim(),
                     FreezyItemQuantity = string.IsNullOrWhiteSpace(item.FreezyItemRef) ? 0 : quantity,
                     SuggestionKey = suggestionKey,
-                    Attendees = attendeeIds
+                    Attendees = requestedAttendees
                         .Select(memberId => new PlannedMealAttendee { FamilyMemberId = memberId })
                         .ToList()
                 };

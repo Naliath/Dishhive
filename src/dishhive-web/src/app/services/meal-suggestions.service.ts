@@ -36,6 +36,9 @@ export class MealSuggestionsService {
       suggestions: suggestions.map(suggestion => ({
         id: suggestion.id,
         date: suggestion.date,
+        mealType: suggestion.mealType,
+        course: suggestion.course,
+        attendeeIds: suggestion.attendeeIds,
         recipeId: suggestion.recipeId,
         dishName: suggestion.dishName,
         freezyItemRef: suggestion.freezyItemRef,

@@ -22,6 +22,14 @@ public class ExternalRecipeTools : IExternalRecipeSession
     private readonly string _requestId;
     private readonly ILogger _logger;
     private int _candidateSequence;
+    private int _researchCalls;
+    private int _searchCount;
+    private int _emptySearchCount;
+    private int _searchResultCount;
+    private int _resolutionCount;
+    private int _resolutionFailureCount;
+    private long _searchDurationMs;
+    private long _resolutionDurationMs;
 
     private readonly ConcurrentDictionary<string, Task<IReadOnlyList<SearchHit>>> _searchCache =
         new(StringComparer.OrdinalIgnoreCase);
@@ -54,11 +62,65 @@ public class ExternalRecipeTools : IExternalRecipeSession
 
     public IList<AITool> Build() =>
     [
-        AIFunctionFactory.Create(SearchRecipesAsync, name: "search_recipes"),
-        AIFunctionFactory.Create(GetRecipeAsync, name: "get_recipe")
+        AIFunctionFactory.Create(ResearchRecipesAsync, name: "research_recipes")
     ];
 
     IList<AITool> IExternalRecipeSession.BuildTools() => Build();
+
+    Task<IReadOnlyList<GetRecipeResult>> IExternalRecipeSession.ResearchAsync(
+        List<RecipeResearchRequest> requests,
+        CancellationToken cancellationToken) => ResearchRecipesAsync(requests, cancellationToken);
+
+    [Description("Research several recipe requirements in one bounded operation. Send all independent "
+        + "source/query requirements together. Dishhive searches each source once, verifies a small number "
+        + "of pages, and returns candidateIds. Call this at most once, then select verified candidateIds in the final response.")]
+    internal async Task<IReadOnlyList<GetRecipeResult>> ResearchRecipesAsync(
+        [Description("All source-specific recipe searches needed for the plan (maximum 4). Set candidateCount to at least the number of distinct recipes requested, up to 6.")] List<RecipeResearchRequest> requests,
+        CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _researchCalls);
+        const int maxRequests = 4;
+        const int maxCandidatesPerRequest = 6;
+        const int maxResolvedCandidates = 12;
+        var selectedIds = new List<string>();
+
+        foreach (var request in requests
+                     .Where(request => !string.IsNullOrWhiteSpace(request.Query)
+                         && !string.IsNullOrWhiteSpace(request.Site))
+                     .DistinctBy(request => $"{request.Site.Trim()}|{request.Query.Trim()}", StringComparer.OrdinalIgnoreCase)
+                     .Take(maxRequests))
+        {
+            var hits = await SearchRecipesAsync(request.Query, request.Site, cancellationToken);
+            selectedIds.AddRange(hits
+                // Resolve a small spare pool as well: list pages, transient fetch errors,
+                // or unsupported markup must not leave an explicit count impossible.
+                .Take(Math.Clamp(request.CandidateCount + 2, 1, maxCandidatesPerRequest))
+                .Select(hit => hit.CandidateId));
+            if (selectedIds.Count >= maxResolvedCandidates)
+            {
+                break;
+            }
+        }
+
+        selectedIds = selectedIds.Distinct(StringComparer.OrdinalIgnoreCase).Take(maxResolvedCandidates).ToList();
+        using var concurrency = new SemaphoreSlim(4);
+        var results = await Task.WhenAll(selectedIds.Select(async candidateId =>
+        {
+            await concurrency.WaitAsync(cancellationToken);
+            try
+            {
+                return await GetRecipeAsync(candidateId, cancellationToken);
+            }
+            finally
+            {
+                concurrency.Release();
+            }
+        }));
+        _logger.LogInformation(
+            "[{RequestId}] Tool research_recipes processed {RequestCount} request(s) and resolved {ResolvedCount}/{CandidateCount} candidate(s)",
+            _requestId, Math.Min(requests.Count, maxRequests), results.Count(result => result.Error == null), results.Length);
+        return results;
+    }
 
     [Description("Search referenced recipe websites. Returns candidateId + title. "
         + "Use get_recipe(candidateId) before selecting a candidate.")]
@@ -87,6 +149,7 @@ public class ExternalRecipeTools : IExternalRecipeSession
         }
 
         var stopwatch = Stopwatch.StartNew();
+        Interlocked.Increment(ref _searchCount);
         var results = await _webSearch.SearchAsync(query, effectiveSite, _maxResults, cancellationToken);
         var hits = new List<SearchHit>();
         foreach (var result in results)
@@ -107,6 +170,12 @@ public class ExternalRecipeTools : IExternalRecipeSession
         _logger.LogInformation(
             "[{RequestId}] Tool search_recipes(\"{Query}\", site={Site}) → {Count} candidates in {ElapsedMs}ms",
             _requestId, query, effectiveSite, hits.Count, stopwatch.ElapsedMilliseconds);
+        Interlocked.Add(ref _searchDurationMs, stopwatch.ElapsedMilliseconds);
+        Interlocked.Add(ref _searchResultCount, hits.Count);
+        if (hits.Count == 0)
+        {
+            Interlocked.Increment(ref _emptySearchCount);
+        }
         return hits;
     }
 
@@ -133,6 +202,7 @@ public class ExternalRecipeTools : IExternalRecipeSession
         }
 
         var stopwatch = Stopwatch.StartNew();
+        Interlocked.Increment(ref _resolutionCount);
         var preview = await _importService.PreviewAsync(candidate.SearchUrl, cancellationToken);
         _logger.LogInformation(
             "[{RequestId}] Tool get_recipe({CandidateId}) → scrapable={Scrapable}, error={Error} in {ElapsedMs}ms",
@@ -140,6 +210,8 @@ public class ExternalRecipeTools : IExternalRecipeSession
 
         if (preview.Error != null)
         {
+            Interlocked.Increment(ref _resolutionFailureCount);
+            Interlocked.Add(ref _resolutionDurationMs, stopwatch.ElapsedMilliseconds);
             return FailedRecipe(candidateId, preview.Error);
         }
 
@@ -147,12 +219,22 @@ public class ExternalRecipeTools : IExternalRecipeSession
         var canonicalUrl = ResolveSourceUrl(recipe?.SourceUrl, candidate.SearchUrl);
         if (canonicalUrl == null || !TryNormalizeAllowedUrl(canonicalUrl, out canonicalUrl))
         {
+            Interlocked.Increment(ref _resolutionFailureCount);
+            Interlocked.Add(ref _resolutionDurationMs, stopwatch.ElapsedMilliseconds);
             return FailedRecipe(candidateId, "The recipe resolved outside the referenced source hosts.");
+        }
+        if (LooksLikeCollectionPage(canonicalUrl!, recipe?.Title ?? candidate.SearchTitle))
+        {
+            Interlocked.Increment(ref _resolutionFailureCount);
+            Interlocked.Add(ref _resolutionDurationMs, stopwatch.ElapsedMilliseconds);
+            return FailedRecipe(candidateId, "The result is a recipe collection/article page, not one importable recipe.");
         }
 
         candidate.MarkFetched(canonicalUrl!, recipe, preview.Text);
+        Interlocked.Add(ref _resolutionDurationMs, stopwatch.ElapsedMilliseconds);
         return new GetRecipeResult(
             CandidateId: candidateId,
+            SourceSite: new Uri(canonicalUrl!).Host,
             Scrapable: preview.Scrapable,
             Title: recipe?.Title ?? candidate.SearchTitle,
             TotalTimeMinutes: recipe?.TotalTimeMinutes,
@@ -186,6 +268,16 @@ public class ExternalRecipeTools : IExternalRecipeSession
         return false;
     }
 
+    public ExternalRecipeSessionMetrics GetMetrics() => new(
+        ResearchCalls: Volatile.Read(ref _researchCalls),
+        SearchCount: Volatile.Read(ref _searchCount),
+        EmptySearchCount: Volatile.Read(ref _emptySearchCount),
+        SearchResultCount: Volatile.Read(ref _searchResultCount),
+        ResolutionCount: Volatile.Read(ref _resolutionCount),
+        ResolutionFailureCount: Volatile.Read(ref _resolutionFailureCount),
+        SearchDurationMs: Interlocked.Read(ref _searchDurationMs),
+        ResolutionDurationMs: Interlocked.Read(ref _resolutionDurationMs));
+
     private bool TryNormalizeAllowedUrl(string? value, out string? normalizedUrl)
     {
         normalizedUrl = null;
@@ -207,6 +299,7 @@ public class ExternalRecipeTools : IExternalRecipeSession
 
     private static GetRecipeResult FailedRecipe(string candidateId, string error) => new(
         CandidateId: candidateId,
+        SourceSite: null,
         Scrapable: false,
         Title: null,
         TotalTimeMinutes: null,
@@ -230,6 +323,21 @@ public class ExternalRecipeTools : IExternalRecipeSession
         }
 
         return null;
+    }
+
+    private static bool LooksLikeCollectionPage(string url, string title)
+    {
+        var path = new Uri(url).AbsolutePath.ToLowerInvariant();
+        if (new[] { "/category/", "/tag/", "/author/", "/search/", "/kookmagazine/" }
+            .Any(path.Contains))
+        {
+            return true;
+        }
+        var normalizedTitle = $" {title.Trim().ToLowerInvariant()} ";
+        return System.Text.RegularExpressions.Regex.IsMatch(
+                title.Trim(), @"^\d+\+?x?\s", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            || new[] { " recepten ", " inspiratie ", " verzameld ", " tips ", " review " }
+                .Any(normalizedTitle.Contains);
     }
 
     private static string? NormalizeHost(string? host)
@@ -264,8 +372,16 @@ public class ExternalRecipeTools : IExternalRecipeSession
 
     public record SearchHit(string CandidateId, string Title, string? Snippet);
 
+    public record RecipeResearchRequest(
+        string Query,
+        string Site,
+        int CandidateCount = 2,
+        IReadOnlyList<string>? Dates = null,
+        string? Course = null);
+
     public record GetRecipeResult(
         string CandidateId,
+        string? SourceSite,
         bool Scrapable,
         string? Title,
         int? TotalTimeMinutes,

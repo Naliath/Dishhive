@@ -4,7 +4,7 @@ using Dishhive.Api.Services.Import;
 namespace Dishhive.Api.Services.Suggestions;
 
 /// <summary>
-/// Resolves @[Source] references in planning instruction texts into website-host
+/// Resolves @[Source] and @domain references in planning instruction texts into website-host
 /// constraints for the LLM's search tool ("find something vegetarian from
 /// @[Dagelijkse Kost]"). A name is matched against the known sources
 /// (<see cref="RecipeSourceCatalog"/>) case-insensitively, or a hand-typed domain is
@@ -17,6 +17,12 @@ public partial class SourceMentionResolver(RecipeSourceCatalog catalog)
     [GeneratedRegex(@"@\[([^\[\]\r\n]{1,100})\]")]
     private static partial Regex MentionRegex();
 
+    // A hand-typed domain is unambiguous enough to accept without brackets. The
+    // negative lookbehind prevents the domain part of an email address from becoming
+    // a source mention.
+    [GeneratedRegex(@"(?<![\w@])@((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,63})(?![\w.-])")]
+    private static partial Regex BareDomainMentionRegex();
+
     /// <summary>The distinct source names referenced in a text</summary>
     public static IReadOnlyList<string> ExtractMentions(string? text)
     {
@@ -26,7 +32,8 @@ public partial class SourceMentionResolver(RecipeSourceCatalog catalog)
         }
 
         return MentionRegex().Matches(text)
-            .Select(m => m.Groups[1].Value.Trim())
+            .Concat(BareDomainMentionRegex().Matches(text))
+            .Select(match => match.Groups[1].Value.Trim())
             .Where(name => name.Length > 0)
             .DistinctBy(name => name.ToLowerInvariant())
             .ToList();

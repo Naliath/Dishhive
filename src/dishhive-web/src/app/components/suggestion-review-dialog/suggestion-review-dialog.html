@@ -103,6 +103,9 @@
                         <span class="suggestion-tag" matTooltip="Filled from your rules, not the AI">rules</span>
                       }
                     </span>
+                    @if (suggestionContext(item.suggestion); as context) {
+                      <span class="suggestion-context">{{ context }}</span>
+                    }
                     @if (item.suggestion.sourceUrl) {
                       <a class="suggestion-source" [href]="item.suggestion.sourceUrl" target="_blank" rel="noopener"
                          (click)="$event.stopPropagation()">

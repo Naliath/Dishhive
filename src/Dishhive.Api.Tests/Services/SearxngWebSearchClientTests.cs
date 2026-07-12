@@ -2,6 +2,7 @@ using Dishhive.Api.Services.WebSearch;
 using Dishhive.Api.Tests.Mocks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 
 namespace Dishhive.Api.Tests.Services;
 
@@ -23,7 +24,8 @@ public class SearxngWebSearchClientTests
     private static SearxngWebSearchClient CreateClient(MockHttpMessageHandler handler)
     {
         var http = new HttpClient(handler) { BaseAddress = new Uri(BaseUrl) };
-        return new SearxngWebSearchClient(http, NullLogger<SearxngWebSearchClient>.Instance);
+        return new SearxngWebSearchClient(
+            http, Substitute.For<ISitemapRecipeSearch>(), NullLogger<SearxngWebSearchClient>.Instance);
     }
 
     [Fact]
@@ -63,7 +65,8 @@ public class SearxngWebSearchClientTests
     [Fact]
     public async Task Search_NotConfigured_ReturnsEmpty()
     {
-        var client = new SearxngWebSearchClient(new HttpClient(), NullLogger<SearxngWebSearchClient>.Instance);
+        var client = new SearxngWebSearchClient(
+            new HttpClient(), Substitute.For<ISitemapRecipeSearch>(), NullLogger<SearxngWebSearchClient>.Instance);
 
         var results = await client.SearchAsync("x", site: null, count: 5);
 
@@ -79,5 +82,46 @@ public class SearxngWebSearchClientTests
         var results = await CreateClient(handler).SearchAsync("x", site: null, count: 5);
 
         results.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Search_EmptySiteResults_UsesSitemapFallback()
+    {
+        var handler = new MockHttpMessageHandler().RespondWith(BaseUrl + "search", "{\"results\":[]}", "application/json");
+        var sitemap = Substitute.For<ISitemapRecipeSearch>();
+        sitemap.SearchAsync("vegetarisch", "example.com", 5, Arg.Any<CancellationToken>())
+            .Returns([new WebSearchResult("Vegetarische curry", "https://example.com/vegetarische-curry", null)]);
+        var client = new SearxngWebSearchClient(
+            new HttpClient(handler) { BaseAddress = new Uri(BaseUrl) },
+            sitemap,
+            NullLogger<SearxngWebSearchClient>.Instance);
+
+        var results = await client.SearchAsync("vegetarisch", "example.com", 5);
+
+        results.Should().ContainSingle().Which.Title.Should().Be("Vegetarische curry");
+    }
+
+    [Fact]
+    public async Task Search_FiltersCollectionPagesAndSupplementsWithSitemapRecipes()
+    {
+        const string response = """
+            {"results":[
+              {"url":"https://example.com/category/desserts/","title":"106+ dessert recepten"},
+              {"url":"https://example.com/chocolate-mousse/","title":"Chocolate mousse"}
+            ]}
+            """;
+        var handler = new MockHttpMessageHandler().RespondWith(BaseUrl + "search", response, "application/json");
+        var sitemap = Substitute.For<ISitemapRecipeSearch>();
+        sitemap.SearchAsync("dessert", "example.com", 2, Arg.Any<CancellationToken>())
+            .Returns([new WebSearchResult("Strawberry cheesecake", "https://example.com/strawberry-cheesecake/", null)]);
+        var client = new SearxngWebSearchClient(
+            new HttpClient(handler) { BaseAddress = new Uri(BaseUrl) }, sitemap,
+            NullLogger<SearxngWebSearchClient>.Instance);
+
+        var results = await client.SearchAsync("dessert", "example.com", 2);
+
+        results.Select(result => result.Url).Should().BeEquivalentTo(
+            "https://example.com/chocolate-mousse/",
+            "https://example.com/strawberry-cheesecake/");
     }
 }

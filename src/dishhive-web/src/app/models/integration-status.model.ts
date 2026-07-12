@@ -4,6 +4,7 @@ export interface AiIntegrationStatus {
   provider: string | null;
   model: string | null;
   baseUrl: string | null;
+  statsEnabled: boolean;
   /** Lifecycle of the model capability test (notConfigured | notRun | running | completed) */
   modelTestState: AiModelTestState;
   /** Headline of the last completed test (passed | warnings | failed), null before any run */
@@ -32,6 +33,61 @@ export interface AiModelTestResult {
 export interface AiModelTestStatus {
   state: AiModelTestState;
   result: AiModelTestResult | null;
+}
+
+export interface AiPlanningMetricsSummary {
+  runCount: number;
+  successfulRuns: number;
+  fallbackRuns: number;
+  averageTotalDurationMs: number;
+  averageCompletionDurationMs: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalReasoningTokens: number;
+  totalSearches: number;
+  totalEmptySearches: number;
+  totalRecipeResolutions: number;
+  totalResolutionFailures: number;
+  totalParseFailures: number;
+}
+
+export interface AiPlanningRun {
+  id: string;
+  requestId: string;
+  startedAt: string;
+  outcome: string;
+  provider: string;
+  model: string;
+  instructions?: string;
+  error?: string;
+  requestedDays: number;
+  suggestedItems: number;
+  externalSuggestions: number;
+  fallbackSuggestions: number;
+  usedExternalResearch: boolean;
+  completionAttempts: number;
+  parseFailures: number;
+  modelTurns: number;
+  inputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+  researchCalls: number;
+  searchCount: number;
+  emptySearchCount: number;
+  searchResultCount: number;
+  recipeResolutionCount: number;
+  recipeResolutionFailureCount: number;
+  capabilityWaitMs: number;
+  completionDurationMs: number;
+  searchDurationMs: number;
+  recipeResolutionDurationMs: number;
+  totalDurationMs: number;
+}
+
+export interface AiPlanningMetricsResponse {
+  summary: AiPlanningMetricsSummary;
+  runs: AiPlanningRun[];
 }
 
 export interface FreezyIntegrationStatus {

@@ -18,6 +18,10 @@ public record DietaryTagProfile
 /// <summary>A household member's planning-relevant profile</summary>
 public record MemberProfile
 {
+    /// <summary>Stable id copied into attendeeIds when a suggestion is intended for
+    /// only part of the household.</summary>
+    public Guid Id { get; init; }
+
     public required string Name { get; init; }
 
     /// <summary>Allergy/intolerance tags (hard "must not contain")</summary>
@@ -106,6 +110,8 @@ public record SourceConstraint
 public record ExistingMeal
 {
     public DateOnly Date { get; init; }
+    public MealType MealType { get; init; } = MealType.Dinner;
+    public Course Course { get; init; } = Course.Main;
     public string? DishName { get; init; }
     public string? VagueInstruction { get; init; }
 }
@@ -179,6 +185,9 @@ public enum MealSuggestionSource
 public record MealSuggestion
 {
     public DateOnly Date { get; init; }
+    public MealType MealType { get; init; } = MealType.Dinner;
+    public Course Course { get; init; } = Course.Main;
+    public IReadOnlyList<Guid> AttendeeIds { get; init; } = [];
     public Guid? RecipeId { get; init; }
     public string? DishName { get; init; }
     public string? Reason { get; init; }

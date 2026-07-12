@@ -246,6 +246,9 @@ public class PlannedMealsController : ControllerBase
         var suggestions = await _suggestionService.SuggestAsync(request, cancellationToken);
 
         var recipeTitles = request.KnownRecipes.ToDictionary(r => r.Id, r => r.Title);
+        var memberNames = request.Members
+            .Where(member => member.Id != Guid.Empty)
+            .ToDictionary(member => member.Id, member => member.Name);
 
         return Ok(new MealSuggestionsDto
         {
@@ -256,6 +259,16 @@ public class PlannedMealsController : ControllerBase
             {
                 Id = Guid.NewGuid(),
                 Date = s.Date,
+                MealType = s.MealType,
+                Course = s.Course,
+                AttendeeIds = s.AttendeeIds.ToList(),
+                AttendeeNames = s.AttendeeIds.Count > 0 && s.AttendeeIds.Count < memberNames.Count
+                    ? s.AttendeeIds
+                        .Select(id => memberNames.GetValueOrDefault(id))
+                        .Where(name => name != null)
+                        .Select(name => name!)
+                        .ToList()
+                    : [],
                 RecipeId = s.RecipeId,
                 RecipeTitle = s.RecipeId.HasValue ? recipeTitles.GetValueOrDefault(s.RecipeId.Value) : null,
                 DishName = s.DishName ?? string.Empty,

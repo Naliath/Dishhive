@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Services\Demo\demo-seed.json" />
+    <EmbeddedResource Include="Resources\Localization\*.json" />
   </ItemGroup>
 
   <ItemGroup>

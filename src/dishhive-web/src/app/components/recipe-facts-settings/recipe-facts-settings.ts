@@ -6,6 +6,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { CookingLoaderComponent } from '../cooking-loader/cooking-loader';
 import { RecipesService } from '../../services/recipes.service';
 import { RecipeFactsStatus } from '../../models/recipe.model';
+import { TranslatePipe } from '../../services/language.service';
 
 /**
  * Settings card for recipe dietary facts: shows how much of the library has been
@@ -17,7 +18,7 @@ import { RecipeFactsStatus } from '../../models/recipe.model';
 @Component({
   selector: 'app-recipe-facts-settings',
   standalone: true,
-  imports: [CookingLoaderComponent, MatButtonModule, MatCardModule, MatIconModule, MatSnackBarModule],
+  imports: [CookingLoaderComponent, MatButtonModule, MatCardModule, MatIconModule, MatSnackBarModule, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './recipe-facts-settings.html',
   styleUrl: './recipe-facts-settings.scss'

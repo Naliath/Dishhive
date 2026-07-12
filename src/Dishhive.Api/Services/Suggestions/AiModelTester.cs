@@ -163,13 +163,13 @@ public class AiModelTester
                 checks.AddRange(evaluation);
                 evaluationPassed = evaluation.All(c => c.Passed);
 
-                toolCallingPassed = await TestResearchIntentAsync(cancellationToken);
+                toolCallingPassed = await TestPlanningIntentAsync(cancellationToken);
                 checks.Add(new AiModelTestCheck(
-                    "External recipe intent",
+                    "Multilingual planning instructions",
                     toolCallingPassed.Value,
                     toolCallingPassed.Value
-                        ? "The model translated a fuzzy source request into the required count, dates and course"
-                        : "The model could not produce a usable external-recipe research plan"));
+                        ? "The model understood counts, dates, courses and sources in English and Dutch"
+                        : "The model could not reliably normalize multilingual planning requirements"));
             }
 
             stopwatch.Stop();
@@ -213,44 +213,57 @@ public class AiModelTester
         }
     }
 
-    private async Task<bool> TestResearchIntentAsync(CancellationToken cancellationToken)
+    private async Task<bool> TestPlanningIntentAsync(CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
         try
         {
-            var response = await _chatClient.GetResponseAsync(
-                [
-                    new ChatMessage(ChatRole.System,
-                        "Interpret source-specific recipe research requests. Reply only as JSON: {\"requests\":[{\"query\":\"terms\",\"site\":\"host\",\"candidateCount\":2,\"dates\":[\"yyyy-MM-dd\"],\"course\":\"dessert\"}]}"),
-                    new ChatMessage(ChatRole.User,
-                        "Source: recipes.example. Monday is 2099-01-05 and Sunday is 2099-01-11. Get 2 desserts from @recipes.example, one Monday and one Sunday.")
-                ],
-                new ChatOptions
-                {
-                    MaxOutputTokens = Math.Min(_options.MaxOutputTokens, 800),
-                    Temperature = 0,
-                    Reasoning = _options.DisableThinking
-                        ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None }
-                        : null
-                },
-                timeout.Token);
-            var start = response.Text.IndexOf('{');
-            var end = response.Text.LastIndexOf('}');
-            if (start < 0 || end <= start)
+            var request = new MealSuggestionRequest
             {
-                return false;
+                WeekStart = new DateOnly(2099, 1, 5),
+                SourceConstraints = [new SourceConstraint { Name = "Example", Host = "recipes.example" }]
+            };
+            var prompts = new[]
+            {
+                "Get 2 desserts from @recipes.example, one Monday and one Sunday.",
+                "Plan 2 desserts van @recipes.example, een op maandag en een op zondag."
+            };
+            foreach (var prompt in prompts)
+            {
+                var response = await _chatClient.GetResponseAsync(
+                    [
+                        new ChatMessage(ChatRole.System, PlanningIntentContract.SystemPrompt),
+                        new ChatMessage(ChatRole.User,
+                            "Referenced source: recipes.example. Monday is 2099-01-05 and Sunday is 2099-01-11. Instructions: " + prompt)
+                    ],
+                    new ChatOptions
+                    {
+                        MaxOutputTokens = Math.Min(_options.MaxOutputTokens, 1000),
+                        Temperature = 0,
+                        Reasoning = _options.DisableThinking
+                            ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None }
+                            : null
+                    }, timeout.Token);
+                var intent = PlanningIntentContract.Parse(response.Text, request);
+                var constraints = intent?.Constraints.Where(constraint =>
+                        constraint.SourceHost == "recipes.example"
+                        && constraint.MealType == MealType.Dinner
+                        && constraint.Course == Course.Dessert)
+                    .ToList() ?? [];
+                var dates = constraints.SelectMany(constraint => constraint.Dates).ToHashSet();
+                var count = constraints.Sum(constraint => constraint.Count);
+                if (count != 2
+                    || !dates.Contains(new DateOnly(2099, 1, 5))
+                    || !dates.Contains(new DateOnly(2099, 1, 11)))
+                {
+                    _logger.LogWarning(
+                        "Multilingual planning capability probe failed for prompt {Prompt}; raw response={Response}",
+                        prompt, response.Text);
+                    return false;
+                }
             }
-
-            using var document = JsonDocument.Parse(response.Text[start..(end + 1)]);
-            var request = document.RootElement.GetProperty("requests").EnumerateArray().First();
-            var dates = request.GetProperty("dates").EnumerateArray()
-                .Select(value => value.GetString()).ToList();
-            return request.GetProperty("site").GetString() == "recipes.example"
-                && request.GetProperty("candidateCount").GetInt32() == 2
-                && request.GetProperty("course").GetString() == "dessert"
-                && dates.Contains("2099-01-05")
-                && dates.Contains("2099-01-11");
+            return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

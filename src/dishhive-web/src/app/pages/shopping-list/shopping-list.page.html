@@ -10,7 +10,7 @@
       Copy as text
     </button>
   </div>
-  <p class="range-line">{{ shoppingList.from | date:'d MMM' }} – {{ shoppingList.to | date:'d MMM y' }}</p>
+  <p class="range-line">{{ shoppingList.from | localizedDate:'dayMonth' }} – {{ shoppingList.to | localizedDate:'dayMonthYear' }}</p>
 
   @if (shoppingList.items.length === 0 && shoppingList.reminders.length === 0) {
     <div class="empty-state">
@@ -47,7 +47,7 @@
             @for (reminder of shoppingList.reminders; track reminder.plannedMealId) {
               <li class="reminder-row">
                 <div class="reminder-line">
-                  <span>{{ reminder.date | date:'EEEE d MMM' }}: {{ reminder.text }}</span>
+                  <span>{{ reminder.date | localizedDate:'weekdayShort' }}: {{ reminder.text }}</span>
                   <span class="reminder-actions">
                     <button mat-icon-button (click)="toggleLinking(reminder)"
                             matTooltip="Link an existing recipe" aria-label="Link recipe">

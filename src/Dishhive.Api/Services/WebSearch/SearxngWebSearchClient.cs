@@ -91,23 +91,7 @@ public class SearxngWebSearchClient : IWebSearchClient
     }
 
     private static bool IsLikelyRecipePage(WebSearchResult result)
-    {
-        if (!Uri.TryCreate(result.Url, UriKind.Absolute, out var uri))
-        {
-            return false;
-        }
-        var path = uri.AbsolutePath.ToLowerInvariant();
-        if (new[] { "/category/", "/tag/", "/author/", "/search/", "/kookmagazine/" }
-            .Any(path.Contains))
-        {
-            return false;
-        }
-        var title = $" {result.Title.ToLowerInvariant()} ";
-        return !System.Text.RegularExpressions.Regex.IsMatch(
-                result.Title.Trim(), @"^\d+\+?x?\s", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            && !new[] { " recepten ", " inspiratie ", " verzameld ", " tips ", " review " }
-                .Any(title.Contains);
-    }
+        => RecipePageClassifier.IsPotentialRecipeUri(result.Url);
 
     private sealed record SearxngResponse([property: JsonPropertyName("results")] List<SearxngResult>? Results);
 

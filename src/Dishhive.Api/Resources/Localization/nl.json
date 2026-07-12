@@ -1,0 +1,44 @@
+{
+  "units": [
+    { "aliases": ["g", "gr", "gram"], "canonicalUnit": "g", "factor": 1 },
+    { "aliases": ["kg", "kilo", "kilogram"], "canonicalUnit": "kg", "factor": 1 },
+    { "aliases": ["ml", "milliliter"], "canonicalUnit": "ml", "factor": 1 },
+    { "aliases": ["cl", "centiliter"], "canonicalUnit": "ml", "factor": 10 },
+    { "aliases": ["dl", "deciliter"], "canonicalUnit": "ml", "factor": 100 },
+    { "aliases": ["l", "liter"], "canonicalUnit": "l", "factor": 1 },
+    { "aliases": ["el", "eetlepel", "eetlepels"], "canonicalUnit": "el", "factor": 1 },
+    { "aliases": ["tl", "theelepel", "theelepels"], "canonicalUnit": "tl", "factor": 1 },
+    { "aliases": ["snuifje"], "canonicalUnit": "snuifje", "factor": 1 },
+    { "aliases": ["blaadje", "blaadjes"], "canonicalUnit": "blaadje", "factor": 1 },
+    { "aliases": ["teentje", "teentjes"], "canonicalUnit": "teentje", "factor": 1 },
+    { "aliases": ["takje", "takjes"], "canonicalUnit": "takje", "factor": 1 },
+    { "aliases": ["bakje", "bakjes"], "canonicalUnit": "bakje", "factor": 1 },
+    { "aliases": ["stuk", "stuks", "stukken"], "canonicalUnit": "piece", "factor": 1 }
+  ],
+  "allergies": [
+    { "aliases": ["noten"], "classes": ["TreeNuts"] },
+    { "aliases": ["pinda", "pinda's", "pindas"], "classes": ["Peanuts"] },
+    { "aliases": ["lactose", "melk", "zuivel"], "classes": ["Milk"] },
+    { "aliases": ["gluten", "tarwe"], "classes": ["Gluten"] },
+    { "aliases": ["ei", "eieren"], "classes": ["Eggs"] },
+    { "aliases": ["vis"], "classes": ["Fish"] },
+    { "aliases": ["schaaldieren"], "classes": ["Crustaceans"] },
+    { "aliases": ["schelpdieren", "weekdieren"], "classes": ["Molluscs"] },
+    { "aliases": ["schaal- en schelpdieren"], "classes": ["Crustaceans", "Molluscs"] },
+    { "aliases": ["soja"], "classes": ["Soybeans"] },
+    { "aliases": ["sesam", "sesamzaad"], "classes": ["Sesame"] },
+    { "aliases": ["mosterd"], "classes": ["Mustard"] },
+    { "aliases": ["selderij", "selder"], "classes": ["Celery"] },
+    { "aliases": ["sulfiet", "sulfieten"], "classes": ["Sulphites"] },
+    { "aliases": ["lupine"], "classes": ["Lupin"] }
+  ],
+  "diets": [
+    { "aliases": ["vegetarisch", "vegetariër", "vegetarier"], "classes": ["RedMeat", "Poultry", "Pork", "Fish", "Crustaceans", "Molluscs", "Gelatin"] },
+    { "aliases": ["veganistisch", "veganist"], "classes": ["RedMeat", "Poultry", "Pork", "Fish", "Crustaceans", "Molluscs", "Gelatin", "Milk", "Eggs", "Honey"] },
+    { "aliases": ["pescotarisch", "pescetarisch", "geen vlees"], "classes": ["RedMeat", "Poultry", "Pork", "Gelatin"] },
+    { "aliases": ["geen rood vlees"], "classes": ["RedMeat", "Pork"] },
+    { "aliases": ["geen varkensvlees", "geen varken", "varkensvrij"], "classes": ["Pork"] },
+    { "aliases": ["halal"], "classes": ["Pork", "Alcohol", "Gelatin"] },
+    { "aliases": ["geen alcohol", "alcoholvrij"], "classes": ["Alcohol"] }
+  ]
+}

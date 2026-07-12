@@ -3,8 +3,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { SettingsService } from '../../services/settings.service';
 import { PwaService } from '../../services/pwa.service';
@@ -15,6 +17,8 @@ import { AiPromptSettingsComponent } from '../../components/ai-prompt-settings/a
 import { IntegrationsStatusComponent } from '../../components/integrations-status/integrations-status';
 import { RecipeFactsSettingsComponent } from '../../components/recipe-facts-settings/recipe-facts-settings';
 import { FirstDayOfWeek, MeasurementSystem } from '../../models/user-setting.model';
+import { SUPPORTED_LANGUAGES, SupportedLanguage } from '../../models/user-setting.model';
+import { AutoCollectionNamePipe, LanguageService, TranslatePipe } from '../../services/language.service';
 import { AutoCollectionInfo } from '../../models/recipe.model';
 import { environment } from '../../../environments/environment';
 
@@ -22,9 +26,9 @@ import { environment } from '../../../environments/environment';
   selector: 'app-settings-page',
   standalone: true,
   imports: [
-    MatButtonModule, MatButtonToggleModule, MatCardModule, MatIconModule, MatRadioModule,
-    MatSlideToggleModule, MatSnackBarModule, AiPromptSettingsComponent, IntegrationsStatusComponent,
-    RecipeFactsSettingsComponent
+    MatButtonModule, MatButtonToggleModule, MatCardModule, MatFormFieldModule, MatIconModule, MatRadioModule,
+    MatSlideToggleModule, MatSelectModule, MatSnackBarModule, AiPromptSettingsComponent, IntegrationsStatusComponent,
+    RecipeFactsSettingsComponent, TranslatePipe, AutoCollectionNamePipe
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings.page.html',
@@ -32,6 +36,7 @@ import { environment } from '../../../environments/environment';
 })
 export class SettingsPage implements OnInit {
   readonly version = environment.version;
+  readonly supportedLanguages = SUPPORTED_LANGUAGES;
 
   readonly importing = signal(false);
   readonly importSkipped = signal<{ title: string; reason: string }[]>([]);
@@ -40,6 +45,7 @@ export class SettingsPage implements OnInit {
 
   constructor(
     public settingsService: SettingsService,
+    public languageService: LanguageService,
     public pwaService: PwaService,
     public recipesService: RecipesService,
     public themeService: ThemeService,
@@ -50,6 +56,8 @@ export class SettingsPage implements OnInit {
   ngOnInit(): void {
     this.settingsService.loadMeasurementSystem().subscribe();
     this.settingsService.loadFirstDayOfWeek().subscribe();
+    this.settingsService.loadPreferredLanguage().subscribe(language => this.languageService.use(language));
+    this.settingsService.loadTranslateImportedRecipes().subscribe();
     this.loadAutoCollections();
   }
 
@@ -122,6 +130,19 @@ export class SettingsPage implements OnInit {
   setFirstDayOfWeek(day: FirstDayOfWeek): void {
     this.settingsService.setFirstDayOfWeek(day).subscribe({
       next: () => this.snackBar.open(`First day of the week set to ${day === 'sunday' ? 'Sunday' : 'Monday'}`, 'Dismiss', { duration: 3000 }),
+      error: () => this.snackBar.open('Could not save the setting', 'Dismiss', { duration: 4000 })
+    });
+  }
+
+  setLanguage(language: SupportedLanguage): void {
+    this.settingsService.setPreferredLanguage(language).subscribe({
+      next: () => this.languageService.use(language),
+      error: () => this.snackBar.open('Could not save the setting', 'Dismiss', { duration: 4000 })
+    });
+  }
+
+  setTranslateImportedRecipes(enabled: boolean): void {
+    this.settingsService.setTranslateImportedRecipes(enabled).subscribe({
       error: () => this.snackBar.open('Could not save the setting', 'Dismiss', { duration: 4000 })
     });
   }

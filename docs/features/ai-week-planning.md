@@ -10,6 +10,23 @@ favorites, dish history with eaten/rating feedback (variety), vague instructions
 on the plan, and expiring Freezy items. LLM-backed with a deterministic rules fallback,
 behind the existing `IMealSuggestionService` seam — AI is not bolted on anywhere else.
 
+## Typed multilingual planning boundary (July 2026)
+
+Free-form instructions are interpreted once into a versioned `PlanningIntent`, regardless
+of input language. Each explicit requirement becomes a typed constraint containing its id,
+dates, meal type, course, source host, count, distinctness and canonical ingredient classes.
+Downstream validation, repair and post-processing do not inspect words in the original
+prompt. Final suggestions claim constraints through `constraintIds`.
+
+Source research requests are derived from the typed intent. Search and sitemap results are
+only candidates; they count as recipes after a structured import preview succeeds. Candidate
+ingredients are assessed into canonical facts before satisfying dietary constraints. Page
+classification uses structural URI/import signals, not title words. Unassessed recipes get a
+visible verification warning instead of title or ingredient-substring inference.
+
+Each persisted planning run includes the normalized intent JSON alongside model, search,
+resolution, parse, fallback, token and timing metrics.
+
 ## Technology Choice (research summary, June 2026)
 
 | Option | Verdict |
@@ -59,7 +76,7 @@ is part of the same stack, so it's on unless overridden).
 |---|---|
 | `WebSearch__Provider` | `searxng` (self-hosted). Seam is provider-agnostic — Brave/Tavily/... can be added |
 | `WebSearch__BaseUrl` | Instance root (e.g. `http://searxng:8080`); JSON output must be enabled on the instance. Host access for local debugging is on `http://localhost:5102` (Dishhive's own `51xx` range, not the collision-prone `8080`/`8888`) |
-| `WebSearch__MaxResults` | Default 5 — results returned to the model per query |
+| `WebSearch__MaxResults` | Default 6 — candidate pool per query; research verifies a bounded subset before planning |
 
 ## Architecture
 

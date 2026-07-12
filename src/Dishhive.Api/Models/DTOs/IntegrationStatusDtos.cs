@@ -67,6 +67,7 @@ public record AiPlanningRunDto(
     string Provider,
     string Model,
     string? Instructions,
+    string? NormalizedIntentJson,
     string? Error,
     int RequestedDays,
     int SuggestedItems,

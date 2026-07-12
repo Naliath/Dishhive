@@ -18,4 +18,8 @@ public class RecipeStep
     [Required]
     [MaxLength(2000)]
     public string Instruction { get; set; } = string.Empty;
+
+    /// <summary>Source instruction preserved when AI translation changes the display text.</summary>
+    [MaxLength(2000)]
+    public string? OriginalInstruction { get; set; }
 }

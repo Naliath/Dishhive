@@ -8,7 +8,10 @@ import {
   FirstDayOfWeek,
   MeasurementSystem,
   MEASUREMENT_SYSTEM_KEY,
-  UserSetting
+  UserSetting,
+  SupportedLanguage,
+  PREFERRED_LANGUAGE_KEY,
+  TRANSLATE_IMPORTED_RECIPES_KEY
 } from '../models/user-setting.model';
 
 @Injectable({ providedIn: 'root' })
@@ -20,6 +23,8 @@ export class SettingsService {
 
   /** Current first day of the week; Monday is the default by absence */
   readonly firstDayOfWeek = signal<FirstDayOfWeek>('monday');
+  readonly preferredLanguage = signal<SupportedLanguage>(this.browserLanguage());
+  readonly translateImportedRecipes = signal(false);
 
   constructor(private http: HttpClient) {}
 
@@ -53,6 +58,38 @@ export class SettingsService {
     return this.http.put<UserSetting>(`${this.apiUrl}/${FIRST_DAY_OF_WEEK_KEY}`, { value: day }).pipe(
       tap(() => this.firstDayOfWeek.set(day))
     );
+  }
+
+  loadPreferredLanguage(): Observable<SupportedLanguage> {
+    return this.http.get<UserSetting>(`${this.apiUrl}/${PREFERRED_LANGUAGE_KEY}`).pipe(
+      map((setting): SupportedLanguage => setting.value === 'nl' ? 'nl' : 'en'),
+      catchError(() => of<SupportedLanguage>(this.browserLanguage())),
+      tap(language => this.preferredLanguage.set(language))
+    );
+  }
+
+  setPreferredLanguage(language: SupportedLanguage): Observable<UserSetting> {
+    return this.http.put<UserSetting>(`${this.apiUrl}/${PREFERRED_LANGUAGE_KEY}`, { value: language }).pipe(
+      tap(() => this.preferredLanguage.set(language))
+    );
+  }
+
+  loadTranslateImportedRecipes(): Observable<boolean> {
+    return this.http.get<UserSetting>(`${this.apiUrl}/${TRANSLATE_IMPORTED_RECIPES_KEY}`).pipe(
+      map(setting => setting.value === 'true'),
+      catchError(() => of(false)),
+      tap(enabled => this.translateImportedRecipes.set(enabled))
+    );
+  }
+
+  setTranslateImportedRecipes(enabled: boolean): Observable<UserSetting> {
+    return this.http.put<UserSetting>(`${this.apiUrl}/${TRANSLATE_IMPORTED_RECIPES_KEY}`, { value: String(enabled) }).pipe(
+      tap(() => this.translateImportedRecipes.set(enabled))
+    );
+  }
+
+  private browserLanguage(): SupportedLanguage {
+    return typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('nl') ? 'nl' : 'en';
   }
 
   /** Local midnight of the start of the week containing `date`, per the configured first day */

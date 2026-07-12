@@ -1,5 +1,7 @@
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.WebSearch;
+using Dishhive.Api.Services.Facts;
+using Dishhive.Api.Models;
 using Microsoft.Extensions.AI;
 using System.Collections.Concurrent;
 using System.ComponentModel;
@@ -21,6 +23,7 @@ public class ExternalRecipeTools : IExternalRecipeSession
     private readonly HashSet<string> _allowedHosts;
     private readonly string _requestId;
     private readonly ILogger _logger;
+    private readonly IRecipeFactsExtractor? _factsExtractor;
     private int _candidateSequence;
     private int _researchCalls;
     private int _searchCount;
@@ -45,7 +48,8 @@ public class ExternalRecipeTools : IExternalRecipeSession
         string? defaultSite,
         IReadOnlyCollection<string>? allowedHosts,
         string requestId,
-        ILogger logger)
+        ILogger logger,
+        IRecipeFactsExtractor? factsExtractor = null)
     {
         _webSearch = webSearch;
         _importService = importService;
@@ -58,6 +62,7 @@ public class ExternalRecipeTools : IExternalRecipeSession
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         _requestId = requestId;
         _logger = logger;
+        _factsExtractor = factsExtractor;
     }
 
     public IList<AITool> Build() =>
@@ -94,7 +99,7 @@ public class ExternalRecipeTools : IExternalRecipeSession
             selectedIds.AddRange(hits
                 // Resolve a small spare pool as well: list pages, transient fetch errors,
                 // or unsupported markup must not leave an explicit count impossible.
-                .Take(Math.Clamp(request.CandidateCount + 2, 1, maxCandidatesPerRequest))
+                .Take(Math.Clamp(request.CandidateCount + 4, 1, maxCandidatesPerRequest))
                 .Select(hit => hit.CandidateId));
             if (selectedIds.Count >= maxResolvedCandidates)
             {
@@ -223,14 +228,28 @@ public class ExternalRecipeTools : IExternalRecipeSession
             Interlocked.Add(ref _resolutionDurationMs, stopwatch.ElapsedMilliseconds);
             return FailedRecipe(candidateId, "The recipe resolved outside the referenced source hosts.");
         }
-        if (LooksLikeCollectionPage(canonicalUrl!, recipe?.Title ?? candidate.SearchTitle))
+        if (!preview.Scrapable || recipe == null
+            || !RecipePageClassifier.IsPotentialRecipeUri(canonicalUrl))
         {
             Interlocked.Increment(ref _resolutionFailureCount);
             Interlocked.Add(ref _resolutionDurationMs, stopwatch.ElapsedMilliseconds);
-            return FailedRecipe(candidateId, "The result is a recipe collection/article page, not one importable recipe.");
+            return FailedRecipe(candidateId, "The result could not be structurally verified as one importable recipe.");
         }
 
-        candidate.MarkFetched(canonicalUrl!, recipe, preview.Text);
+        IReadOnlyList<IngredientClass> facts = [];
+        var factsAssessed = false;
+        if (recipe != null && _factsExtractor?.IsAvailable == true)
+        {
+            var assessed = await _factsExtractor.ExtractAsync(
+                recipe.Title, recipe.IngredientLines, cancellationToken);
+            if (assessed != null)
+            {
+                facts = assessed;
+                factsAssessed = true;
+            }
+        }
+
+        candidate.MarkFetched(canonicalUrl!, recipe, preview.Text, facts, factsAssessed);
         Interlocked.Add(ref _resolutionDurationMs, stopwatch.ElapsedMilliseconds);
         return new GetRecipeResult(
             CandidateId: candidateId,
@@ -243,6 +262,8 @@ public class ExternalRecipeTools : IExternalRecipeSession
             Servings: recipe?.Servings,
             Ingredients: recipe?.IngredientLines,
             Instructions: recipe?.Steps,
+            ContainsClasses: facts,
+            FactsAssessed: factsAssessed,
             PageText: preview.Text,
             Error: null);
     }
@@ -260,7 +281,9 @@ public class ExternalRecipeTools : IExternalRecipeSession
                 state.Recipe?.Title ?? state.SearchTitle,
                 state.Recipe?.IngredientLines ?? [],
                 state.Recipe?.Steps ?? [],
-                state.PageText);
+                state.PageText,
+                state.ContainsClasses,
+                state.FactsAssessed);
             return true;
         }
 
@@ -308,6 +331,8 @@ public class ExternalRecipeTools : IExternalRecipeSession
         Servings: null,
         Ingredients: null,
         Instructions: null,
+        ContainsClasses: [],
+        FactsAssessed: false,
         PageText: null,
         Error: error);
 
@@ -323,21 +348,6 @@ public class ExternalRecipeTools : IExternalRecipeSession
         }
 
         return null;
-    }
-
-    private static bool LooksLikeCollectionPage(string url, string title)
-    {
-        var path = new Uri(url).AbsolutePath.ToLowerInvariant();
-        if (new[] { "/category/", "/tag/", "/author/", "/search/", "/kookmagazine/" }
-            .Any(path.Contains))
-        {
-            return true;
-        }
-        var normalizedTitle = $" {title.Trim().ToLowerInvariant()} ";
-        return System.Text.RegularExpressions.Regex.IsMatch(
-                title.Trim(), @"^\d+\+?x?\s", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            || new[] { " recepten ", " inspiratie ", " verzameld ", " tips ", " review " }
-                .Any(normalizedTitle.Contains);
     }
 
     private static string? NormalizeHost(string? host)
@@ -360,12 +370,21 @@ public class ExternalRecipeTools : IExternalRecipeSession
         public string? CanonicalUrl { get; private set; }
         public ImportedRecipe? Recipe { get; private set; }
         public string? PageText { get; private set; }
+        public IReadOnlyList<IngredientClass> ContainsClasses { get; private set; } = [];
+        public bool FactsAssessed { get; private set; }
 
-        public void MarkFetched(string canonicalUrl, ImportedRecipe? recipe, string? pageText)
+        public void MarkFetched(
+            string canonicalUrl,
+            ImportedRecipe? recipe,
+            string? pageText,
+            IReadOnlyList<IngredientClass> containsClasses,
+            bool factsAssessed)
         {
             CanonicalUrl = canonicalUrl;
             Recipe = recipe;
             PageText = pageText;
+            ContainsClasses = containsClasses;
+            FactsAssessed = factsAssessed;
             Fetched = true;
         }
     }
@@ -373,11 +392,14 @@ public class ExternalRecipeTools : IExternalRecipeSession
     public record SearchHit(string CandidateId, string Title, string? Snippet);
 
     public record RecipeResearchRequest(
+        string ConstraintId,
         string Query,
         string Site,
         int CandidateCount = 2,
         IReadOnlyList<string>? Dates = null,
-        string? Course = null);
+        string? Course = null,
+        IReadOnlyList<IngredientClass>? RequiredClasses = null,
+        IReadOnlyList<IngredientClass>? ExcludedClasses = null);
 
     public record GetRecipeResult(
         string CandidateId,
@@ -390,6 +412,8 @@ public class ExternalRecipeTools : IExternalRecipeSession
         int? Servings,
         IReadOnlyList<string>? Ingredients,
         IReadOnlyList<string>? Instructions,
+        IReadOnlyList<IngredientClass> ContainsClasses,
+        bool FactsAssessed,
         string? PageText,
         string? Error);
 }
@@ -400,4 +424,6 @@ public sealed record ExternalRecipeCandidate(
     string Title,
     IReadOnlyList<string> Ingredients,
     IReadOnlyList<string> Instructions,
-    string? PageText);
+    string? PageText,
+    IReadOnlyList<IngredientClass> ContainsClasses,
+    bool FactsAssessed);

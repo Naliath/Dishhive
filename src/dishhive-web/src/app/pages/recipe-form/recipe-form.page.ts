@@ -26,6 +26,7 @@ interface IngredientRow {
 
 interface StepRow {
   instruction: string;
+  originalInstruction?: string;
 }
 
 /**
@@ -66,6 +67,9 @@ export class RecipeFormPage implements OnInit, OnDestroy {
 
   title = '';
   description = '';
+  originalTitle?: string;
+  originalDescription?: string;
+  contentLanguage?: string;
   servings = 4;
   prepTimeMinutes: number | null = null;
   cookTimeMinutes: number | null = null;
@@ -167,6 +171,9 @@ export class RecipeFormPage implements OnInit, OnDestroy {
       next: recipe => {
         this.title = recipe.title;
         this.description = recipe.description ?? '';
+        this.originalTitle = recipe.originalTitle;
+        this.originalDescription = recipe.originalDescription;
+        this.contentLanguage = recipe.contentLanguage;
         this.servings = recipe.servings;
         this.prepTimeMinutes = recipe.prepTimeMinutes ?? null;
         this.cookTimeMinutes = recipe.cookTimeMinutes ?? null;
@@ -179,7 +186,7 @@ export class RecipeFormPage implements OnInit, OnDestroy {
           ? recipe.ingredients.map(i => ({ name: i.name, quantity: i.quantity ?? null, unit: i.unit ?? '' }))
           : [{ name: '', quantity: null, unit: '' }];
         this.steps = recipe.steps.length > 0
-          ? recipe.steps.map(s => ({ instruction: s.instruction }))
+          ? recipe.steps.map(s => ({ instruction: s.instruction, originalInstruction: s.originalInstruction }))
           : [{ instruction: '' }];
         this.tags.set([...recipe.tags]);
         this.containsClasses.set([...recipe.dietaryFacts.contains]);
@@ -367,7 +374,10 @@ export class RecipeFormPage implements OnInit, OnDestroy {
 
     const payload: CreateRecipe = {
       title: this.title.trim(),
+      originalTitle: this.originalTitle,
       description: this.description.trim() || undefined,
+      originalDescription: this.originalDescription,
+      contentLanguage: this.contentLanguage,
       servings: this.servings,
       prepTimeMinutes: this.prepTimeMinutes ?? undefined,
       cookTimeMinutes: this.cookTimeMinutes ?? undefined,
@@ -391,7 +401,7 @@ export class RecipeFormPage implements OnInit, OnDestroy {
         })),
       steps: this.steps
         .filter(s => s.instruction.trim())
-        .map(s => ({ instruction: s.instruction.trim() })),
+        .map(s => ({ instruction: s.instruction.trim(), originalInstruction: s.originalInstruction })),
       tags: this.tags(),
       containsClasses: this.factsTouched() ? this.containsClasses() : null
     };

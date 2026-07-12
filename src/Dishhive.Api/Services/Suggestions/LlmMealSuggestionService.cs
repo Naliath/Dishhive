@@ -2,7 +2,6 @@ using Dishhive.Api.Models;
 using Microsoft.Extensions.AI;
 using System.Diagnostics;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace Dishhive.Api.Services.Suggestions;
 
@@ -68,82 +67,83 @@ public sealed class LlmMealSuggestionService(
                 return Complete(Finalize(await fallback.SuggestAsync(request, cancellationToken), request), "capabilityFallback");
             }
 
-            var useTools = externalRecipeSessions.IsConfigured && request.SourceConstraints.Count > 0;
-            run.UsedExternalResearch = useTools;
-
-            logger.LogInformation(
-                "[{RequestId}] AI suggestion request starting: {DayCount} day(s) to fill, tools={UseTools}, {Provider}/{Model}",
-                requestId, request.DaysToFill.Count, useTools, options.Provider, options.Model);
-
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(useTools ? options.AgentTimeoutSeconds : options.TimeoutSeconds));
+            timeout.CancelAfter(TimeSpan.FromSeconds(
+                request.SourceConstraints.Count > 0 ? options.AgentTimeoutSeconds : options.TimeoutSeconds));
 
-            var effectivePrompt = await promptProvider.GetEffectiveSystemPromptAsync(cancellationToken);
-            var userPrompt = MealSuggestionPromptBuilder.BuildUserPrompt(request, options.MaxPromptTokens);
-            var messages = new List<ChatMessage>
+            var intent = new PlanningIntent();
+            if (!string.IsNullOrWhiteSpace(request.Instructions) || request.SourceConstraints.Count > 0)
             {
-                new(ChatRole.System, effectivePrompt),
-                new(ChatRole.User, userPrompt)
-            };
-
-            if (useTools)
-            {
-                externalRecipeSession = externalRecipeSessions.Create(request.SourceConstraints, requestId, logger);
-                var researchStopwatch = Stopwatch.StartNew();
-                var researchPlanResponse = await chatClient.GetResponseAsync(
+                var intentStopwatch = Stopwatch.StartNew();
+                var intentResponse = await chatClient.GetResponseAsync(
                     [
-                        new ChatMessage(ChatRole.System,
-                            "Interpret source-specific recipe research requests. Resolve fuzzy wording and any language, but do not plan meals. Reply only as JSON: {\"requests\":[{\"query\":\"source-language search terms\",\"site\":\"exact allowed host\",\"candidateCount\":2,\"dates\":[\"yyyy-MM-dd\"],\"course\":\"main|appetizer|side|dessert|null\"}]}. Include one request per referenced source. candidateCount MUST equal the number of distinct source recipes/uses requested (1-6): 'dishes from @site for 4 days' means 4 even if the clause also says 'some'; '2 desserts from @site, Friday and Sunday' means 2. Only use 3 when there is no explicit quantity, duration, or date count anywhere in that source's clause. Resolve explicitly named weekdays through the supplied mapping; use an empty dates list when no dates were specified."),
-                        new ChatMessage(ChatRole.User, BuildResearchIntentPrompt(request))
+                        new ChatMessage(ChatRole.System, PlanningIntentContract.SystemPrompt),
+                        new ChatMessage(ChatRole.User, BuildPlanningIntentPrompt(request))
                     ],
                     new ChatOptions
                     {
-                        MaxOutputTokens = Math.Min(options.MaxOutputTokens, 800),
+                        MaxOutputTokens = Math.Min(options.MaxOutputTokens, 1400),
                         Temperature = 0,
                         Reasoning = options.DisableThinking
                             ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None }
                             : null
                     },
                     timeout.Token);
-                researchStopwatch.Stop();
-                RecordCompletion(run, researchPlanResponse, researchStopwatch.ElapsedMilliseconds);
-                logger.LogInformation(
-                    "[{RequestId}] AI research intent completed in {ElapsedMs}ms: input={Input}, output={Output}, reasoning={Reasoning}, finish={Finish}",
-                    requestId, researchStopwatch.ElapsedMilliseconds,
-                    researchPlanResponse.Usage?.InputTokenCount,
-                    researchPlanResponse.Usage?.OutputTokenCount,
-                    researchPlanResponse.Usage?.ReasoningTokenCount,
-                    researchPlanResponse.FinishReason);
-                if (logger.IsEnabled(LogLevel.Debug))
-                {
-                    logger.LogDebug(
-                        "[{RequestId}] Raw AI research intent: {Response}",
-                        requestId, FormatForLog(researchPlanResponse.Text, 4000));
-                }
-
-                var researchRequests = ParseResearchPlan(researchPlanResponse.Text, request);
-                if (researchRequests.Count == 0)
+                intentStopwatch.Stop();
+                RecordCompletion(run, intentResponse, intentStopwatch.ElapsedMilliseconds);
+                intent = PlanningIntentContract.Parse(intentResponse.Text, request)!;
+                if (intent == null)
                 {
                     run.ParseFailures++;
-                    researchRequests = request.SourceConstraints
-                        .Select(constraint => new ExternalRecipeTools.RecipeResearchRequest(
-                            Query: "recipe", Site: constraint.Host, CandidateCount: 3))
-                        .ToList();
                     logger.LogWarning(
-                        "[{RequestId}] AI research intent was unparseable; using one bounded generic search per referenced source",
-                        requestId);
+                        "[{RequestId}] AI planning intent was invalid; visible={Visible}. Using rules fallback instead of guessing at language-specific meaning",
+                        requestId, FormatForLog(intentResponse.Text, 2000));
+                    return Complete(Finalize(await fallback.SuggestAsync(request, cancellationToken), request), "intentFallback");
                 }
-                else
-                {
-                    foreach (var constraint in request.SourceConstraints.Where(constraint =>
-                                 researchRequests.All(item => !string.Equals(
-                                     NormalizeHost(item.Site), NormalizeHost(constraint.Host),
-                                     StringComparison.OrdinalIgnoreCase))))
-                    {
-                        researchRequests.Add(new ExternalRecipeTools.RecipeResearchRequest(
-                            Query: "recipe", Site: constraint.Host, CandidateCount: 3));
-                    }
-                }
+                logger.LogInformation(
+                    "[{RequestId}] AI planning intent completed in {ElapsedMs}ms with {ConstraintCount} constraint(s)",
+                    requestId, intentStopwatch.ElapsedMilliseconds, intent.Constraints.Count);
+                logger.LogDebug(
+                    "[{RequestId}] Normalized planning intent: {Intent}",
+                    requestId, PlanningIntentContract.FormatForModel(intent));
+            }
+            request = request with { Intent = intent };
+            run.NormalizedIntentJson = PlanningIntentContract.FormatForModel(intent);
+
+            var useTools = externalRecipeSessions.IsConfigured
+                && intent.Constraints.Any(item => item.SourceHost != null);
+            run.UsedExternalResearch = useTools;
+
+            logger.LogInformation(
+                "[{RequestId}] AI suggestion request starting: {DayCount} day(s) to fill, tools={UseTools}, {Provider}/{Model}",
+                requestId, request.DaysToFill.Count, useTools, options.Provider, options.Model);
+
+            var effectivePrompt = await promptProvider.GetEffectiveSystemPromptAsync(cancellationToken);
+            var userPrompt = MealSuggestionPromptBuilder.BuildUserPrompt(request, options.MaxPromptTokens);
+            var messages = new List<ChatMessage>
+            {
+                new(ChatRole.System, effectivePrompt),
+                new(ChatRole.User, userPrompt),
+                new(ChatRole.User,
+                    "Authoritative normalized planning intent follows. Satisfy every constraint and copy each satisfied constraint id into constraintIds on the corresponding suggestion.\n"
+                    + PlanningIntentContract.FormatForModel(intent))
+            };
+
+            if (useTools)
+            {
+                externalRecipeSession = externalRecipeSessions.Create(request.SourceConstraints, requestId, logger);
+                var researchRequests = intent.Constraints
+                    .Where(item => item.SourceHost != null)
+                    .Select(item => new ExternalRecipeTools.RecipeResearchRequest(
+                        item.Id,
+                        item.SearchQuery ?? item.DishRequest ?? "recipe",
+                        item.SourceHost!,
+                        item.Count,
+                        item.Dates.Select(date => date.ToString("yyyy-MM-dd")).ToList(),
+                        item.Course.ToString().ToLowerInvariant(),
+                        item.RequiredClasses,
+                        item.ExcludedClasses))
+                    .ToList();
 
                 var verifiedCandidates = await externalRecipeSession.ResearchAsync(researchRequests, timeout.Token);
                 verifiedResearchCandidates = verifiedCandidates;
@@ -198,22 +198,8 @@ public sealed class LlmMealSuggestionService(
                 payload = MealSuggestionResponseContract.Parse(response.Text);
                 if (payload?.Suggestions is not null)
                 {
-                    var qualityIssues = new List<string>();
-                    if (useTools && externalRecipeSession != null
-                        && !MeetsResearchRequirements(
-                            payload, externalRecipeSession, researchRequirements, out var sourceIssue))
-                    {
-                        qualityIssues.Add(sourceIssue);
-                    }
-                    if (!InstructionsAllowRepeats(request.Instructions)
-                        && !MeetsUniquenessRequirement(payload, out var duplicateIssue))
-                    {
-                        qualityIssues.Add(duplicateIssue);
-                    }
-                    if (!MeetsExplicitDatedDishRequirements(payload, request, out var datedDishIssue))
-                    {
-                        qualityIssues.Add(datedDishIssue);
-                    }
+                    var qualityIssues = PlanningIntentValidator.Validate(
+                        payload, intent, request, externalRecipeSession).ToList();
 
                     if (qualityIssues.Count > 0)
                     {
@@ -280,27 +266,10 @@ public sealed class LlmMealSuggestionService(
 
             if (unresolvedQualityIssue != null)
             {
-                var repairedIssues = new List<string>();
-                if (useTools && externalRecipeSession != null)
-                {
-                    payload = RepairResearchRequirements(
-                        payload, researchRequirements, verifiedResearchCandidates, request, requestId);
-                    if (!MeetsResearchRequirements(
-                            payload, externalRecipeSession, researchRequirements, out var sourceIssue))
-                    {
-                        repairedIssues.Add(sourceIssue);
-                    }
-                }
-                if (!InstructionsAllowRepeats(request.Instructions)
-                    && !MeetsUniquenessRequirement(payload, out var duplicateIssue))
-                {
-                    repairedIssues.Add(duplicateIssue);
-                }
-                payload = RepairExplicitDatedDishRequirements(payload, request, requestId);
-                if (!MeetsExplicitDatedDishRequirements(payload, request, out var datedDishIssue))
-                {
-                    repairedIssues.Add(datedDishIssue);
-                }
+                payload = PlanningIntentValidator.Repair(
+                    payload, intent, request, verifiedResearchCandidates);
+                var repairedIssues = PlanningIntentValidator.Validate(
+                    payload, intent, request, externalRecipeSession).ToList();
                 unresolvedQualityIssue = repairedIssues.Count == 0
                     ? null
                     : string.Join("; ", repairedIssues);
@@ -368,9 +337,7 @@ public sealed class LlmMealSuggestionService(
         MealSuggestionRequest request)
         => postProcessor.Finalize(suggestions, request);
 
-    private sealed record ResearchPlan(List<ExternalRecipeTools.RecipeResearchRequest>? Requests);
-
-    private static string BuildResearchIntentPrompt(MealSuggestionRequest request)
+    private static string BuildPlanningIntentPrompt(MealSuggestionRequest request)
     {
         var sources = string.Join("\n", request.SourceConstraints.Select(constraint =>
             $"- {constraint.Name}: {constraint.Host}"));
@@ -378,202 +345,6 @@ public sealed class LlmMealSuggestionService(
             .Select(request.WeekStart.AddDays)
             .Select(date => $"- {date.DayOfWeek}: {date:yyyy-MM-dd}"));
         return $"Referenced sources:\n{sources}\nWeekday mapping:\n{dates}\nPlanner instructions:\n{request.Instructions}";
-    }
-
-    private static List<ExternalRecipeTools.RecipeResearchRequest> ParseResearchPlan(
-        string? text,
-        MealSuggestionRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return [];
-        }
-
-        try
-        {
-            var start = text.IndexOf('{');
-            var end = text.LastIndexOf('}');
-            if (start < 0 || end <= start)
-            {
-                return [];
-            }
-
-            var plan = JsonSerializer.Deserialize<ResearchPlan>(
-                text[start..(end + 1)],
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            var allowedHosts = request.SourceConstraints.Select(constraint => NormalizeHost(constraint.Host))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var normalized = (plan?.Requests ?? [])
-                .Where(item => !string.IsNullOrWhiteSpace(item.Query)
-                    && allowedHosts.Contains(NormalizeHost(item.Site)))
-                .Select(item =>
-                {
-                    var site = NormalizeHost(item.Site);
-                    var dates = (item.Dates ?? []).Where(date => DateOnly.TryParse(date, out _))
-                        .Distinct(StringComparer.Ordinal).ToList();
-                    return item with
-                    {
-                        Site = site,
-                        Dates = dates,
-                        Course = string.IsNullOrWhiteSpace(item.Course) ? "main" : item.Course.Trim().ToLowerInvariant(),
-                        CandidateCount = Math.Clamp(Math.Max(item.CandidateCount, dates.Count), 1, 6)
-                    };
-                })
-                .ToList();
-
-            // The model may express one logical request as several dated requests (for example,
-            // one Laura's Bakery dessert for Friday and another for Sunday). Merge those while
-            // retaining genuinely different requests against the same site, such as vegetarian
-            // Dagelijkse Kost dishes plus a separate chicken dish.
-            var merged = normalized
-                .GroupBy(item => string.Join('\u001f',
-                    item.Site,
-                    item.Course,
-                    Regex.Replace(item.Query.Trim().ToLowerInvariant(), @"\s+", " ")),
-                    StringComparer.OrdinalIgnoreCase)
-                .Select(group =>
-                {
-                    var first = group.First();
-                    var dates = group.SelectMany(item => item.Dates ?? [])
-                        .Distinct(StringComparer.Ordinal).ToList();
-                    return first with
-                    {
-                        Dates = dates,
-                        CandidateCount = Math.Clamp(
-                            Math.Max(dates.Count, group.Max(item => item.CandidateCount)), 1, 6)
-                    };
-                })
-                .ToList();
-
-            // A research model can over-attach a nearby source to an adjacent request. In
-            // "4 vegetarian dishes from @Source, and 1 chicken on Friday", for example,
-            // the explicit source scope is four dishes, not five. When one request exactly
-            // matches that explicit count, prefer it over extra inferred requests for the
-            // same source. Separate requests whose combined count is explicitly requested
-            // are retained.
-            merged = merged
-                .GroupBy(item => item.Site, StringComparer.OrdinalIgnoreCase)
-                .SelectMany(group =>
-                {
-                    var constraint = request.SourceConstraints.First(source =>
-                        string.Equals(NormalizeHost(source.Host), group.Key, StringComparison.OrdinalIgnoreCase));
-                    var explicitCount = InferExplicitSourceCount(request.Instructions, constraint);
-                    var exact = explicitCount > 0
-                        ? group.FirstOrDefault(item => item.CandidateCount == explicitCount)
-                        : null;
-                    IEnumerable<ExternalRecipeTools.RecipeResearchRequest> selected =
-                        exact != null && group.Sum(item => item.CandidateCount) > explicitCount
-                            ? new[] { exact }
-                            : group;
-                    return selected;
-                })
-                .ToList();
-
-            foreach (var sourceGroup in merged.GroupBy(item => item.Site, StringComparer.OrdinalIgnoreCase))
-            {
-                var singleRequestForSource = sourceGroup.Count() == 1;
-                foreach (var item in sourceGroup.ToList())
-                {
-                    var constraint = request.SourceConstraints.First(source =>
-                        string.Equals(NormalizeHost(source.Host), item.Site, StringComparison.OrdinalIgnoreCase));
-                    var dates = (item.Dates ?? []).ToList();
-                    var explicitCount = singleRequestForSource
-                        ? InferExplicitSourceCount(request.Instructions, constraint)
-                        : 0;
-                    var candidateCount = Math.Clamp(
-                        Math.Max(item.CandidateCount, Math.Max(dates.Count, explicitCount)), 1, 6);
-                    if (dates.Count > 0 && dates.Count < candidateCount)
-                    {
-                        dates.AddRange(InferExplicitSourceDates(request, constraint)
-                            .Where(date => !dates.Contains(date, StringComparer.Ordinal))
-                            .Take(candidateCount - dates.Count));
-                    }
-
-                    var index = merged.IndexOf(item);
-                    merged[index] = item with
-                    {
-                        Dates = dates,
-                        CandidateCount = Math.Max(candidateCount, dates.Count)
-                    };
-                }
-            }
-
-            return merged.Take(4).ToList();
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
-    }
-
-    private static int InferExplicitSourceCount(string? instructions, SourceConstraint constraint)
-    {
-        if (string.IsNullOrWhiteSpace(instructions))
-        {
-            return 0;
-        }
-
-        var markers = new[] { $"@[{constraint.Name}]", $"@{constraint.Host}" };
-        var index = markers.Select(marker => instructions.IndexOf(marker, StringComparison.OrdinalIgnoreCase))
-            .Where(position => position >= 0)
-            .DefaultIfEmpty(-1)
-            .Min();
-        if (index < 0)
-        {
-            return 0;
-        }
-
-        // The closest small number to the source mention is the source-specific count in
-        // natural prompts such as "4 dishes from @[Source]" or "@[Source] for 4 days".
-        // Taking the largest number in the whole sentence incorrectly mixes adjacent sources.
-        var closest = Regex.Matches(instructions, @"\b([1-6])\b")
-            .Select(match => new
-            {
-                Count = int.Parse(match.Groups[1].Value),
-                Distance = Math.Abs((match.Index + (match.Length / 2)) - index)
-            })
-            .OrderBy(match => match.Distance)
-            .FirstOrDefault();
-        return closest?.Count ?? 0;
-    }
-
-    private static IReadOnlyList<string> InferExplicitSourceDates(
-        MealSuggestionRequest request,
-        SourceConstraint constraint)
-    {
-        if (string.IsNullOrWhiteSpace(request.Instructions))
-        {
-            return [];
-        }
-        var instructions = request.Instructions;
-        var markers = new[] { $"@[{constraint.Name}]", $"@{constraint.Host}" };
-        var index = markers.Select(marker => instructions.IndexOf(marker, StringComparison.OrdinalIgnoreCase))
-            .Where(position => position >= 0).DefaultIfEmpty(-1).Min();
-        if (index < 0)
-        {
-            return [];
-        }
-        var start = index;
-        while (start > 0 && ".!?;\r\n".IndexOf(instructions[start - 1]) < 0) start--;
-        var end = index;
-        while (end < instructions.Length && ".!?;\r\n".IndexOf(instructions[end]) < 0) end++;
-        var clause = instructions[start..end];
-        var names = new Dictionary<DayOfWeek, string[]>
-        {
-            [DayOfWeek.Monday] = ["monday", "maandag"],
-            [DayOfWeek.Tuesday] = ["tuesday", "dinsdag"],
-            [DayOfWeek.Wednesday] = ["wednesday", "woensdag"],
-            [DayOfWeek.Thursday] = ["thursday", "donderdag"],
-            [DayOfWeek.Friday] = ["friday", "vrijdag"],
-            [DayOfWeek.Saturday] = ["saturday", "zaterdag"],
-            [DayOfWeek.Sunday] = ["sunday", "zondag"]
-        };
-        return names
-            .Where(entry => entry.Value.Any(name => Regex.IsMatch(
-                clause, $@"\b{Regex.Escape(name)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
-            .Select(entry => Enumerable.Range(0, 7).Select(request.WeekStart.AddDays)
-                .Single(date => date.DayOfWeek == entry.Key).ToString("yyyy-MM-dd"))
-            .ToList();
     }
 
     private static string FormatCandidates(
@@ -590,332 +361,6 @@ public sealed class LlmMealSuggestionService(
                 ingredients = candidate.Ingredients?.Take(30),
                 instructions = candidate.Instructions?.Take(10)
             }));
-
-    private static bool MeetsResearchRequirements(
-        WeekSuggestionsPayload payload,
-        IExternalRecipeSession session,
-        IReadOnlyList<ExternalRecipeTools.RecipeResearchRequest> requirements,
-        out string issue)
-    {
-        var issues = new List<string>();
-        foreach (var requirement in requirements)
-        {
-            var selected = new List<(DaySuggestionPayload Suggestion, ExternalRecipeCandidate Candidate)>();
-            foreach (var suggestion in payload.Suggestions ?? [])
-            {
-                if (session.TryResolveCandidate(suggestion.ExternalCandidateId, out var candidate)
-                    && candidate != null
-                    && Uri.TryCreate(candidate.SourceUrl, UriKind.Absolute, out var uri)
-                    && string.Equals(NormalizeHost(uri.Host), NormalizeHost(requirement.Site),
-                        StringComparison.OrdinalIgnoreCase)
-                    && CandidateMatchesRequirement(candidate.Title, candidate.Ingredients, requirement))
-                {
-                    selected.Add((suggestion, candidate));
-                }
-            }
-            var distinctCount = selected
-                .Select(item => item.Suggestion.ExternalCandidateId)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Count();
-            if (distinctCount != requirement.CandidateCount)
-            {
-                issues.Add($"use exactly {requirement.CandidateCount} distinct verified candidate(s) from {requirement.Site}, not {distinctCount}");
-            }
-
-            foreach (var requiredDate in requirement.Dates ?? [])
-            {
-                var dateMatched = selected.Any(item =>
-                    string.Equals(item.Suggestion.Date, requiredDate, StringComparison.Ordinal)
-                    && (string.IsNullOrWhiteSpace(requirement.Course)
-                        || string.Equals(item.Suggestion.Course ?? "main", requirement.Course, StringComparison.OrdinalIgnoreCase)));
-                if (!dateMatched)
-                {
-                    issues.Add($"place a verified {requirement.Site} {requirement.Course ?? "dish"} on {requiredDate}");
-                }
-            }
-        }
-
-        issue = string.Join("; ", issues);
-        return issues.Count == 0;
-    }
-
-    private WeekSuggestionsPayload RepairResearchRequirements(
-        WeekSuggestionsPayload payload,
-        IReadOnlyList<ExternalRecipeTools.RecipeResearchRequest> requirements,
-        IReadOnlyList<ExternalRecipeTools.GetRecipeResult> candidates,
-        MealSuggestionRequest request,
-        string requestId)
-    {
-        var items = (payload.Suggestions ?? []).ToList();
-        var changed = false;
-        foreach (var requirement in requirements)
-        {
-            var available = candidates
-                .Where(candidate => candidate.Error == null
-                    && !string.IsNullOrWhiteSpace(candidate.Title)
-                    && string.Equals(NormalizeHost(candidate.SourceSite ?? ""),
-                        NormalizeHost(requirement.Site), StringComparison.OrdinalIgnoreCase)
-                    && CandidateMatchesRequirement(
-                        candidate.Title!, candidate.Ingredients ?? [], requirement))
-                .DistinctBy(candidate => candidate.CandidateId, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (available.Count == 0)
-            {
-                continue;
-            }
-
-            var candidateIds = available.Select(candidate => candidate.CandidateId)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var allSourceCandidateIds = candidates
-                .Where(candidate => candidate.Error == null
-                    && string.Equals(NormalizeHost(candidate.SourceSite ?? ""),
-                        NormalizeHost(requirement.Site), StringComparison.OrdinalIgnoreCase))
-                .Select(candidate => candidate.CandidateId)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var selectedDates = items
-                .Where(item => item.ExternalCandidateId != null
-                    && candidateIds.Contains(item.ExternalCandidateId)
-                    && !string.IsNullOrWhiteSpace(item.Date))
-                .Select(item => item.Date!)
-                .Where(date => DateOnly.TryParse(date, out _))
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
-            var targetDates = (requirement.Dates ?? [])
-                .Where(date => DateOnly.TryParse(date, out _))
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
-            if (targetDates.Count == 0)
-            {
-                targetDates.AddRange(selectedDates.Take(requirement.CandidateCount));
-            }
-            targetDates.AddRange(request.DaysToFill
-                .Select(date => date.ToString("yyyy-MM-dd"))
-                .Where(date => !targetDates.Contains(date, StringComparer.Ordinal))
-                .Take(requirement.CandidateCount - targetDates.Count));
-            targetDates = targetDates.Take(requirement.CandidateCount).ToList();
-
-            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var course = string.IsNullOrWhiteSpace(requirement.Course) ? "main" : requirement.Course!;
-            var removedWrongCourse = items.RemoveAll(item =>
-                item.ExternalCandidateId != null
-                && candidateIds.Contains(item.ExternalCandidateId)
-                && !string.Equals(item.Course ?? "main", course, StringComparison.OrdinalIgnoreCase));
-            changed |= removedWrongCourse > 0;
-            foreach (var date in targetDates)
-            {
-                var existing = items.FirstOrDefault(item =>
-                    string.Equals(item.Date, date, StringComparison.Ordinal)
-                    && string.Equals(item.Course ?? "main", course, StringComparison.OrdinalIgnoreCase)
-                    && item.ExternalCandidateId != null
-                    && candidateIds.Contains(item.ExternalCandidateId)
-                    && used.Add(item.ExternalCandidateId));
-                if (existing != null)
-                {
-                    continue;
-                }
-
-                var replacement = available.FirstOrDefault(candidate => used.Add(candidate.CandidateId));
-                if (replacement == null)
-                {
-                    break;
-                }
-                items.RemoveAll(item =>
-                    string.Equals(item.Date, date, StringComparison.Ordinal)
-                    && string.Equals(item.Course ?? "main", course, StringComparison.OrdinalIgnoreCase));
-                items.Add(new DaySuggestionPayload(
-                    Date: date,
-                    DishName: replacement.Title,
-                    RecipeTitle: null,
-                    Reason: $"Verified distinct recipe from {requirement.Site}",
-                    ExternalCandidateId: replacement.CandidateId,
-                    MealType: "dinner",
-                    Course: course,
-                    AttendeeIds: []));
-                changed = true;
-            }
-            var removedExtras = items.RemoveAll(item =>
-                item.ExternalCandidateId != null
-                && allSourceCandidateIds.Contains(item.ExternalCandidateId)
-                && string.Equals(item.Course ?? "main", course, StringComparison.OrdinalIgnoreCase)
-                && item.Date != null
-                && !targetDates.Contains(item.Date, StringComparer.Ordinal));
-            changed |= removedExtras > 0;
-        }
-
-        if (changed)
-        {
-            logger.LogWarning(
-                "[{RequestId}] Deterministically repaired unresolved external source requirements using distinct verified candidates; no search or rules backfill was used for those slots",
-                requestId);
-        }
-        return new WeekSuggestionsPayload(items);
-    }
-
-    private static bool CandidateMatchesRequirement(
-        string title,
-        IReadOnlyList<string> ingredients,
-        ExternalRecipeTools.RecipeResearchRequest requirement)
-    {
-        var query = requirement.Query.ToLowerInvariant();
-        if (!query.Contains("vegetar", StringComparison.Ordinal)
-            && !query.Contains("vegan", StringComparison.Ordinal))
-        {
-            return true;
-        }
-        var normalizedTitle = title.ToLowerInvariant();
-        if (normalizedTitle.Contains("vegetar", StringComparison.Ordinal)
-            || normalizedTitle.Contains("vegan", StringComparison.Ordinal))
-        {
-            return true;
-        }
-        var text = $" {normalizedTitle} {string.Join(" ", ingredients).ToLowerInvariant()} ";
-        return !new[]
-        {
-            " chicken ", " kip ", " poulet ", " beef ", " rund ", " pork ", " varken ",
-            " bacon ", " ham ", " fish ", " vis ", " salmon ", " zalm ", " tuna ", " tonijn ",
-            " gehakt ", " meat ", " vlees "
-        }.Any(text.Contains);
-    }
-
-    private static bool MeetsUniquenessRequirement(
-        WeekSuggestionsPayload payload,
-        out string issue)
-    {
-        var duplicates = (payload.Suggestions ?? [])
-            .Where(item => !string.IsNullOrWhiteSpace(item.DishName))
-            .GroupBy(item => !string.IsNullOrWhiteSpace(item.ExternalCandidateId)
-                    ? $"candidate:{item.ExternalCandidateId!.Trim()}"
-                    : $"dish:{item.DishName!.Trim()}",
-                StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Select(item => item.Date).Distinct(StringComparer.Ordinal).Count() > 1)
-            .Select(group => group.First().DishName!.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        issue = duplicates.Count == 0
-            ? ""
-            : $"use a different recipe on each date; repeated: {string.Join(", ", duplicates)}";
-        return duplicates.Count == 0;
-    }
-
-    private static bool MeetsExplicitDatedDishRequirements(
-        WeekSuggestionsPayload payload,
-        MealSuggestionRequest request,
-        out string issue)
-    {
-        var missing = GetExplicitChickenDates(request)
-            .Where(date => !(payload.Suggestions ?? []).Any(item =>
-                string.Equals(item.Date, date, StringComparison.Ordinal)
-                && string.Equals(item.Course ?? "main", "main", StringComparison.OrdinalIgnoreCase)
-                && ContainsChicken(item.DishName, item.RecipeTitle)))
-            .ToList();
-        issue = missing.Count == 0
-            ? ""
-            : $"place the explicitly requested chicken main on {string.Join(", ", missing)}";
-        return missing.Count == 0;
-    }
-
-    private WeekSuggestionsPayload RepairExplicitDatedDishRequirements(
-        WeekSuggestionsPayload payload,
-        MealSuggestionRequest request,
-        string requestId)
-    {
-        var missingDates = GetExplicitChickenDates(request)
-            .Where(date => !(payload.Suggestions ?? []).Any(item =>
-                string.Equals(item.Date, date, StringComparison.Ordinal)
-                && string.Equals(item.Course ?? "main", "main", StringComparison.OrdinalIgnoreCase)
-                && ContainsChicken(item.DishName, item.RecipeTitle)))
-            .ToList();
-        if (missingDates.Count == 0)
-        {
-            return payload;
-        }
-
-        var recipe = request.KnownRecipes.FirstOrDefault(item => ContainsChicken(item.Title, null));
-        if (recipe == null)
-        {
-            return payload;
-        }
-
-        var items = (payload.Suggestions ?? []).ToList();
-        foreach (var date in missingDates)
-        {
-            items.RemoveAll(item => string.Equals(item.Date, date, StringComparison.Ordinal)
-                && string.Equals(item.Course ?? "main", "main", StringComparison.OrdinalIgnoreCase));
-            items.Add(new DaySuggestionPayload(
-                date,
-                recipe.Title,
-                recipe.Title,
-                "Explicitly requested chicken dish; review or replace individual portions for dietary preferences.",
-                null,
-                MealType: "dinner",
-                Course: "main",
-                AttendeeIds: []));
-        }
-        logger.LogWarning(
-            "[{RequestId}] Deterministically restored {Count} explicitly dated chicken main(s) from the recipe store after model correction displaced them",
-            requestId, missingDates.Count);
-        return payload with { Suggestions = items };
-    }
-
-    private static IReadOnlyList<string> GetExplicitChickenDates(MealSuggestionRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(request.Instructions))
-        {
-            return [];
-        }
-        var text = request.Instructions;
-        var chickenMatches = Regex.Matches(text, @"\b(chicken|kip)\b",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (chickenMatches.Count == 0)
-        {
-            return [];
-        }
-        var weekdayNames = new Dictionary<DayOfWeek, string[]>
-        {
-            [DayOfWeek.Monday] = ["monday", "maandag"],
-            [DayOfWeek.Tuesday] = ["tuesday", "dinsdag"],
-            [DayOfWeek.Wednesday] = ["wednesday", "woensdag"],
-            [DayOfWeek.Thursday] = ["thursday", "donderdag"],
-            [DayOfWeek.Friday] = ["friday", "vrijdag"],
-            [DayOfWeek.Saturday] = ["saturday", "zaterdag"],
-            [DayOfWeek.Sunday] = ["sunday", "zondag"]
-        };
-        var dates = new List<string>();
-        foreach (var (day, names) in weekdayNames)
-        {
-            var weekdayMatches = names.SelectMany(name => Regex.Matches(text, $@"\b{Regex.Escape(name)}\b",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Cast<Match>());
-            var linked = weekdayMatches.Any(weekday => chickenMatches.Cast<Match>().Any(chicken =>
-            {
-                var start = Math.Min(weekday.Index, chicken.Index);
-                var end = Math.Max(weekday.Index + weekday.Length, chicken.Index + chicken.Length);
-                return end - start <= 80 && !Regex.IsMatch(text[start..end], @"[.!?;\r\n]");
-            }));
-            if (!linked)
-            {
-                continue;
-            }
-            dates.AddRange(request.DaysToFill.Where(date => date.DayOfWeek == day)
-                .Select(date => date.ToString("yyyy-MM-dd")));
-        }
-        return dates.Distinct(StringComparer.Ordinal).ToList();
-    }
-
-    private static bool ContainsChicken(string? first, string? second)
-        => Regex.IsMatch($"{first} {second}", @"\b(chicken|kip)\b",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
-    private static bool InstructionsAllowRepeats(string? instructions)
-        => !string.IsNullOrWhiteSpace(instructions)
-            && Regex.IsMatch(instructions,
-                @"\b(same|repeat|again|every\s+day|each\s+day|elke\s+dag|iedere\s+dag|herhaal|opnieuw)\b",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
-    private static string NormalizeHost(string host)
-    {
-        var normalized = host.Trim().ToLowerInvariant();
-        return normalized.StartsWith("www.", StringComparison.Ordinal) ? normalized[4..] : normalized;
-    }
 
     private static void RecordCompletion(AiPlanningRun run, ChatResponse response, long elapsedMs)
     {

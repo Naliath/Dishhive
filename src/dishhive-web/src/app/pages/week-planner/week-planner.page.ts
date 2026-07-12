@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { LocalizedDatePipe, TranslatePipe } from '../../services/language.service';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -56,14 +56,15 @@ function toIso(date: Date): string {
   standalone: true,
   imports: [
     CookingLoaderComponent,
-    DatePipe,
+    LocalizedDatePipe,
     RouterLink,
     MatButtonModule,
     MatCardModule,
     MatDialogModule,
     MatIconModule,
     MatSnackBarModule,
-    MatTooltipModule
+    MatTooltipModule,
+    TranslatePipe
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './week-planner.page.html',

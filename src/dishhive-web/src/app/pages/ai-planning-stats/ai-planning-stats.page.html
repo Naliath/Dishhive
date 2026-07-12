@@ -30,6 +30,12 @@
         </mat-card-header>
         <mat-card-content>
           @if (run.instructions) { <p class="instructions">{{ run.instructions }}</p> }
+          @if (run.normalizedIntentJson) {
+            <details>
+              <summary>Normalized planning intent</summary>
+              <pre>{{ run.normalizedIntentJson }}</pre>
+            </details>
+          }
           @if (run.error) { <p class="error">{{ run.error }}</p> }
           <div class="metric-grid">
             <span>Total <strong>{{ seconds(run.totalDurationMs) }}</strong></span>

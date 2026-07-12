@@ -9,7 +9,7 @@ namespace Dishhive.Api.Services.Suggestions;
 public static partial class MealSuggestionResponseContract
 {
     public const string ExampleJson =
-        "{\"suggestions\":[{\"date\":\"yyyy-MM-dd\",\"mealType\":\"dinner\",\"course\":\"main\",\"attendeeIds\":[],\"dishName\":\"...\",\"recipeTitle\":null,\"freezerItemId\":null,\"externalCandidateId\":null,\"reason\":\"...\"}]}";
+        "{\"suggestions\":[{\"date\":\"yyyy-MM-dd\",\"mealType\":\"dinner\",\"course\":\"main\",\"attendeeIds\":[],\"constraintIds\":[],\"dishName\":\"...\",\"recipeTitle\":null,\"freezerItemId\":null,\"externalCandidateId\":null,\"reason\":\"...\"}]}";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -36,13 +36,18 @@ public static partial class MealSuggestionResponseContract
                         "items": { "type": "string" },
                         "description": "empty means every household member; otherwise exact ids from the household list"
                       },
+                      "constraintIds": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "exact ids from the normalized planning intent satisfied by this suggestion"
+                      },
                       "dishName": { "type": "string" },
                       "recipeTitle": { "type": ["string", "null"] },
                       "freezerItemId": { "type": ["string", "null"], "description": "exact id from the freezer items list, or null" },
                       "externalCandidateId": { "type": ["string", "null"], "description": "candidateId from a successful get_recipe call, or null" },
                       "reason": { "type": "string" }
                     },
-                    "required": ["date", "mealType", "course", "attendeeIds", "dishName", "recipeTitle", "freezerItemId", "externalCandidateId", "reason"],
+                    "required": ["date", "mealType", "course", "attendeeIds", "constraintIds", "dishName", "recipeTitle", "freezerItemId", "externalCandidateId", "reason"],
                     "additionalProperties": false
                   }
                 }
@@ -129,4 +134,5 @@ public sealed record DaySuggestionPayload(
     string? FreezerItemId = null,
     string? MealType = null,
     string? Course = null,
-    IReadOnlyList<string>? AttendeeIds = null);
+    IReadOnlyList<string>? AttendeeIds = null,
+    IReadOnlyList<string>? ConstraintIds = null);

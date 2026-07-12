@@ -132,6 +132,7 @@ if (!builder.Environment.IsEnvironment("Testing") && aiOptions.IsConfigured)
     builder.Services.AddSingleton<ILlmRecipeExtractor, LlmRecipeExtractor>();
     // Dietary-facts classification of recipes (contains milk/gluten/…), same posture
     builder.Services.AddSingleton<IRecipeFactsExtractor, LlmRecipeFactsExtractor>();
+    builder.Services.AddSingleton<IRecipeLocalizationService, LlmRecipeLocalizationService>();
     // Model capability test: runs once at startup (AiModelStartupTest) and gates every
     // AI suggestion call on its verdict; re-triggerable from the settings page.
     builder.Services.AddSingleton<AiModelTester>();
@@ -143,6 +144,7 @@ else
     builder.Services.AddSingleton<IMealSuggestionService, NoOpMealSuggestionService>();
     builder.Services.AddSingleton<ILlmRecipeExtractor, NoOpLlmRecipeExtractor>();
     builder.Services.AddSingleton<IRecipeFactsExtractor, NoOpRecipeFactsExtractor>();
+    builder.Services.AddSingleton<IRecipeLocalizationService, NoOpRecipeLocalizationService>();
     builder.Services.AddSingleton<IAiModelCapabilityService, NoOpAiModelCapabilityService>();
 }
 // Background dietary-facts assessment queue. The singleton is always registered

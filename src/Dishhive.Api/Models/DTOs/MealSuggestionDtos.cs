@@ -65,6 +65,13 @@ public class MealSuggestionDto
 
     /// <summary>Friendly source name for an external suggestion (e.g. "Dagelijkse Kost")</summary>
     public string? SourceName { get; set; }
+
+    /// <summary>Normalized intent constraints satisfied by this suggestion (technical diagnostics).</summary>
+    public List<string> ConstraintIds { get; set; } = new();
+
+    /// <summary>Canonical dietary facts used for deterministic validation.</summary>
+    public List<string> ContainsClasses { get; set; } = new();
+    public bool FactsAssessed { get; set; }
 }
 
 /// <summary>

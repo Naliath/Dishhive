@@ -323,8 +323,14 @@ public class LlmMealSuggestionServiceTests
     {
         var omnivoreId = Guid.NewGuid();
         var vegetarianId = Guid.NewGuid();
-        var chatClient = new FakeChatClient(
-            """{"suggestions":[{"date":"2026-06-15","dishName":"Chicken curry","attendeeIds":[]}]}""");
+        var responses = new Queue<ChatResponse>([
+            new(new ChatMessage(ChatRole.Assistant,
+                """{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"chicken-monday","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":null,"count":1,"distinct":true,"dishRequest":"chicken","requiredClasses":["Poultry"],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":true}]}""")),
+            new(new ChatMessage(ChatRole.Assistant,
+                """{"suggestions":[{"date":"2026-06-15","dishName":"Chicken curry","recipeTitle":"Chicken curry","attendeeIds":[],"constraintIds":["chicken-monday"]}]}"""))
+        ]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
+        var recipeId = Guid.NewGuid();
         var request = Request(daysToFill: [WeekStart]) with
         {
             Members =
@@ -337,12 +343,13 @@ public class LlmMealSuggestionServiceTests
                     Diets = [new DietaryTagProfile { Name = "Vegetarian", ExcludedClasses = [IngredientClass.Poultry] }]
                 }
             ],
+            KnownRecipes = [new RecipeOption { Id = recipeId, Title = "Chicken curry", FactsAssessed = true, ContainsClasses = [IngredientClass.Poultry] }],
             Instructions = "Chicken on Monday"
         };
 
         var suggestions = await CreateService(chatClient).SuggestAsync(request);
 
-        chatClient.Calls.Should().Be(1);
+        chatClient.Calls.Should().Be(2);
         var suggestion = suggestions.Should().ContainSingle().Subject;
         suggestion.DishName.Should().Be("Chicken curry");
         suggestion.AttendeeIds.Should().BeEquivalentTo(new[] { omnivoreId, vegetarianId });
@@ -353,14 +360,21 @@ public class LlmMealSuggestionServiceTests
     public async Task Suggest_ModelDisplacesExplicitFridayChicken_RestoresKnownChickenRecipe()
     {
         var friday = WeekStart.AddDays(4);
-        var chatClient = new FakeChatClient(
-            $$"""{"suggestions":[{"date":"{{friday:yyyy-MM-dd}}","dishName":"Vegetable curry","attendeeIds":[]}]}""");
+        var responses = new Queue<ChatResponse>([
+            new(new ChatMessage(ChatRole.Assistant,
+                $$"""{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"friday-chicken","dates":["{{friday:yyyy-MM-dd}}"],"mealType":"dinner","course":"main","sourceHost":null,"count":1,"distinct":true,"dishRequest":"chicken","requiredClasses":["Poultry"],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":true}]}""")),
+            new(new ChatMessage(ChatRole.Assistant,
+                $$"""{"suggestions":[{"date":"{{friday:yyyy-MM-dd}}","dishName":"Vegetable curry","attendeeIds":[]}]}""")),
+            new(new ChatMessage(ChatRole.Assistant,
+                $$"""{"suggestions":[{"date":"{{friday:yyyy-MM-dd}}","dishName":"Vegetable curry","attendeeIds":[]}]}"""))
+        ]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
         var request = Request(daysToFill: [friday]) with
         {
             Instructions = "Get one with chicken for Friday.",
             KnownRecipes =
             [
-                new RecipeOption { Id = Guid.NewGuid(), Title = "Chicken curry" }
+                new RecipeOption { Id = Guid.NewGuid(), Title = "Chicken curry", FactsAssessed = true, ContainsClasses = [IngredientClass.Poultry] }
             ]
         };
 
@@ -494,13 +508,21 @@ public class LlmMealSuggestionServiceTests
     [Fact]
     public async Task Suggest_RepeatedDishAcrossDays_IsRemovedAndMissingDayBackfilled()
     {
-        var chatClient = new FakeChatClient(
-            """
+        var responses = new Queue<ChatResponse>([
+            new(new ChatMessage(ChatRole.Assistant,
+                """
             {"suggestions":[
               {"date":"2026-06-15","dishName":"Same curry"},
               {"date":"2026-06-16","dishName":"Same curry"}
             ]}
-            """);
+            """)),
+            new(new ChatMessage(ChatRole.Assistant, """
+            {"suggestions":[
+              {"date":"2026-06-15","dishName":"Same curry"},
+              {"date":"2026-06-16","dishName":"Same curry"}
+            ]}
+            """))]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
 
         var suggestions = await CreateService(chatClient).SuggestAsync(Request(
             daysToFill: [WeekStart, WeekStart.AddDays(1)],
@@ -514,19 +536,22 @@ public class LlmMealSuggestionServiceTests
     [Fact]
     public async Task Suggest_ExplicitRepeatInstruction_AllowsDishOnMultipleDays()
     {
-        var chatClient = new FakeChatClient(
-            """
+        var responses = new Queue<ChatResponse>([
+            new(new ChatMessage(ChatRole.Assistant,
+                """{"version":1,"allowRepeatedDishes":true,"constraints":[]}""")),
+            new(new ChatMessage(ChatRole.Assistant, """
             {"suggestions":[
               {"date":"2026-06-15","dishName":"Same curry"},
               {"date":"2026-06-16","dishName":"Same curry"}
             ]}
-            """);
+            """))]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
 
         var suggestions = await CreateService(chatClient).SuggestAsync(Request(
             daysToFill: [WeekStart, WeekStart.AddDays(1)],
             instructions: "Serve the same curry every day"));
 
-        chatClient.Calls.Should().Be(1);
+        chatClient.Calls.Should().Be(2);
         suggestions.Should().HaveCount(2).And.OnlyContain(item => item.DishName == "Same curry");
     }
 
@@ -672,18 +697,54 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
+    public async Task Suggest_MultipleFreezerItemIdsForOneDinner_LinkIndependently()
+    {
+        var chatClient = new FakeChatClient(
+            """
+            {"suggestions":[
+              {"date":"2026-06-15","mealType":"dinner","course":"main","dishName":"stew","freezerItemId":"stew-1"},
+              {"date":"2026-06-15","mealType":"dinner","course":"side","dishName":"bread","freezerItemId":"bread-1"}
+            ]}
+            """);
+
+        var request = Request(daysToFill: [WeekStart]) with
+        {
+            AvailableFrozenItems =
+            [
+                new FrozenItem { Id = "stew-1", Name = "Beef stew", Quantity = 1 },
+                new FrozenItem { Id = "bread-1", Name = "Garlic bread", Quantity = 1 }
+            ]
+        };
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+
+        suggestions.Should().HaveCount(2);
+        suggestions.Should().ContainSingle(s =>
+            s.Date == WeekStart && s.Course == Course.Main
+            && s.DishName == "Beef stew" && s.FreezyItemRef == "stew-1"
+            && s.FreezyItemQuantity == 1);
+        suggestions.Should().ContainSingle(s =>
+            s.Date == WeekStart && s.Course == Course.Side
+            && s.DishName == "Garlic bread" && s.FreezyItemRef == "bread-1"
+            && s.FreezyItemQuantity == 1);
+    }
+
+    [Fact]
     public async Task Suggest_ExplicitRepeatedFreezerItem_IsCappedWithoutDroppingTheSecondDish()
     {
         // Same id proposed for two days but only one unit available: the second day
         // must lose the freezer link (so stock isn't double-reserved) while remaining
         // a valid suggestion rather than disappearing.
-        var chatClient = new FakeChatClient(
-            """
+        var responses = new Queue<ChatResponse>([
+            new(new ChatMessage(ChatRole.Assistant,
+                """{"version":1,"allowRepeatedDishes":true,"constraints":[]}""")),
+            new(new ChatMessage(ChatRole.Assistant, """
             {"suggestions":[
               {"date":"2026-06-15","dishName":"lasagna","freezerItemId":"lasagna-1"},
               {"date":"2026-06-16","dishName":"lasagna again","freezerItemId":"lasagna-1"}
             ]}
-            """);
+            """))]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
 
         var request = Request(
             daysToFill: [WeekStart, WeekStart.AddDays(1)],
@@ -860,7 +921,7 @@ public class LlmMealSuggestionServiceTests
 
         var result = await tools.GetRecipeAsync(candidateId);
 
-        result.Error.Should().Contain("collection/article");
+        result.Error.Should().Contain("structurally verified");
         tools.TryResolveCandidate(candidateId, out _).Should().BeFalse();
     }
 
@@ -896,9 +957,9 @@ public class LlmMealSuggestionServiceTests
         var responses = new Queue<ChatResponse>(
         [
             new ChatResponse(new ChatMessage(ChatRole.Assistant,
-                """{"requests":[{"query":"vegetarische lasagne","site":"dagelijksekost.vrt.be","candidateCount":1,"dates":["2026-06-15"],"course":"main"}]}""")),
+                """{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"source-main","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":"dagelijksekost.vrt.be","count":1,"distinct":true,"searchQuery":"vegetarische lasagne","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}""")),
             new ChatResponse(new ChatMessage(ChatRole.Assistant,
-                """{"suggestions":[{"date":"2026-06-15","dishName":"model title","recipeTitle":null,"externalCandidateId":"c1","reason":"verified"}]}"""))
+                """{"suggestions":[{"date":"2026-06-15","dishName":"model title","recipeTitle":null,"externalCandidateId":"c1","reason":"verified","constraintIds":["source-main"]}]}"""))
         ]);
         var chatClient = new FakeChatClient(() => responses.Dequeue());
         var webSearch = ConfiguredWebSearch();
@@ -950,7 +1011,7 @@ public class LlmMealSuggestionServiceTests
         suggestion.DishName.Should().Be("Vegetarische lasagne");
         suggestion.SourceUrl.Should().Be(url);
         suggestion.SourceName.Should().Be("Dagelijkse Kost");
-        suggestion.AllergyWarning.Should().Contain("onion");
+        suggestion.AllergyWarning.Should().Contain("not been verified");
         chatClient.Calls.Should().Be(2);
     }
 
@@ -973,7 +1034,14 @@ public class LlmMealSuggestionServiceTests
         // agentic web-search path — only an explicit @[Source] reference may (SourceConstraints).
         // A prior version gated on "any non-empty instructions", so the model went searching
         // the web even when the planner never asked it to.
-        var chatClient = new FakeChatClient("""{"suggestions":[]}""");
+        var responses = new Queue<ChatResponse>([
+            new(new ChatMessage(ChatRole.Assistant,
+                """{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"source-main","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":"dagelijksekost.vrt.be","count":1,"distinct":true,"searchQuery":"recipe","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}""")),
+            new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}""")),
+            new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}""")),
+            new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}"""))
+        ]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
 
         await CreateService(chatClient, ConfiguredWebSearch()).SuggestAsync(
             Request(instructions: "3 days vegetarian, at least one fish dish"));
@@ -984,7 +1052,14 @@ public class LlmMealSuggestionServiceTests
     [Fact]
     public async Task Suggest_SourceMentionPresent_UsesSeparateResearchIntentPass()
     {
-        var chatClient = new FakeChatClient("""{"suggestions":[]}""");
+        var responses = new Queue<ChatResponse>([
+            new(new ChatMessage(ChatRole.Assistant,
+                """{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"source-main","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":"dagelijksekost.vrt.be","count":1,"distinct":true,"searchQuery":"recipe","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}""")),
+            new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}""")),
+            new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}""")),
+            new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}"""))
+        ]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
 
         var request = Request() with
         {
@@ -998,7 +1073,7 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
-    public async Task Suggest_UnassessedRecipeWithAllergyIngredient_IsFlaggedViaSubstringHeuristic()
+    public async Task Suggest_UnassessedRecipeWithAllergy_IsFlaggedWithoutLanguageHeuristic()
     {
         var recipeId = Guid.NewGuid();
         var chatClient = new FakeChatClient(
@@ -1017,7 +1092,7 @@ public class LlmMealSuggestionServiceTests
         var suggestions = await CreateService(chatClient).SuggestAsync(request);
 
         suggestions.Should().ContainSingle();
-        suggestions[0].AllergyWarning.Should().NotBeNull().And.Subject.Should().Contain("peanut");
+        suggestions[0].AllergyWarning.Should().NotBeNull().And.Subject.Should().Contain("not been verified");
     }
 
     [Fact]

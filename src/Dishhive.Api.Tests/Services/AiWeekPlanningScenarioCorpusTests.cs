@@ -32,7 +32,8 @@ public class AiWeekPlanningScenarioCorpusTests
                 source.GetProperty("minDistinctRecipes").GetInt32().Should().BeGreaterThan(0);
                 source.GetProperty("maxDistinctRecipes").GetInt32()
                     .Should().BeGreaterThanOrEqualTo(source.GetProperty("minDistinctRecipes").GetInt32());
-                source.GetProperty("forbiddenDishKeywords").ValueKind.Should().Be(JsonValueKind.Array);
+                source.GetProperty("requiredClasses").ValueKind.Should().Be(JsonValueKind.Array);
+                source.GetProperty("excludedClasses").ValueKind.Should().Be(JsonValueKind.Array);
             }
         }
     }

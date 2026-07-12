@@ -1,0 +1,44 @@
+{
+  "units": [
+    { "aliases": ["g", "gr", "gram", "grams"], "canonicalUnit": "g", "factor": 1 },
+    { "aliases": ["kg", "kilo", "kilogram"], "canonicalUnit": "kg", "factor": 1 },
+    { "aliases": ["ml", "milliliter", "milliliters"], "canonicalUnit": "ml", "factor": 1 },
+    { "aliases": ["cl", "centiliter"], "canonicalUnit": "ml", "factor": 10 },
+    { "aliases": ["dl", "deciliter"], "canonicalUnit": "ml", "factor": 100 },
+    { "aliases": ["l", "liter", "liters"], "canonicalUnit": "l", "factor": 1 },
+    { "aliases": ["oz", "ounce", "ounces"], "canonicalUnit": "g", "factor": 28.35 },
+    { "aliases": ["lb", "lbs", "pound", "pounds"], "canonicalUnit": "g", "factor": 453.59 },
+    { "aliases": ["cup", "cups"], "canonicalUnit": "ml", "factor": 240 },
+    { "aliases": ["pint", "pints"], "canonicalUnit": "ml", "factor": 473 },
+    { "aliases": ["tbsp", "tablespoon", "tablespoons"], "canonicalUnit": "el", "factor": 1 },
+    { "aliases": ["tsp", "teaspoon", "teaspoons"], "canonicalUnit": "tl", "factor": 1 },
+    { "aliases": ["pinch"], "canonicalUnit": "snuifje", "factor": 1 },
+    { "aliases": ["piece", "pieces"], "canonicalUnit": "piece", "factor": 1 }
+  ],
+  "allergies": [
+    { "aliases": ["nuts", "tree nuts"], "classes": ["TreeNuts"] },
+    { "aliases": ["peanut", "peanuts"], "classes": ["Peanuts"] },
+    { "aliases": ["lactose", "milk", "dairy"], "classes": ["Milk"] },
+    { "aliases": ["gluten", "wheat"], "classes": ["Gluten"] },
+    { "aliases": ["egg", "eggs"], "classes": ["Eggs"] },
+    { "aliases": ["fish"], "classes": ["Fish"] },
+    { "aliases": ["crustaceans"], "classes": ["Crustaceans"] },
+    { "aliases": ["molluscs"], "classes": ["Molluscs"] },
+    { "aliases": ["shellfish"], "classes": ["Crustaceans", "Molluscs"] },
+    { "aliases": ["soy", "soya"], "classes": ["Soybeans"] },
+    { "aliases": ["sesame"], "classes": ["Sesame"] },
+    { "aliases": ["mustard"], "classes": ["Mustard"] },
+    { "aliases": ["celery"], "classes": ["Celery"] },
+    { "aliases": ["sulphites", "sulfites"], "classes": ["Sulphites"] },
+    { "aliases": ["lupin"], "classes": ["Lupin"] }
+  ],
+  "diets": [
+    { "aliases": ["vegetarian", "veggie"], "classes": ["RedMeat", "Poultry", "Pork", "Fish", "Crustaceans", "Molluscs", "Gelatin"] },
+    { "aliases": ["vegan"], "classes": ["RedMeat", "Poultry", "Pork", "Fish", "Crustaceans", "Molluscs", "Gelatin", "Milk", "Eggs", "Honey"] },
+    { "aliases": ["pescatarian", "pescetarian", "no meat"], "classes": ["RedMeat", "Poultry", "Pork", "Gelatin"] },
+    { "aliases": ["no red meat"], "classes": ["RedMeat", "Pork"] },
+    { "aliases": ["no pork"], "classes": ["Pork"] },
+    { "aliases": ["halal"], "classes": ["Pork", "Alcohol", "Gelatin"] },
+    { "aliases": ["no alcohol"], "classes": ["Alcohol"] }
+  ]
+}

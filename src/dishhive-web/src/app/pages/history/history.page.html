@@ -15,7 +15,7 @@
     @for (day of historyDays(); track day.date) {
       <mat-card appearance="raised">
         <mat-card-header>
-          <mat-card-title>{{ day.date | date:'EEEE d MMMM' }}</mat-card-title>
+          <mat-card-title>{{ day.date | localizedDate:'weekdayMonth' }}</mat-card-title>
         </mat-card-header>
         <mat-card-content>
           @for (meal of day.meals; track meal.id) {

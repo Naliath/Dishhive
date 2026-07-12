@@ -71,13 +71,9 @@ function Test-Iteration($scenario, [datetime]$weekStart, $response, [long]$durat
     if ($scenario.expectations.rejectCollectionPages) {
         foreach ($suggestion in @($suggestions | Where-Object sourceUrl)) {
             $path = ([uri]$suggestion.sourceUrl).AbsolutePath.ToLowerInvariant()
-            $title = " $($suggestion.dishName.ToLowerInvariant()) "
-            $badPath = @("/category/", "/tag/", "/author/", "/search/", "/kookmagazine/") |
+            $badPath = @("/category/", "/tag/", "/author/", "/search/", "/feed/") |
                 Where-Object { $path.Contains($_) }
-            $badTitle = @(" recepten ", " inspiratie ", " verzameld ", " tips ", " review ") |
-                Where-Object { $title.Contains($_) }
-            $numberedList = $suggestion.dishName.Trim() -match '^\d+\+?x?\s'
-            if (@($badPath).Count -gt 0 -or @($badTitle).Count -gt 0 -or $numberedList) {
+            if (@($badPath).Count -gt 0) {
                 $failures.Add("External result is a collection/article page, not a recipe: $($suggestion.sourceUrl)")
             }
         }
@@ -97,10 +93,22 @@ function Test-Iteration($scenario, [datetime]$weekStart, $response, [long]$durat
         if ($distinctUrls.Count -gt [int]$source.maxDistinctRecipes) {
             $failures.Add("$($source.host) $($source.course): expected at most $($source.maxDistinctRecipes) distinct recipes, got $($distinctUrls.Count)")
         }
-        foreach ($keyword in @($source.forbiddenDishKeywords)) {
-            $pattern = "(?i)\b$([regex]::Escape($keyword))\b"
-            foreach ($bad in @($matches | Where-Object { $_.dishName -match $pattern })) {
-                $failures.Add("$($source.host) $($source.course): '$($bad.dishName)' conflicts with requested dietary intent")
+        foreach ($match in $matches) {
+            if (@($source.requiredClasses).Count -gt 0 -or @($source.excludedClasses).Count -gt 0) {
+                if (-not $match.factsAssessed) {
+                    $failures.Add("$($source.host) $($source.course): '$($match.dishName)' has no assessed canonical facts")
+                    continue
+                }
+                foreach ($required in @($source.requiredClasses)) {
+                    if ($required -notin @($match.containsClasses)) {
+                        $failures.Add("$($source.host) $($source.course): '$($match.dishName)' misses required class $required")
+                    }
+                }
+                foreach ($excluded in @($source.excludedClasses)) {
+                    if ($excluded -in @($match.containsClasses)) {
+                        $failures.Add("$($source.host) $($source.course): '$($match.dishName)' contains excluded class $excluded")
+                    }
+                }
             }
         }
         foreach ($offset in @($source.requiredDayOffsets)) {
@@ -118,11 +126,16 @@ function Test-Iteration($scenario, [datetime]$weekStart, $response, [long]$durat
         if ($matches.Count -lt [int]$slot.minCount -or $matches.Count -gt [int]$slot.maxCount) {
             $failures.Add("Slot $date/$($slot.course): expected $($slot.minCount)-$($slot.maxCount) suggestion(s), got $($matches.Count)")
         }
-        if (@($slot.dishKeywords).Count -gt 0 -and -not ($matches | Where-Object {
-            $name = $_.dishName.ToLowerInvariant()
-            @($slot.dishKeywords | Where-Object { $name.Contains($_.ToLowerInvariant()) }).Count -gt 0
-        })) {
-            $failures.Add("Slot $date/$($slot.course): no dish matched [$($slot.dishKeywords -join ', ')]")
+        foreach ($required in @($slot.requiredClasses)) {
+            if (-not ($matches | Where-Object { $_.factsAssessed -and $required -in @($_.containsClasses) })) {
+                $failures.Add("Slot $date/$($slot.course): no verified dish contains $required")
+            }
+        }
+        if ($slot.requiresConstraintClaim -and -not ($matches | Where-Object { @($_.constraintIds).Count -gt 0 })) {
+            $failures.Add("Slot $date/$($slot.course): explicit requirement was not linked to a normalized constraint")
+        }
+        if ($slot.requiresDietWarning -and -not ($matches | Where-Object { $_.dietWarning })) {
+            $failures.Add("Slot $date/$($slot.course): explicit dietary exception has no review warning")
         }
         if ($slot.allAttendees -and ($matches | Where-Object { @($_.attendeeNames).Count -gt 0 })) {
             $failures.Add("Slot $date/$($slot.course): explicitly requested dish was split across attendees")

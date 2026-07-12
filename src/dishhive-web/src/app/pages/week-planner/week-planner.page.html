@@ -5,7 +5,7 @@
       <mat-icon>chevron_left</mat-icon>
     </button>
     <button mat-button (click)="goToCurrentWeek()">
-      {{ weekStart() | date:'d MMM' }} – {{ weekEnd() | date:'d MMM' }}
+      {{ weekStart() | localizedDate:'dayMonth' }} – {{ weekEnd() | localizedDate:'dayMonth' }}
     </button>
     <button mat-icon-button (click)="nextWeek()" aria-label="Next week">
       <mat-icon>chevron_right</mat-icon>
@@ -32,8 +32,8 @@
     @for (day of days(); track day.iso) {
       <mat-card appearance="raised" [class.today]="day.isToday">
         <mat-card-header>
-          <mat-card-title>{{ day.date | date:'EEEE' }}</mat-card-title>
-          <mat-card-subtitle>{{ day.date | date:'d MMMM' }}</mat-card-subtitle>
+          <mat-card-title>{{ day.date | localizedDate:'weekday' }}</mat-card-title>
+          <mat-card-subtitle>{{ day.date | localizedDate:'dayMonth' }}</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
           @if (day.meals.length > 0) {
@@ -88,7 +88,7 @@
               }
             </div>
           } @else {
-            <p class="empty-slot">Nothing planned</p>
+            <p class="empty-slot">{{ 'Nothing planned' | translate }}</p>
           }
         </mat-card-content>
         <mat-card-actions align="end">

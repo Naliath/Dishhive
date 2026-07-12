@@ -7,6 +7,7 @@ import { OnboardingService } from './services/onboarding.service';
 import { PwaService } from './services/pwa.service';
 import { SettingsService } from './services/settings.service';
 import { ThemeService } from './services/theme.service';
+import { LanguageService } from './services/language.service';
 
 describe('App', () => {
   beforeEach(async () => {
@@ -18,12 +19,15 @@ describe('App', () => {
           provide: SettingsService,
           useValue: {
             loadMeasurementSystem: () => of('metric'),
-            loadFirstDayOfWeek: () => of('monday')
+            loadFirstDayOfWeek: () => of('monday'),
+            loadPreferredLanguage: () => of('en'),
+            loadTranslateImportedRecipes: () => of(false)
           }
         },
         { provide: OnboardingService, useValue: { start: () => of({ shouldShow: false }) } },
         { provide: PwaService, useValue: {} },
-        { provide: ThemeService, useValue: {} }
+        { provide: ThemeService, useValue: {} },
+        { provide: LanguageService, useValue: { use: () => {}, t: (key: string) => key } }
       ]
     }).compileComponents();
   });

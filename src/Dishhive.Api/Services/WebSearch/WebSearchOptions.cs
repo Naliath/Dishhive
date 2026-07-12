@@ -27,7 +27,7 @@ public class WebSearchOptions
     public string ApiKey { get; set; } = "";
 
     /// <summary>Upper bound on results returned to the model per query</summary>
-    public int MaxResults { get; set; } = 5;
+    public int MaxResults { get; set; } = 6;
 
     public string NormalizedProvider => Provider.Trim().ToLowerInvariant();
 

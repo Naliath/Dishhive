@@ -10,11 +10,14 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatStepper, MatStepperModule } from '@angular/material/stepper';
 import { forkJoin } from 'rxjs';
 import { FamilyMember } from '../../models/family-member.model';
 import { FirstDayOfWeek, MeasurementSystem } from '../../models/user-setting.model';
+import { SUPPORTED_LANGUAGES, SupportedLanguage } from '../../models/user-setting.model';
+import { LanguageService, TranslatePipe } from '../../services/language.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { OnboardingService } from '../../services/onboarding.service';
 import { SettingsService } from '../../services/settings.service';
@@ -33,8 +36,10 @@ import { SettingsService } from '../../services/settings.service';
     MatProgressSpinnerModule,
     MatRadioModule,
     MatSlideToggleModule,
+    MatSelectModule,
     MatSnackBarModule,
-    MatStepperModule
+    MatStepperModule,
+    TranslatePipe
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './onboarding.html',
@@ -42,10 +47,13 @@ import { SettingsService } from '../../services/settings.service';
 })
 export class OnboardingComponent implements OnInit {
   readonly finished = output<void>();
+  readonly supportedLanguages = SUPPORTED_LANGUAGES;
 
   readonly preferencesForm = new FormGroup({
     firstDayOfWeek: new FormControl<FirstDayOfWeek>('monday', { nonNullable: true }),
-    measurementSystem: new FormControl<MeasurementSystem>('metric', { nonNullable: true })
+    measurementSystem: new FormControl<MeasurementSystem>('metric', { nonNullable: true }),
+    preferredLanguage: new FormControl<SupportedLanguage>('en', { nonNullable: true }),
+    translateImportedRecipes: new FormControl(false, { nonNullable: true })
   });
   readonly memberForm = new FormGroup({
     name: new FormControl('', {
@@ -67,6 +75,7 @@ export class OnboardingComponent implements OnInit {
 
   constructor(
     private readonly settingsService: SettingsService,
+    readonly languageService: LanguageService,
     private readonly familyMembersService: FamilyMembersService,
     private readonly onboardingService: OnboardingService,
     private readonly snackBar: MatSnackBar
@@ -75,9 +84,12 @@ export class OnboardingComponent implements OnInit {
   ngOnInit(): void {
     forkJoin([
       this.settingsService.loadMeasurementSystem(),
-      this.settingsService.loadFirstDayOfWeek()
-    ]).subscribe(([measurementSystem, firstDayOfWeek]) => {
-      this.preferencesForm.setValue({ measurementSystem, firstDayOfWeek });
+      this.settingsService.loadFirstDayOfWeek(),
+      this.settingsService.loadPreferredLanguage(),
+      this.settingsService.loadTranslateImportedRecipes()
+    ]).subscribe(([measurementSystem, firstDayOfWeek, preferredLanguage, translateImportedRecipes]) => {
+      this.preferencesForm.setValue({ measurementSystem, firstDayOfWeek, preferredLanguage, translateImportedRecipes });
+      this.languageService.use(preferredLanguage);
     });
 
     this.familyMembersService.getMembers().subscribe({
@@ -93,13 +105,16 @@ export class OnboardingComponent implements OnInit {
 
     this.errorMessage.set(null);
     this.savingPreferences.set(true);
-    const { measurementSystem, firstDayOfWeek } = this.preferencesForm.getRawValue();
+    const { measurementSystem, firstDayOfWeek, preferredLanguage, translateImportedRecipes } = this.preferencesForm.getRawValue();
 
     forkJoin([
       this.settingsService.setMeasurementSystem(measurementSystem),
-      this.settingsService.setFirstDayOfWeek(firstDayOfWeek)
+      this.settingsService.setFirstDayOfWeek(firstDayOfWeek),
+      this.settingsService.setPreferredLanguage(preferredLanguage),
+      this.settingsService.setTranslateImportedRecipes(translateImportedRecipes)
     ]).subscribe({
       next: () => {
+        this.languageService.use(preferredLanguage);
         this.savingPreferences.set(false);
         stepper.next();
       },

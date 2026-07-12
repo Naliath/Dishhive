@@ -22,6 +22,7 @@ public class RecipeListItemDto
 {
     public Guid Id { get; set; }
     public string Title { get; set; } = string.Empty;
+
     public int Servings { get; set; }
     public int? TotalTimeMinutes { get; set; }
     public string? Category { get; set; }
@@ -48,7 +49,11 @@ public class RecipeDto
 {
     public Guid Id { get; set; }
     public string Title { get; set; } = string.Empty;
+    public string? OriginalTitle { get; set; }
     public string? Description { get; set; }
+
+    public string? OriginalDescription { get; set; }
+    public string? ContentLanguage { get; set; }
     public int Servings { get; set; }
     public int? PrepTimeMinutes { get; set; }
     public int? CookTimeMinutes { get; set; }
@@ -105,6 +110,7 @@ public class RecipeStepDto
     public Guid Id { get; set; }
     public int StepNumber { get; set; }
     public string Instruction { get; set; } = string.Empty;
+    public string? OriginalInstruction { get; set; }
 }
 
 public class CreateRecipeDto
@@ -113,8 +119,17 @@ public class CreateRecipeDto
     [MaxLength(300)]
     public string Title { get; set; } = string.Empty;
 
+    [MaxLength(300)]
+    public string? OriginalTitle { get; set; }
+
     [MaxLength(2000)]
     public string? Description { get; set; }
+
+    [MaxLength(2000)]
+    public string? OriginalDescription { get; set; }
+
+    [MaxLength(10)]
+    public string? ContentLanguage { get; set; }
 
     [Range(1, 100)]
     public int Servings { get; set; } = 4;
@@ -171,6 +186,9 @@ public class CreateRecipeStepDto
     [Required]
     [MaxLength(2000)]
     public string Instruction { get; set; } = string.Empty;
+
+    [MaxLength(2000)]
+    public string? OriginalInstruction { get; set; }
 }
 
 /// <summary>Update replaces ingredients and steps wholesale (see docs/features/recipe-store.md)</summary>

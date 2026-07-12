@@ -787,7 +787,10 @@ public class RecipesController : ControllerBase
     private static void ApplyDto(Recipe recipe, CreateRecipeDto dto)
     {
         recipe.Title = dto.Title;
+        recipe.OriginalTitle = dto.OriginalTitle;
         recipe.Description = dto.Description;
+        recipe.OriginalDescription = dto.OriginalDescription;
+        recipe.ContentLanguage = dto.ContentLanguage;
         recipe.Servings = dto.Servings;
         recipe.PrepTimeMinutes = dto.PrepTimeMinutes;
         recipe.CookTimeMinutes = dto.CookTimeMinutes;
@@ -818,7 +821,8 @@ public class RecipesController : ControllerBase
             recipe.Steps.Add(new RecipeStep
             {
                 StepNumber = stepNumber++,
-                Instruction = step.Instruction
+                Instruction = step.Instruction,
+                OriginalInstruction = step.OriginalInstruction
             });
         }
     }
@@ -827,7 +831,10 @@ public class RecipesController : ControllerBase
     {
         Id = recipe.Id,
         Title = recipe.Title,
+        OriginalTitle = recipe.OriginalTitle,
         Description = recipe.Description,
+        OriginalDescription = recipe.OriginalDescription,
+        ContentLanguage = recipe.ContentLanguage,
         Servings = recipe.Servings,
         PrepTimeMinutes = recipe.PrepTimeMinutes,
         CookTimeMinutes = recipe.CookTimeMinutes,
@@ -864,7 +871,8 @@ public class RecipesController : ControllerBase
             {
                 Id = s.Id,
                 StepNumber = s.StepNumber,
-                Instruction = s.Instruction
+                Instruction = s.Instruction,
+                OriginalInstruction = s.OriginalInstruction
             })
             .ToList(),
         Tags = recipe.Tags

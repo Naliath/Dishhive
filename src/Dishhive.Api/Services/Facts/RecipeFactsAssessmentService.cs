@@ -34,18 +34,27 @@ public class RecipeFactsAssessmentService : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IRecipeFactsExtractor _extractor;
+    private readonly IRecipeLocalizationService _localizer;
     private readonly ILogger<RecipeFactsAssessmentService> _logger;
 
     private volatile bool _processing;
     private volatile string? _lastError;
 
     public RecipeFactsAssessmentService(
-        IServiceScopeFactory scopeFactory, IRecipeFactsExtractor extractor,
+        IServiceScopeFactory scopeFactory, IRecipeFactsExtractor extractor, IRecipeLocalizationService localizer,
         ILogger<RecipeFactsAssessmentService> logger)
     {
         _scopeFactory = scopeFactory;
         _extractor = extractor;
+        _localizer = localizer;
         _logger = logger;
+    }
+
+    public RecipeFactsAssessmentService(
+        IServiceScopeFactory scopeFactory, IRecipeFactsExtractor extractor,
+        ILogger<RecipeFactsAssessmentService> logger)
+        : this(scopeFactory, extractor, new NoOpRecipeLocalizationService(), logger)
+    {
     }
 
     public RecipeFactsQueueStatus Status => new(_pending.Count, _processing || !_pending.IsEmpty, _lastError);
@@ -101,50 +110,81 @@ public class RecipeFactsAssessmentService : BackgroundService
 
         var recipe = await context.Recipes
             .Include(r => r.Ingredients)
+            .Include(r => r.Steps)
             .Include(r => r.DietaryFacts)
             .FirstOrDefaultAsync(r => r.Id == item.RecipeId, cancellationToken);
         if (recipe == null)
         {
             return; // deleted while queued
         }
-        if (recipe.DietaryFactsStatus == DietaryFactsStatus.UserConfirmed && !item.OverwriteUserConfirmed)
-        {
-            return; // a human verdict outranks a fresher model one
-        }
-        if (recipe.Ingredients.Count == 0)
+        var shouldAssessFacts = recipe.DietaryFactsStatus != DietaryFactsStatus.UserConfirmed
+            || item.OverwriteUserConfirmed;
+        IReadOnlyList<IngredientClass>? classes = null;
+        if (shouldAssessFacts && recipe.Ingredients.Count == 0)
         {
             // Nothing to classify: assessing from the title alone would be exactly
             // the world-knowledge guessing this feature replaces
             _logger.LogInformation("Skipping facts assessment for \"{Title}\": no ingredients", recipe.Title);
-            return;
+            shouldAssessFacts = false;
+        }
+        if (shouldAssessFacts)
+        {
+            classes = await _extractor.ExtractAsync(
+                recipe.Title,
+                recipe.Ingredients.OrderBy(i => i.SortOrder).Select(i => i.Name).ToList(),
+                cancellationToken);
+            if (classes == null)
+                _lastError = $"Assessment failed for \"{recipe.Title}\" (see logs)";
         }
 
-        var classes = await _extractor.ExtractAsync(
-            recipe.Title,
-            recipe.Ingredients.OrderBy(i => i.SortOrder).Select(i => i.Name).ToList(),
-            cancellationToken);
-        if (classes == null)
+        if (classes != null)
         {
-            _lastError = $"Assessment failed for \"{recipe.Title}\" (see logs)";
-            return; // stays Unassessed; behaves like before the feature existed
-        }
-
-        recipe.DietaryFacts.Clear();
-        foreach (var ingredientClass in classes)
-        {
-            recipe.DietaryFacts.Add(new RecipeDietaryFact
+            recipe.DietaryFacts.Clear();
+            foreach (var ingredientClass in classes)
             {
-                RecipeId = recipe.Id,
-                IngredientClass = ingredientClass
-            });
+                recipe.DietaryFacts.Add(new RecipeDietaryFact
+                {
+                    RecipeId = recipe.Id,
+                    IngredientClass = ingredientClass
+                });
+            }
+            recipe.DietaryFactsStatus = DietaryFactsStatus.AiDetected;
+            recipe.DietaryFactsAssessedAt = DateTime.UtcNow;
         }
-        recipe.DietaryFactsStatus = DietaryFactsStatus.AiDetected;
-        recipe.DietaryFactsAssessedAt = DateTime.UtcNow;
+
+        var languageSetting = await context.UserSettings.AsNoTracking().FirstOrDefaultAsync(
+            setting => setting.Key == UserSettingKeys.PreferredLanguage, cancellationToken);
+        var translateSetting = await context.UserSettings.AsNoTracking().FirstOrDefaultAsync(
+            setting => setting.Key == UserSettingKeys.TranslateImportedRecipes, cancellationToken);
+        var targetLanguage = languageSetting?.Value is "nl" ? "nl" : "en";
+        if (recipe.SourceUrl != null && translateSetting?.Value == "true" && _localizer.IsAvailable
+            && recipe.ContentLanguage != targetLanguage)
+        {
+            var translated = await _localizer.TranslateAsync(recipe, targetLanguage, cancellationToken);
+            if (translated != null)
+            {
+                recipe.OriginalTitle ??= recipe.Title;
+                recipe.OriginalDescription ??= recipe.Description;
+                recipe.Title = translated.Title;
+                recipe.Description = translated.Description;
+                foreach (var pair in recipe.Ingredients.OrderBy(item => item.SortOrder)
+                             .Zip(translated.IngredientNames)) pair.First.Name = pair.Second;
+                foreach (var pair in recipe.Steps.OrderBy(item => item.StepNumber).Zip(translated.Steps))
+                {
+                    pair.First.OriginalInstruction ??= pair.First.Instruction;
+                    pair.First.Instruction = pair.Second;
+                }
+                recipe.ContentLanguage = targetLanguage;
+            }
+        }
         await context.SaveChangesAsync(cancellationToken);
 
-        _lastError = null;
-        _logger.LogInformation(
-            "Facts assessed for \"{Title}\": [{Classes}]",
-            recipe.Title, string.Join(", ", classes));
+        if (classes != null)
+        {
+            _lastError = null;
+            _logger.LogInformation(
+                "Facts assessed for \"{Title}\": [{Classes}]",
+                recipe.Title, string.Join(", ", classes));
+        }
     }
 }

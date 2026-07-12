@@ -144,6 +144,10 @@ public class SettingsController : ControllerBase
     [ProducesResponseType(typeof(UserSettingDto), StatusCodes.Status201Created)]
     public async Task<ActionResult<UserSettingDto>> SetSetting(string key, [FromBody] UpsertUserSettingDto dto)
     {
+        if (!IsValidKnownValue(key, dto.Value))
+        {
+            return ValidationProblem($"Unsupported value '{dto.Value}' for setting '{key}'.");
+        }
         var setting = await _context.UserSettings.FindAsync(key);
 
         if (setting == null)
@@ -198,5 +202,14 @@ public class SettingsController : ControllerBase
         Value = setting.Value,
         CreatedAt = setting.CreatedAt,
         UpdatedAt = setting.UpdatedAt
+    };
+
+    private static bool IsValidKnownValue(string key, string value) => key switch
+    {
+        UserSettingKeys.PreferredLanguage => value is "en" or "nl",
+        UserSettingKeys.TranslateImportedRecipes => bool.TryParse(value, out _),
+        UserSettingKeys.MeasurementSystem => value is "metric" or "imperial",
+        UserSettingKeys.FirstDayOfWeek => value is "monday" or "sunday",
+        _ => true
     };
 }

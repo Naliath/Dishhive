@@ -5,7 +5,7 @@
       <span class="mat-title-large">Dishhive</span>
     </div>
     <button mat-button type="button" (click)="skip()" [disabled]="finishing()">
-      Skip setup
+      {{ 'Skip setup' | translate }}
     </button>
   </header>
 
@@ -28,25 +28,38 @@
 
       <mat-vertical-stepper #stepper [linear]="true">
         <mat-step [stepControl]="preferencesForm">
-          <ng-template matStepLabel>Planning preferences</ng-template>
+          <ng-template matStepLabel>{{ 'Planning preferences' | translate }}</ng-template>
           <form [formGroup]="preferencesForm" class="step-content">
             <div>
-              <h2 class="mat-title-large">Start with the familiar</h2>
+              <h2 class="mat-title-large">{{ 'Start with the familiar' | translate }}</h2>
               <p class="mat-body-medium secondary-copy">
-                We picked the most common defaults. You can change these later in Settings.
+                {{ 'We picked the most common defaults. You can change these later in Settings.' | translate }}
               </p>
             </div>
 
             <fieldset class="choice-group">
-              <legend class="mat-title-medium">First day of the week</legend>
+              <legend class="mat-title-medium">{{ 'Language' | translate }}</legend>
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'Language' | translate }}</mat-label>
+                <mat-select formControlName="preferredLanguage" (selectionChange)="languageService.use($event.value)">
+                  @for (language of supportedLanguages; track language.code) {
+                    <mat-option [value]="language.code">{{ language.labelKey | translate }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-slide-toggle formControlName="translateImportedRecipes">{{ 'Translate imported recipes' | translate }}</mat-slide-toggle>
+            </fieldset>
+
+            <fieldset class="choice-group">
+              <legend class="mat-title-medium">{{ 'First day of the week' | translate }}</legend>
               <mat-radio-group formControlName="firstDayOfWeek" aria-label="First day of the week">
-                <mat-radio-button value="monday">Monday</mat-radio-button>
-                <mat-radio-button value="sunday">Sunday</mat-radio-button>
+                <mat-radio-button value="monday">{{ 'Monday' | translate }}</mat-radio-button>
+                <mat-radio-button value="sunday">{{ 'Sunday' | translate }}</mat-radio-button>
               </mat-radio-group>
             </fieldset>
 
             <fieldset class="choice-group">
-              <legend class="mat-title-medium">Measurements</legend>
+              <legend class="mat-title-medium">{{ 'Measurements' | translate }}</legend>
               <mat-radio-group formControlName="measurementSystem" aria-label="Measurement system">
                 <mat-radio-button value="metric">Metric (g, ml, °C)</mat-radio-button>
                 <mat-radio-button value="imperial">Imperial (oz, cups, °F)</mat-radio-button>
@@ -60,7 +73,7 @@
                 </button>
               } @else {
                 <button mat-flat-button type="button" (click)="savePreferences(stepper)">
-                  Continue
+                  {{ 'Continue' | translate }}
                   <mat-icon iconPositionEnd>arrow_forward</mat-icon>
                 </button>
               }

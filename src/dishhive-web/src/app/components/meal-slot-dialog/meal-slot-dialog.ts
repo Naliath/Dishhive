@@ -19,6 +19,7 @@ import { DishStatistic } from '../../models/statistics.model';
 import { Cookbook, RecipeListItem } from '../../models/recipe.model';
 import { FamilyMember } from '../../models/family-member.model';
 import { FrozenItem } from '../../models/frozen-item.model';
+import { AutoCollectionNamePipe } from '../../services/language.service';
 import {
   COURSE_LABELS,
   Course,
@@ -49,6 +50,7 @@ type PlanMode = 'recipe' | 'dish' | 'idea';
     FormsModule,
     RouterLink,
     CollectionMentionDirective,
+    AutoCollectionNamePipe,
     MatDialogModule,
     MatAutocompleteModule,
     MatButtonModule,

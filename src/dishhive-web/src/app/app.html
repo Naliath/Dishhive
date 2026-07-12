@@ -23,32 +23,32 @@
     <mat-nav-list>
       <a mat-list-item routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" (click)="sidenav.close()">
         <mat-icon matListItemIcon>calendar_month</mat-icon>
-        <span matListItemTitle>Week Planner</span>
+        <span matListItemTitle>{{ 'Week Planner' | translate }}</span>
       </a>
       <a mat-list-item routerLink="/recipes" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>menu_book</mat-icon>
-        <span matListItemTitle>Recipes</span>
+        <span matListItemTitle>{{ 'Recipes' | translate }}</span>
       </a>
       <a mat-list-item routerLink="/family" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>group</mat-icon>
-        <span matListItemTitle>Family</span>
+        <span matListItemTitle>{{ 'Family' | translate }}</span>
       </a>
       <a mat-list-item routerLink="/shopping-list" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>shopping_cart</mat-icon>
-        <span matListItemTitle>Shopping List</span>
+        <span matListItemTitle>{{ 'Shopping List' | translate }}</span>
       </a>
       <a mat-list-item routerLink="/history" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>history</mat-icon>
-        <span matListItemTitle>Past Dishes</span>
+        <span matListItemTitle>{{ 'Past Dishes' | translate }}</span>
       </a>
       <a mat-list-item routerLink="/statistics" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>insights</mat-icon>
-        <span matListItemTitle>Statistics</span>
+        <span matListItemTitle>{{ 'Statistics' | translate }}</span>
       </a>
       <mat-divider></mat-divider>
       <a mat-list-item routerLink="/settings" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>settings</mat-icon>
-        <span matListItemTitle>Settings</span>
+        <span matListItemTitle>{{ 'Settings' | translate }}</span>
       </a>
     </mat-nav-list>
   </mat-sidenav>

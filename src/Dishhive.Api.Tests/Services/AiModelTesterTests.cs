@@ -21,10 +21,10 @@ public class AiModelTesterTests
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             if (messages.Any(message => message.Text.Contains(
-                    "Interpret source-specific recipe research requests", StringComparison.Ordinal)))
+                    "language-neutral JSON intent", StringComparison.Ordinal)))
             {
                 var text = supportsTools
-                    ? """{"requests":[{"query":"dessert","site":"recipes.example","candidateCount":2,"dates":["2099-01-05","2099-01-11"],"course":"dessert"}]}"""
+                    ? """{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"desserts","dates":["2099-01-05","2099-01-11"],"mealType":"dinner","course":"dessert","sourceHost":"recipes.example","count":2,"distinct":true,"searchQuery":"dessert","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}"""
                     : "{}";
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, text)));
             }
@@ -177,7 +177,7 @@ public class AiModelTesterTests
         result.Viable.Should().BeTrue();
         result.ToolCallingPassed.Should().BeFalse();
         result.Verdict.Should().Be("warnings");
-        result.Checks.Should().Contain(c => c.Name == "External recipe intent" && !c.Passed);
+        result.Checks.Should().Contain(c => c.Name == "Multilingual planning instructions" && !c.Passed);
     }
 
     [Fact]

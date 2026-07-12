@@ -141,6 +141,11 @@ public class RecipeImportService : IRecipeImportService
         }
 
         ApplyImportedRecipe(recipe, imported, sourceUrl, providerKey);
+        // A re-import is fresh source text. Clear the prior localization marker so
+        // the background assessment can translate it again and retain this version.
+        recipe.OriginalTitle = null;
+        recipe.OriginalDescription = null;
+        recipe.ContentLanguage = null;
         await RecipeImageDownloader.TryDownloadAsync(_httpFetcher, recipe, _logger, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);

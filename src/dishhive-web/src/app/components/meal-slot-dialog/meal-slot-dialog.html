@@ -65,7 +65,7 @@
                 <button mat-stroked-button class="collection-pick-chip" type="button"
                         [disabled]="picking()" (click)="surpriseFrom(collection)">
                   <mat-icon>shuffle</mat-icon>
-                  {{ collection.name }}
+                  {{ collection | autoCollectionName }}
                 </button>
               }
             </div>
@@ -92,7 +92,7 @@
             @for (item of mention.suggestions(); track item.id) {
               <mat-option [value]="mention.valueFor(item)">
                 <mat-icon>{{ item.icon }}</mat-icon>
-                {{ item.name }}
+                {{ item.displayName }}
                 @if (item.detail) {
                   <span class="mention-count">{{ item.detail }}</span>
                 }

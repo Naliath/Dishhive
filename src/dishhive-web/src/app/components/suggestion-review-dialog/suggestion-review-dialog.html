@@ -27,7 +27,7 @@
             @for (item of composeMention.suggestions(); track item.id) {
               <mat-option [value]="composeMention.valueFor(item)">
                 <mat-icon>{{ item.icon }}</mat-icon>
-                {{ item.name }}
+                {{ item.displayName }}
                 @if (item.detail) {
                   <span class="mention-count">{{ item.detail }}</span>
                 }
@@ -79,7 +79,7 @@
         <div class="suggestion-list">
           @for (group of groupedSuggestions(); track group.date) {
             <div class="suggestion-day">
-              <div class="suggestion-day-header">{{ group.date | date:'EEEE d MMM' }}</div>
+              <div class="suggestion-day-header">{{ group.date | localizedDate:'weekdayShort' }}</div>
               @for (item of group.items; track item.index) {
                 <div class="suggestion-row" (click)="toggle(item.index)">
                   <mat-checkbox
@@ -147,7 +147,7 @@
             @for (item of reviewMention.suggestions(); track item.id) {
               <mat-option [value]="reviewMention.valueFor(item)">
                 <mat-icon>{{ item.icon }}</mat-icon>
-                {{ item.name }}
+                {{ item.displayName }}
                 @if (item.detail) {
                   <span class="mention-count">{{ item.detail }}</span>
                 }

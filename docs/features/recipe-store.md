@@ -94,6 +94,14 @@ RecipeStep
   keeps good recipe-card/detail quality while bounding database usage. Bytes-in-database plus
   a dedicated endpoint avoids Base64 in normal JSON responses. Video remains a URL.
 
+### Localized imports
+
+When `translateImportedRecipes` is enabled and AI is available, the background facts step
+also translates imported recipe text to `preferredLanguage`. `Recipe.OriginalTitle`,
+`OriginalDescription`, `ContentLanguage`, and `RecipeStep.OriginalInstruction` preserve the
+source beside the translated display values; ingredient `OriginalText` already preserves its
+source line. The edit form exposes these originals for comparison.
+
 ## Backend Requirements
 
 - `RecipesController`: `GET /api/recipes?search=`, `GET /api/recipes/{id}`, `POST`, `PUT`, `DELETE`

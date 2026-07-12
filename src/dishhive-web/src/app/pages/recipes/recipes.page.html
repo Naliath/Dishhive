@@ -79,7 +79,7 @@
             [class.is-auto]="cookbook.kind === 'auto'"
             (click)="applyCookbook(cookbook)">
       <mat-icon class="cookbook-kind-icon">{{ cookbook.kind === 'auto' ? 'auto_awesome' : 'bookmark' }}</mat-icon>
-      {{ cookbook.name }}
+      {{ cookbook | autoCollectionName }}
       <span class="cookbook-count">{{ cookbook.recipeCount }}</span>
       @if (cookbook.kind === 'manual') {
         <mat-icon class="cookbook-delete" (click)="deleteCookbook(cookbook, $event)"

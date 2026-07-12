@@ -271,7 +271,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
 
         return Ok(new AiPlanningMetricsResponseDto(summary, runs.Select(run => new AiPlanningRunDto(
             run.Id, run.RequestId, run.StartedAt, run.Outcome, run.Provider, run.Model,
-            run.Instructions, run.Error, run.RequestedDays, run.SuggestedItems,
+            run.Instructions, run.NormalizedIntentJson, run.Error, run.RequestedDays, run.SuggestedItems,
             run.ExternalSuggestions, run.FallbackSuggestions, run.UsedExternalResearch,
             run.CompletionAttempts, run.ParseFailures, run.ModelTurns, run.InputTokens,
             run.OutputTokens, run.ReasoningTokens, run.TotalTokens, run.ResearchCalls,

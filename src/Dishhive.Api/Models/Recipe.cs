@@ -13,8 +13,17 @@ public class Recipe
     [MaxLength(300)]
     public string Title { get; set; } = string.Empty;
 
+    [MaxLength(300)]
+    public string? OriginalTitle { get; set; }
+
     [MaxLength(2000)]
     public string? Description { get; set; }
+
+    [MaxLength(2000)]
+    public string? OriginalDescription { get; set; }
+
+    [MaxLength(10)]
+    public string? ContentLanguage { get; set; }
 
     /// <summary>
     /// Intended number of people/servings

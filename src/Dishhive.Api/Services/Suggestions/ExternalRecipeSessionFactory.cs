@@ -1,5 +1,6 @@
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.WebSearch;
+using Dishhive.Api.Services.Facts;
 using Microsoft.Extensions.AI;
 
 namespace Dishhive.Api.Services.Suggestions;
@@ -37,8 +38,17 @@ public interface IExternalRecipeSessionFactory
 public sealed class ExternalRecipeSessionFactory(
     IWebSearchClient webSearch,
     IRecipeImportService importService,
+    IRecipeFactsExtractor factsExtractor,
     WebSearchOptions options) : IExternalRecipeSessionFactory
 {
+    public ExternalRecipeSessionFactory(
+        IWebSearchClient webSearch,
+        IRecipeImportService importService,
+        WebSearchOptions options)
+        : this(webSearch, importService, new NoOpRecipeFactsExtractor(), options)
+    {
+    }
+
     public bool IsConfigured => webSearch.IsConfigured;
 
     public IExternalRecipeSession Create(
@@ -54,6 +64,7 @@ public sealed class ExternalRecipeSessionFactory(
             hosts.Count == 1 ? hosts[0] : null,
             hosts,
             requestId,
-            logger);
+            logger,
+            factsExtractor);
     }
 }

@@ -25,6 +25,9 @@ public class AiPlanningRun
     [MaxLength(500)]
     public string? Instructions { get; set; }
 
+    /// <summary>Versioned, language-neutral constraints interpreted for this run.</summary>
+    public string? NormalizedIntentJson { get; set; }
+
     [MaxLength(1000)]
     public string? Error { get; set; }
 

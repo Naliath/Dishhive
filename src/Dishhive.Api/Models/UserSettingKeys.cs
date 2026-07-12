@@ -16,6 +16,12 @@ public static class UserSettingKeys
     /// <summary>Week boundary preference: Monday or Sunday.</summary>
     public const string FirstDayOfWeek = "firstDayOfWeek";
 
+    /// <summary>Interface and recipe-localization language: en or nl.</summary>
+    public const string PreferredLanguage = "preferredLanguage";
+
+    /// <summary>Whether AI-assisted imports translate recipes to the preferred language.</summary>
+    public const string TranslateImportedRecipes = "translateImportedRecipes";
+
     /// <summary>First-run wizard lifecycle marker.</summary>
     public const string OnboardingStatus = "onboardingStatus";
 

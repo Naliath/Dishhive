@@ -8,10 +8,12 @@ import { OnboardingComponent } from './components/onboarding/onboarding';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatIconRegistry } from '@angular/material/icon';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatListModule } from '@angular/material/list';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { LanguageService, TranslatePipe } from './services/language.service';
 
 @Component({
   selector: 'app-root',
@@ -27,7 +29,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
     MatListModule,
     MatDividerModule,
     MatProgressSpinnerModule,
-    OnboardingComponent
+    OnboardingComponent,
+    TranslatePipe
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -40,18 +43,24 @@ export class App implements OnInit {
 
   constructor(
     private settingsService: SettingsService,
+    private languageService: LanguageService,
     private onboardingService: OnboardingService,
     private router: Router,
+    iconRegistry: MatIconRegistry,
     // Instantiated for its side effects: update checks, offline notices, install prompt
     private pwaService: PwaService,
     // Instantiated for its side effects: restores saved theme preference on startup
     private themeService: ThemeService
-  ) {}
+  ) {
+    iconRegistry.setDefaultFontSetClass('material-symbols-outlined');
+  }
 
   ngOnInit(): void {
     // Load display preferences once so all pages use them from the start
     this.settingsService.loadMeasurementSystem().subscribe();
     this.settingsService.loadFirstDayOfWeek().subscribe();
+    this.settingsService.loadPreferredLanguage().subscribe(language => this.languageService.use(language));
+    this.settingsService.loadTranslateImportedRecipes().subscribe();
     this.onboardingService.start().subscribe({
       next: status => {
         this.showOnboarding.set(status.shouldShow);

@@ -120,7 +120,10 @@ public class DishhiveDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.Title).IsRequired().HasMaxLength(300);
+            entity.Property(e => e.OriginalTitle).HasMaxLength(300);
             entity.Property(e => e.Description).HasMaxLength(2000);
+            entity.Property(e => e.OriginalDescription).HasMaxLength(2000);
+            entity.Property(e => e.ContentLanguage).HasMaxLength(10);
             entity.Property(e => e.Servings).HasDefaultValue(4);
             entity.Property(e => e.Category).HasMaxLength(100);
             entity.Property(e => e.Keywords).HasMaxLength(500);
@@ -350,6 +353,7 @@ public class DishhiveDbContext : DbContext
             entity.Property(run => run.Provider).HasMaxLength(50);
             entity.Property(run => run.Model).HasMaxLength(200);
             entity.Property(run => run.Instructions).HasMaxLength(500);
+            entity.Property(run => run.NormalizedIntentJson).HasColumnType("jsonb");
             entity.Property(run => run.Error).HasMaxLength(1000);
         });
     }

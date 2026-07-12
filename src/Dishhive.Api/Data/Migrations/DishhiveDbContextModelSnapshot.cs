@@ -126,6 +126,9 @@ namespace Dishhive.Api.Data.Migrations
                     b.Property<int>("ModelTurns")
                         .HasColumnType("integer");
 
+                    b.Property<string>("NormalizedIntentJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("Outcome")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -493,6 +496,10 @@ namespace Dishhive.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("ContentLanguage")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
                     b.Property<int?>("CookTimeMinutes")
                         .HasColumnType("integer");
 
@@ -525,6 +532,14 @@ namespace Dishhive.Api.Data.Migrations
                     b.Property<string>("Keywords")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("OriginalDescription")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("OriginalTitle")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<int?>("PrepTimeMinutes")
                         .HasColumnType("integer");
@@ -640,6 +655,10 @@ namespace Dishhive.Api.Data.Migrations
 
                     b.Property<string>("Instruction")
                         .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("OriginalInstruction")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 

@@ -144,6 +144,9 @@ public record MealSuggestionRequest
     /// </summary>
     public string? Instructions { get; init; }
 
+    /// <summary>Language-neutral interpretation produced once by the LLM boundary.</summary>
+    public PlanningIntent? Intent { get; init; }
+
     /// <summary>
     /// Resolved #[Collection Name] references from day instructions and the global
     /// instructions text (see <see cref="CollectionMentionResolver"/>)
@@ -226,8 +229,12 @@ public record MealSuggestion
     /// <summary>Friendly source name for an external suggestion (e.g. "Dagelijkse Kost" or the host)</summary>
     public string? SourceName { get; init; }
 
-    /// <summary>Ingredients retained from a verified external candidate for the
-    /// post-hoc allergy warning net; never exposed through the API DTO.</summary>
+    /// <summary>Structured constraints this suggestion claims to satisfy.</summary>
+    internal IReadOnlyList<string> ConstraintIds { get; init; } = [];
+
+    /// <summary>Canonical facts resolved from either the stored recipe or verified candidate.</summary>
+    internal IReadOnlyList<IngredientClass> ResolvedContainsClasses { get; init; } = [];
+    internal bool ResolvedFactsAssessed { get; init; }
     internal IReadOnlyList<string> ExternalIngredients { get; init; } = [];
 }
 

@@ -16,6 +16,9 @@
         <mat-form-field appearance="outline">
           <mat-label>Title</mat-label>
           <input matInput name="title" [(ngModel)]="title" required maxlength="300">
+          @if (originalTitle && originalTitle !== title) {
+            <mat-hint>Original: {{ originalTitle }}</mat-hint>
+          }
         </mat-form-field>
 
         <section class="image-editor" aria-label="Recipe image">
@@ -98,6 +101,9 @@
         <mat-form-field appearance="outline">
           <mat-label>Description</mat-label>
           <textarea matInput name="description" [(ngModel)]="description" rows="2" maxlength="2000"></textarea>
+          @if (originalDescription && originalDescription !== description) {
+            <mat-hint>Original: {{ originalDescription }}</mat-hint>
+          }
         </mat-form-field>
 
         <div class="field-row">
@@ -223,6 +229,9 @@
             <mat-form-field appearance="outline" class="step-field">
               <mat-label>Step</mat-label>
               <textarea matInput [name]="'step' + $index" [(ngModel)]="step.instruction" rows="2" maxlength="2000"></textarea>
+              @if (step.originalInstruction && step.originalInstruction !== step.instruction) {
+                <mat-hint>Original: {{ step.originalInstruction }}</mat-hint>
+              }
             </mat-form-field>
             <button mat-icon-button type="button" (click)="removeStep($index)"
                     [disabled]="steps.length === 1" aria-label="Remove step">

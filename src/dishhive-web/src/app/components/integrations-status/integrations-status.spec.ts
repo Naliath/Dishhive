@@ -58,4 +58,15 @@ describe('IntegrationsStatusComponent', () => {
       detail: 'The model cannot reliably interpret external recipe requests.'
     });
   });
+
+  it('explains that multilingual planning tests structured source requests, not fluency', () => {
+    expect(component.aiFeature({
+      name: 'Multilingual planning instructions',
+      passed: false,
+      detail: 'Raw diagnostic detail'
+    })).toEqual({
+      name: 'Multilingual source requests',
+      detail: 'At least one English or Dutch source request did not produce a usable count, date and course plan. This is stricter than understanding conversational language.'
+    });
+  });
 });

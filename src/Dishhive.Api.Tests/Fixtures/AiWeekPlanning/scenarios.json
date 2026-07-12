@@ -16,7 +16,8 @@
           "minDistinctRecipes": 4,
           "maxDistinctRecipes": 4,
           "requiredDayOffsets": [],
-          "forbiddenDishKeywords": ["fish", "vis", "zalm", "salmon", "chicken", "kip", "beef", "rund", "pork", "varken", "gehakt", "vlees"]
+          "requiredClasses": [],
+          "excludedClasses": ["RedMeat", "Poultry", "Pork", "Fish", "Crustaceans", "Molluscs", "Gelatin"]
         }
       ],
       "slots": []
@@ -39,7 +40,8 @@
           "minDistinctRecipes": 4,
           "maxDistinctRecipes": 4,
           "requiredDayOffsets": [],
-          "forbiddenDishKeywords": ["fish", "vis", "zalm", "salmon", "chicken", "kip", "beef", "rund", "pork", "varken", "gehakt", "vlees"]
+          "requiredClasses": [],
+          "excludedClasses": ["RedMeat", "Poultry", "Pork", "Fish", "Crustaceans", "Molluscs", "Gelatin"]
         },
         {
           "host": "laurasbakery.nl",
@@ -47,7 +49,8 @@
           "minDistinctRecipes": 2,
           "maxDistinctRecipes": 2,
           "requiredDayOffsets": [4, 6],
-          "forbiddenDishKeywords": []
+          "requiredClasses": [],
+          "excludedClasses": []
         }
       ],
       "slots": [
@@ -56,7 +59,9 @@
           "course": "main",
           "minCount": 1,
           "maxCount": 1,
-          "dishKeywords": ["chicken", "kip"],
+          "requiredClasses": [],
+          "requiresConstraintClaim": true,
+          "requiresDietWarning": true,
           "allAttendees": true
         }
       ]
@@ -79,7 +84,8 @@
           "minDistinctRecipes": 4,
           "maxDistinctRecipes": 4,
           "requiredDayOffsets": [],
-          "forbiddenDishKeywords": ["fish", "vis", "zalm", "salmon", "chicken", "kip", "beef", "rund", "pork", "varken", "gehakt", "vlees"]
+          "requiredClasses": [],
+          "excludedClasses": ["RedMeat", "Poultry", "Pork", "Fish", "Crustaceans", "Molluscs", "Gelatin"]
         }
       ],
       "slots": []
@@ -104,7 +110,8 @@
           "minDistinctRecipes": 1,
           "maxDistinctRecipes": 1,
           "requiredDayOffsets": [4],
-          "forbiddenDishKeywords": []
+          "requiredClasses": [],
+          "excludedClasses": []
         }
       ],
       "slots": [
@@ -113,7 +120,7 @@
           "course": "main",
           "minCount": 1,
           "maxCount": 1,
-          "dishKeywords": ["pannekoek", "pannekoeken", "pannenkoek", "pannenkoeken"],
+          "requiredClasses": [],
           "allAttendees": true
         }
       ]

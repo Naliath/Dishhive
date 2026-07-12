@@ -80,7 +80,7 @@ services:
       # compose stack, so it's on unless overridden).
       WebSearch__Provider: "${WEBSEARCH_PROVIDER:-searxng}"
       WebSearch__BaseUrl: "${WEBSEARCH_BASE_URL:-http://searxng:8080}"
-      WebSearch__MaxResults: "${WEBSEARCH_MAX_RESULTS:-5}"
+      WebSearch__MaxResults: "${WEBSEARCH_MAX_RESULTS:-6}"
     ports:
       - "5100:5100"
     depends_on:

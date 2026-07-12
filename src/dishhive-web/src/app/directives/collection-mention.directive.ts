@@ -5,12 +5,15 @@ import { RecipeSourcesService } from '../services/recipe-sources.service';
 import { Cookbook } from '../models/recipe.model';
 import { RecipeSource } from '../models/recipe-source.model';
 import { applyMention, findActiveMention } from './collection-mention.util';
+import { LanguageService } from '../services/language.service';
 
 /** A unified autocomplete row for either a collection (#) or a source (@) mention */
 export interface MentionSuggestion {
   id: string;
   /** Name inserted into the token */
   name: string;
+  /** Localized label shown in the picker; name remains the invariant inserted token. */
+  displayName: string;
   /** mat-icon name */
   icon: string;
   /** Secondary detail (recipe count, or host) */
@@ -45,6 +48,7 @@ export class CollectionMentionDirective implements OnInit, AfterViewInit {
   private readonly trigger = inject(MatAutocompleteTrigger, { self: true });
   private readonly cookbooksService = inject(CookbooksService);
   private readonly sourcesService = inject(RecipeSourcesService);
+  private readonly language = inject(LanguageService);
 
   private readonly cookbooks = signal<Cookbook[]>([]);
   private readonly sources = signal<RecipeSource[]>([]);
@@ -65,18 +69,22 @@ export class CollectionMentionDirective implements OnInit, AfterViewInit {
         .map(s => ({
           id: s.host,
           name: s.name,
+          displayName: s.name,
           icon: 'public',
           detail: s.name.toLowerCase() === s.host.toLowerCase() ? undefined : s.host
         }));
     }
 
     return this.cookbooks()
-      .filter(c => c.name.toLowerCase().includes(query))
-      .map(c => ({
+      .map(c => ({ collection: c, displayName: this.language.autoCollectionName(c) }))
+      .filter(({ collection, displayName }) => collection.name.toLowerCase().includes(query)
+        || displayName.toLowerCase().includes(query))
+      .map(({ collection: c, displayName }) => ({
         id: c.id,
         name: c.name,
+        displayName,
         icon: c.kind === 'auto' ? 'auto_awesome' : 'bookmark',
-        detail: `${c.recipeCount} recipes`
+        detail: `${c.recipeCount} ${this.language.t('recipes')}`
       }));
   });
 

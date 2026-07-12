@@ -22,6 +22,7 @@ import { FamilyMembersService } from '../../services/family-members.service';
 import { StatisticsService } from '../../services/statistics.service';
 import { Cookbook, RecipeListItem } from '../../models/recipe.model';
 import { DishStatistic } from '../../models/statistics.model';
+import { AutoCollectionNamePipe } from '../../services/language.service';
 
 @Component({
   selector: 'app-recipes-page',
@@ -39,7 +40,8 @@ import { DishStatistic } from '../../models/statistics.model';
     MatMenuModule,
     MatSelectModule,
     MatSnackBarModule,
-    MatTooltipModule
+    MatTooltipModule,
+    AutoCollectionNamePipe
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './recipes.page.html',

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { LocalizedDatePipe } from '../../services/language.service';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -30,7 +30,7 @@ function toIso(date: Date): string {
   standalone: true,
   imports: [
     CookingLoaderComponent,
-    DatePipe,
+    LocalizedDatePipe,
     FormsModule,
     RouterLink,
     MatButtonModule,

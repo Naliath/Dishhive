@@ -59,6 +59,7 @@ export interface AiPlanningRun {
   provider: string;
   model: string;
   instructions?: string;
+  normalizedIntentJson?: string;
   error?: string;
   requestedDays: number;
   suggestedItems: number;

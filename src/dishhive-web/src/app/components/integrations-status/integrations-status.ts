@@ -5,6 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { TranslatePipe } from '../../services/language.service';
 import { CookingLoaderComponent } from '../cooking-loader/cooking-loader';
 import { IntegrationsService } from '../../services/integrations.service';
 import {
@@ -19,7 +20,7 @@ import {
   selector: 'app-integrations-status',
   standalone: true,
   imports: [CookingLoaderComponent, DatePipe, DecimalPipe, MatButtonModule, MatCardModule, MatIconModule,
-    MatTooltipModule, RouterLink],
+    MatTooltipModule, RouterLink, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './integrations-status.html',
   styleUrl: './integrations-status.scss'
@@ -128,6 +129,11 @@ export class IntegrationsStatusComponent implements OnInit {
         name: 'External recipe discovery',
         supported: 'The model can interpret source, count, date, and course requests for verified recipe research.',
         unsupported: 'The model cannot reliably interpret external recipe requests.'
+      },
+      'Multilingual planning instructions': {
+        name: 'Multilingual source requests',
+        supported: 'The model can turn equivalent English and Dutch source requests into usable counts, dates and courses.',
+        unsupported: 'At least one English or Dutch source request did not produce a usable count, date and course plan. This is stricter than understanding conversational language.'
       },
       'Test run': {
         name: 'Capability test',

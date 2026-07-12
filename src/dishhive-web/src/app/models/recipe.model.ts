@@ -63,6 +63,7 @@ export interface RecipeStep {
   id: string;
   stepNumber: number;
   instruction: string;
+  originalInstruction?: string;
 }
 
 export interface CreateRecipeIngredient {
@@ -74,7 +75,10 @@ export interface CreateRecipeIngredient {
 
 export interface CreateRecipe {
   title: string;
+  originalTitle?: string;
   description?: string;
+  originalDescription?: string;
+  contentLanguage?: string;
   servings: number;
   prepTimeMinutes?: number;
   cookTimeMinutes?: number;
@@ -84,7 +88,7 @@ export interface CreateRecipe {
   imageUrl?: string;
   videoUrl?: string;
   ingredients: CreateRecipeIngredient[];
-  steps: { instruction: string }[];
+  steps: { instruction: string; originalInstruction?: string }[];
   /** Organization tag names; tags are created when new, synced on update */
   tags: string[];
   /**
@@ -137,7 +141,10 @@ export interface RecipeFileImportResult {
 export interface Recipe {
   id: string;
   title: string;
+  originalTitle?: string;
   description?: string;
+  originalDescription?: string;
+  contentLanguage?: string;
   servings: number;
   prepTimeMinutes?: number;
   cookTimeMinutes?: number;

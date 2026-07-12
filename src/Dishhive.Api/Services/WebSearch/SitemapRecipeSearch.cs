@@ -2,7 +2,6 @@ using Dishhive.Api.Services.Import;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -25,7 +24,7 @@ public sealed partial class SitemapRecipeSearch(
     ILogger<SitemapRecipeSearch> logger) : ISitemapRecipeSearch
 {
     private const int MaxSitemapBytes = 8 * 1024 * 1024;
-    private const int MaxChildSitemaps = 5;
+    private const int MaxChildSitemaps = 12;
     private readonly ConcurrentDictionary<string, Task<IReadOnlyList<Uri>>> _indexes =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -47,7 +46,7 @@ public sealed partial class SitemapRecipeSearch(
 
         return urls
             .Select((url, index) => new { Url = url, Index = index, Text = Normalize(url.AbsolutePath) })
-            .Where(candidate => !LooksLikeCollectionPage(candidate.Text))
+            .Where(candidate => RecipePageClassifier.IsPotentialRecipeUri(candidate.Url.AbsoluteUri))
             .Select(candidate => new
             {
                 candidate.Url,
@@ -140,54 +139,21 @@ public sealed partial class SitemapRecipeSearch(
             return [];
         }
 
-        var prioritized = locations.Select(uri => new { Uri = uri, Priority = SitemapPriority(uri) }).ToList();
-        var bestPriority = prioritized.Count == 0 ? 0 : prioritized.Max(item => item.Priority);
-        var children = prioritized
-            .Where(item => bestPriority < 90 || item.Priority >= 90)
-            .OrderByDescending(item => item.Priority)
+        var children = locations
             .Take(MaxChildSitemaps)
-            .Select(item => item.Uri)
             .ToList();
         var results = await Task.WhenAll(children.Select(child =>
             ReadSitemapAsync(child, expectedHost, depth + 1, cancellationToken)));
         return results.SelectMany(result => result).DistinctBy(uri => uri.AbsoluteUri).ToList();
     }
 
-    private static int SitemapPriority(Uri uri)
-    {
-        var value = uri.AbsolutePath.ToLowerInvariant();
-        if (value.Contains("recipe")) return 100;
-        if (value.Contains("post")) return 90;
-        if (value.Contains("article")) return 50;
-        if (value.Contains("category")) return 20;
-        return 0;
-    }
-
     private static IReadOnlyDictionary<string, int> SearchTerms(string query)
     {
-        var raw = WordRegex().Matches(Normalize(query)).Select(match => match.Value).Where(word => word.Length >= 3);
-        var terms = raw.Distinct(StringComparer.Ordinal).ToDictionary(term => term, _ => 5, StringComparer.Ordinal);
-        foreach (var term in terms.Keys.ToList())
-        {
-            if (term.StartsWith("vegetar", StringComparison.Ordinal)) terms["vegetar"] = 5;
-            if (term is "chicken" or "kip") { terms["chicken"] = 5; terms["kip"] = 5; }
-            if (term.StartsWith("dessert", StringComparison.Ordinal)
-                || term.StartsWith("desert", StringComparison.Ordinal)
-                || term.StartsWith("toetje", StringComparison.Ordinal))
-            {
-                if (term is not "dessert" and not "desert" and not "toetje") terms.Remove(term);
-                terms["dessert"] = 5;
-                terms["toetje"] = 5;
-                foreach (var value in new[] { "taart", "cake", "gebak", "koek" }) terms.TryAdd(value, 1);
-            }
-        }
-        return terms;
+        return Normalize(query).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(word => word.Length >= 2)
+            .Distinct(StringComparer.Ordinal)
+            .ToDictionary(term => term, _ => 5, StringComparer.Ordinal);
     }
-
-    private static bool LooksLikeCollectionPage(string normalizedPath)
-        => Regex.IsMatch(normalizedPath, @"(^| )\d+ .*?(dessert|toetje)")
-            || new[] { " recepten ", " verzameld ", " inspiratie ", " review ", " tips voor ", " bewaren " }
-                .Any(marker => $" {normalizedPath} ".Contains(marker, StringComparison.Ordinal));
 
     private static string Normalize(string value)
     {
@@ -216,7 +182,4 @@ public sealed partial class SitemapRecipeSearch(
         var actual = NormalizeHost(uri.Host);
         return string.Equals(actual, expectedHost, StringComparison.OrdinalIgnoreCase);
     }
-
-    [GeneratedRegex(@"[a-z0-9]+")]
-    private static partial Regex WordRegex();
 }

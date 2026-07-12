@@ -9,7 +9,7 @@ namespace Dishhive.Api.Tests.Services;
 public class SitemapRecipeSearchTests
 {
     [Fact]
-    public async Task Search_IndexesRecipeSitemapAndRanksTranslatedSlugTerms()
+    public async Task Search_IndexesRecipeSitemapAndRanksUnicodeTermsWithoutLanguageMappings()
     {
         const string host = "recipes.example";
         const string root = $"https://{host}/sitemap.xml";
@@ -25,8 +25,8 @@ public class SitemapRecipeSearchTests
                 $"https://{host}/gerechten/kip-met-rijst")));
         var search = new SitemapRecipeSearch(fetcher, NullLogger<SitemapRecipeSearch>.Instance);
 
-        var vegetarian = await search.SearchAsync("vegetarian dinner", host, 5);
-        var chicken = await search.SearchAsync("chicken", host, 5);
+        var vegetarian = await search.SearchAsync("vegetarische", host, 5);
+        var chicken = await search.SearchAsync("kip", host, 5);
 
         vegetarian.Should().ContainSingle().Which.Url.Should().Contain("vegetarische-curry");
         chicken.Should().ContainSingle().Which.Url.Should().Contain("kip-met-rijst");
@@ -51,7 +51,7 @@ public class SitemapRecipeSearchTests
     }
 
     [Fact]
-    public async Task Search_PluralDesserts_PrefersRecipesOverCollectionPages()
+    public async Task Search_DoesNotGuessWhetherLanguageSpecificTitlesAreCollections()
     {
         const string host = "recipes.example";
         const string root = $"https://{host}/sitemap.xml";
@@ -67,9 +67,8 @@ public class SitemapRecipeSearchTests
         var results = await new SitemapRecipeSearch(fetcher, NullLogger<SitemapRecipeSearch>.Instance)
             .SearchAsync("desserts", host, 5);
 
-        results.Select(result => result.Url).Should().BeEquivalentTo(
-            $"https://{host}/appel-karamel-monchou-dessert/",
-            $"https://{host}/bounty-yoghurt-toetje/");
+        results.Should().ContainSingle().Which.Url.Should().Be(
+            $"https://{host}/10-makkelijke-kerstdesserts/");
     }
 
     private static FetchedHttpResource Resource(string text) => new(

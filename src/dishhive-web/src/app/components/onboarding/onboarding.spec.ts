@@ -5,12 +5,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { OnboardingService } from '../../services/onboarding.service';
 import { SettingsService } from '../../services/settings.service';
+import { LanguageService } from '../../services/language.service';
 import { OnboardingComponent } from './onboarding';
 
 describe('OnboardingComponent', () => {
   const complete = vi.fn(() => of({ shouldShow: false }));
   const setMeasurementSystem = vi.fn(() => of({}));
   const setFirstDayOfWeek = vi.fn(() => of({}));
+  const setPreferredLanguage = vi.fn(() => of({}));
+  const setTranslateImportedRecipes = vi.fn(() => of({}));
   const createdMember = {
     id: 'member-1',
     name: 'Ada',
@@ -37,8 +40,12 @@ describe('OnboardingComponent', () => {
           useValue: {
             loadMeasurementSystem: () => of('metric'),
             loadFirstDayOfWeek: () => of('monday'),
+            loadPreferredLanguage: () => of('en'),
+            loadTranslateImportedRecipes: () => of(false),
             setMeasurementSystem,
-            setFirstDayOfWeek
+            setFirstDayOfWeek,
+            setPreferredLanguage,
+            setTranslateImportedRecipes
           }
         },
         {
@@ -46,6 +53,7 @@ describe('OnboardingComponent', () => {
           useValue: { getMembers: () => of([]), createMember }
         },
         { provide: OnboardingService, useValue: { complete } },
+        { provide: LanguageService, useValue: { use: vi.fn(), t: (key: string) => key } },
         { provide: MatSnackBar, useValue: { open: vi.fn() } }
       ]
     }).compileComponents();
@@ -56,7 +64,9 @@ describe('OnboardingComponent', () => {
 
     expect(component.preferencesForm.getRawValue()).toEqual({
       firstDayOfWeek: 'monday',
-      measurementSystem: 'metric'
+      measurementSystem: 'metric',
+      preferredLanguage: 'en',
+      translateImportedRecipes: false
     });
   });
 
@@ -76,13 +86,17 @@ describe('OnboardingComponent', () => {
     const stepper = { next: vi.fn() };
     component.preferencesForm.setValue({
       firstDayOfWeek: 'sunday',
-      measurementSystem: 'imperial'
+      measurementSystem: 'imperial',
+      preferredLanguage: 'nl',
+      translateImportedRecipes: true
     });
 
     component.savePreferences(stepper as never);
 
     expect(setMeasurementSystem).toHaveBeenCalledWith('imperial');
     expect(setFirstDayOfWeek).toHaveBeenCalledWith('sunday');
+    expect(setPreferredLanguage).toHaveBeenCalledWith('nl');
+    expect(setTranslateImportedRecipes).toHaveBeenCalledWith(true);
     expect(stepper.next).toHaveBeenCalledOnce();
   });
 

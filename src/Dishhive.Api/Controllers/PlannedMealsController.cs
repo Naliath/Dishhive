@@ -279,7 +279,10 @@ public class PlannedMealsController : ControllerBase
                 FreezyItemRef = s.FreezyItemRef,
                 FreezyItemQuantity = s.FreezyItemQuantity,
                 SourceUrl = s.SourceUrl,
-                SourceName = s.SourceName
+                SourceName = s.SourceName,
+                ConstraintIds = s.ConstraintIds.ToList(),
+                ContainsClasses = IngredientClasses.ToNames(s.ResolvedContainsClasses).ToList(),
+                FactsAssessed = s.ResolvedFactsAssessed
             }).ToList()
         });
     }

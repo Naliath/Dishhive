@@ -40,7 +40,7 @@ Use at least three iterations when measuring nondeterminism or comparing model/c
 
 Inspect the generated JSON report, not only the exit code. For every iteration, verify:
 
-1. Every explicit count, weekday, course, source, ingredient, and attendee requirement is satisfied.
+1. Every explicit count, weekday, course, source, canonical ingredient class, and attendee requirement is satisfied.
 2. A dish or external recipe is not repeated across dates unless repetition was explicitly requested.
 3. Source URLs resolve to individual recipes rather than search, category, magazine, or list pages.
 4. Explicit meat requests remain one shared dish and expose a dietary review warning when appropriate.
@@ -49,7 +49,7 @@ Inspect the generated JSON report, not only the exit code. For every iteration, 
 
 Classify a failure before editing code:
 
-- **Intent failure:** research plan or final model output misunderstood count, date, course, language, or source scope.
+- **Intent failure:** normalized planning intent or final model output misunderstood count, date, course, language, or source scope.
 - **Candidate failure:** search returned too few results, a collection page, an unsuitable recipe, or resolution failed.
 - **Validation/repair failure:** invalid output was accepted, valid output was displaced, or repair created duplicates/wrong courses.
 - **Fallback failure:** rules backfill silently violated an explicit instruction.
@@ -64,7 +64,8 @@ Add every confirmed user-facing regression to the JSON array. Prefer requirement
 - Give the scenario a stable kebab-case `id` and preserve the original prompt verbatim.
 - Set `uniqueDishes` and `rejectCollectionPages` unless the prompt explicitly permits otherwise.
 - Express exact source counts with equal minimum and maximum values.
-- Use source/course/date assertions for verified external recipes.
+- Use source/course/date and canonical `requiredClasses`/`excludedClasses` assertions for verified external recipes.
+- Never add title keywords as a proxy for dietary facts or fuzzy language understanding.
 - Use slot assertions for explicitly dated dishes and `allAttendees` for shared meals.
 - Add multilingual cases when parsing or interpretation depends on language.
 - Set a realistic performance budget that reports regressions without trading away correctness.

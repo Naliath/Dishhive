@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { IntegrationsService } from '../../services/integrations.service';
 import { SettingsService } from '../../services/settings.service';
 import { AiPromptSettings } from '../../models/user-setting.model';
+import { TranslatePipe } from '../../services/language.service';
 
 /**
  * Settings card for the editable AI system prompt. Only the persona/preferences
@@ -31,7 +32,8 @@ import { AiPromptSettings } from '../../models/user-setting.model';
     MatIconModule,
     MatInputModule,
     MatSnackBarModule,
-    TextFieldModule
+    TextFieldModule,
+    TranslatePipe
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ai-prompt-settings.html',

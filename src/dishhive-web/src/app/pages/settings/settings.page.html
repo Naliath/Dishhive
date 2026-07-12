@@ -9,8 +9,8 @@
     <mat-form-field appearance="outline">
       <mat-label>{{ 'Language' | translate }}</mat-label>
       <mat-select [value]="settingsService.preferredLanguage()" (selectionChange)="setLanguage($event.value)">
-        @for (language of supportedLanguages; track language.code) {
-          <mat-option [value]="language.code">{{ language.labelKey | translate }}</mat-option>
+        @for (language of settingsService.supportedLanguages(); track language.code) {
+          <mat-option [value]="language.code">{{ language.displayName }}</mat-option>
         }
       </mat-select>
     </mat-form-field>
@@ -71,8 +71,8 @@
       [value]="settingsService.measurementSystem()"
       (change)="setMeasurementSystem($event.value)"
       aria-label="Measurement system">
-      <mat-radio-button value="metric">{{ 'Metric default' | translate }}</mat-radio-button>
-      <mat-radio-button value="imperial">{{ 'Imperial units' | translate }}</mat-radio-button>
+      <mat-radio-button [value]="MeasurementSystem.Metric">{{ 'Metric default' | translate }}</mat-radio-button>
+      <mat-radio-button [value]="MeasurementSystem.Imperial">{{ 'Imperial units' | translate }}</mat-radio-button>
     </mat-radio-group>
   </mat-card-content>
 </mat-card>
@@ -91,8 +91,8 @@
       [value]="settingsService.firstDayOfWeek()"
       (change)="setFirstDayOfWeek($event.value)"
       aria-label="First day of the week">
-      <mat-radio-button value="monday">{{ 'Monday default' | translate }}</mat-radio-button>
-      <mat-radio-button value="sunday">{{ 'Sunday' | translate }}</mat-radio-button>
+      <mat-radio-button [value]="FirstDayOfWeek.Monday">{{ 'Monday default' | translate }}</mat-radio-button>
+      <mat-radio-button [value]="FirstDayOfWeek.Sunday">{{ 'Sunday' | translate }}</mat-radio-button>
     </mat-radio-group>
   </mat-card-content>
 </mat-card>

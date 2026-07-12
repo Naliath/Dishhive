@@ -13,10 +13,10 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatStepper, MatStepperModule } from '@angular/material/stepper';
-import { forkJoin } from 'rxjs';
 import { FamilyMember } from '../../models/family-member.model';
 import { FirstDayOfWeek, MeasurementSystem } from '../../models/user-setting.model';
-import { SUPPORTED_LANGUAGES, SupportedLanguage } from '../../models/user-setting.model';
+import { SupportedLanguage } from '../../models/user-setting.model';
+import { forkJoin } from 'rxjs';
 import { LanguageService, TranslatePipe } from '../../services/language.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { OnboardingService } from '../../services/onboarding.service';
@@ -47,11 +47,12 @@ import { SettingsService } from '../../services/settings.service';
 })
 export class OnboardingComponent implements OnInit {
   readonly finished = output<void>();
-  readonly supportedLanguages = SUPPORTED_LANGUAGES;
+  readonly MeasurementSystem = MeasurementSystem;
+  readonly FirstDayOfWeek = FirstDayOfWeek;
 
   readonly preferencesForm = new FormGroup({
-    firstDayOfWeek: new FormControl<FirstDayOfWeek>('monday', { nonNullable: true }),
-    measurementSystem: new FormControl<MeasurementSystem>('metric', { nonNullable: true }),
+    firstDayOfWeek: new FormControl(FirstDayOfWeek.Monday, { nonNullable: true }),
+    measurementSystem: new FormControl(MeasurementSystem.Metric, { nonNullable: true }),
     preferredLanguage: new FormControl<SupportedLanguage>('en', { nonNullable: true }),
     translateImportedRecipes: new FormControl(false, { nonNullable: true })
   });
@@ -74,7 +75,7 @@ export class OnboardingComponent implements OnInit {
   };
 
   constructor(
-    private readonly settingsService: SettingsService,
+    readonly settingsService: SettingsService,
     readonly languageService: LanguageService,
     private readonly familyMembersService: FamilyMembersService,
     private readonly onboardingService: OnboardingService,
@@ -82,12 +83,9 @@ export class OnboardingComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    forkJoin([
-      this.settingsService.loadMeasurementSystem(),
-      this.settingsService.loadFirstDayOfWeek(),
-      this.settingsService.loadPreferredLanguage(),
-      this.settingsService.loadTranslateImportedRecipes()
-    ]).subscribe(([measurementSystem, firstDayOfWeek, preferredLanguage, translateImportedRecipes]) => {
+    this.settingsService.loadPreferences().subscribe(preferences => {
+      if (!preferences) return;
+      const { measurementSystem, firstDayOfWeek, preferredLanguage, translateImportedRecipes } = preferences;
       this.preferencesForm.setValue({ measurementSystem, firstDayOfWeek, preferredLanguage, translateImportedRecipes });
       this.languageService.use(preferredLanguage);
     });

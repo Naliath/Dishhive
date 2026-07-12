@@ -1,5 +1,6 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
+using Dishhive.Api.Services.Localization;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Threading.Channels;
@@ -35,6 +36,7 @@ public class RecipeFactsAssessmentService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IRecipeFactsExtractor _extractor;
     private readonly IRecipeLocalizationService _localizer;
+    private readonly SupportedLanguageCatalog _languages;
     private readonly ILogger<RecipeFactsAssessmentService> _logger;
 
     private volatile bool _processing;
@@ -42,18 +44,20 @@ public class RecipeFactsAssessmentService : BackgroundService
 
     public RecipeFactsAssessmentService(
         IServiceScopeFactory scopeFactory, IRecipeFactsExtractor extractor, IRecipeLocalizationService localizer,
+        SupportedLanguageCatalog languages,
         ILogger<RecipeFactsAssessmentService> logger)
     {
         _scopeFactory = scopeFactory;
         _extractor = extractor;
         _localizer = localizer;
+        _languages = languages;
         _logger = logger;
     }
 
     public RecipeFactsAssessmentService(
         IServiceScopeFactory scopeFactory, IRecipeFactsExtractor extractor,
         ILogger<RecipeFactsAssessmentService> logger)
-        : this(scopeFactory, extractor, new NoOpRecipeLocalizationService(), logger)
+        : this(scopeFactory, extractor, new NoOpRecipeLocalizationService(), new SupportedLanguageCatalog(), logger)
     {
     }
 
@@ -156,7 +160,7 @@ public class RecipeFactsAssessmentService : BackgroundService
             setting => setting.Key == UserSettingKeys.PreferredLanguage, cancellationToken);
         var translateSetting = await context.UserSettings.AsNoTracking().FirstOrDefaultAsync(
             setting => setting.Key == UserSettingKeys.TranslateImportedRecipes, cancellationToken);
-        var targetLanguage = languageSetting?.Value is "nl" ? "nl" : "en";
+        var targetLanguage = _languages.Find(languageSetting?.Value)?.Code ?? _languages.DefaultCode;
         if (recipe.SourceUrl != null && translateSetting?.Value == "true" && _localizer.IsAvailable
             && recipe.ContentLanguage != targetLanguage)
         {

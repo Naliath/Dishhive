@@ -18,10 +18,7 @@ describe('App', () => {
         {
           provide: SettingsService,
           useValue: {
-            loadMeasurementSystem: () => of('metric'),
-            loadFirstDayOfWeek: () => of('monday'),
-            loadPreferredLanguage: () => of('en'),
-            loadTranslateImportedRecipes: () => of(false)
+            loadPreferences: () => of({ preferredLanguage: 'en' })
           }
         },
         { provide: OnboardingService, useValue: { start: () => of({ shouldShow: false }) } },

@@ -13,6 +13,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Services\Demo\demo-seed.json" />
     <EmbeddedResource Include="Resources\Localization\*.json" />
+    <!-- The UI translation filenames are the authoritative supported-language catalog. -->
+    <EmbeddedResource Include="..\dishhive-web\public\i18n\*.json"
+                      LogicalName="Dishhive.Api.UiTranslations.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

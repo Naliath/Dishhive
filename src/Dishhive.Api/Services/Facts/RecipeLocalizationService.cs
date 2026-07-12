@@ -1,5 +1,6 @@
 using Dishhive.Api.Models;
 using Dishhive.Api.Services.Suggestions;
+using Dishhive.Api.Services.Localization;
 using Microsoft.Extensions.AI;
 using System.Text.Json;
 
@@ -26,6 +27,7 @@ public sealed class NoOpRecipeLocalizationService : IRecipeLocalizationService
 public sealed class LlmRecipeLocalizationService(
     IChatClient chatClient,
     AiOptions options,
+    SupportedLanguageCatalog languages,
     ILogger<LlmRecipeLocalizationService> logger) : IRecipeLocalizationService
 {
     public bool IsAvailable => true;
@@ -33,7 +35,7 @@ public sealed class LlmRecipeLocalizationService(
     public async Task<LocalizedRecipeText?> TranslateAsync(
         Recipe recipe, string targetLanguage, CancellationToken cancellationToken = default)
     {
-        var languageName = targetLanguage == "nl" ? "Dutch" : "English";
+        var languageName = languages.Find(targetLanguage)?.DisplayName ?? targetLanguage;
         var source = JsonSerializer.Serialize(new
         {
             recipe.Title,

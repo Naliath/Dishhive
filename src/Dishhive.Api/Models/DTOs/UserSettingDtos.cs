@@ -2,6 +2,21 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Dishhive.Api.Models.DTOs;
 
+public record SupportedLanguageDto(string Code, string DisplayName);
+
+public record UserPreferencesDto(
+    MeasurementSystem MeasurementSystem,
+    FirstDayOfWeek FirstDayOfWeek,
+    string PreferredLanguage,
+    bool TranslateImportedRecipes,
+    IReadOnlyList<SupportedLanguageDto> SupportedLanguages);
+
+public record UpdateUserPreferencesDto(
+    MeasurementSystem? MeasurementSystem = null,
+    FirstDayOfWeek? FirstDayOfWeek = null,
+    string? PreferredLanguage = null,
+    bool? TranslateImportedRecipes = null);
+
 public class UserSettingDto
 {
     public string Key { get; set; } = string.Empty;

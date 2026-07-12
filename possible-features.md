@@ -19,6 +19,9 @@ Allow switching planned meals of meals that are being planned in an easy fashion
 
 ## Medium Scope Features
 
+### Refactor the client side API using NSwag
+The following error should be fixed "NSwag now generates contract classes and enums only. Full client generation remains disabled because unrelated recipe endpoints currently have duplicate OpenAPI operation names."
+
 ### Persisted shopping list with check-off
 Promote the computed shopping list to a persisted, checkable list with manually added extra
 items, shared across devices. 

@@ -17,7 +17,7 @@ import { AiPromptSettingsComponent } from '../../components/ai-prompt-settings/a
 import { IntegrationsStatusComponent } from '../../components/integrations-status/integrations-status';
 import { RecipeFactsSettingsComponent } from '../../components/recipe-facts-settings/recipe-facts-settings';
 import { FirstDayOfWeek, MeasurementSystem } from '../../models/user-setting.model';
-import { SUPPORTED_LANGUAGES, SupportedLanguage } from '../../models/user-setting.model';
+import { SupportedLanguage } from '../../models/user-setting.model';
 import { AutoCollectionNamePipe, LanguageService, TranslatePipe } from '../../services/language.service';
 import { AutoCollectionInfo } from '../../models/recipe.model';
 import { environment } from '../../../environments/environment';
@@ -36,7 +36,8 @@ import { environment } from '../../../environments/environment';
 })
 export class SettingsPage implements OnInit {
   readonly version = environment.version;
-  readonly supportedLanguages = SUPPORTED_LANGUAGES;
+  readonly MeasurementSystem = MeasurementSystem;
+  readonly FirstDayOfWeek = FirstDayOfWeek;
 
   readonly importing = signal(false);
   readonly importSkipped = signal<{ title: string; reason: string }[]>([]);
@@ -54,10 +55,9 @@ export class SettingsPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.settingsService.loadMeasurementSystem().subscribe();
-    this.settingsService.loadFirstDayOfWeek().subscribe();
-    this.settingsService.loadPreferredLanguage().subscribe(language => this.languageService.use(language));
-    this.settingsService.loadTranslateImportedRecipes().subscribe();
+    this.settingsService.loadPreferences().subscribe(preferences => {
+      if (preferences) this.languageService.use(preferences.preferredLanguage);
+    });
     this.loadAutoCollections();
   }
 
@@ -129,7 +129,7 @@ export class SettingsPage implements OnInit {
 
   setFirstDayOfWeek(day: FirstDayOfWeek): void {
     this.settingsService.setFirstDayOfWeek(day).subscribe({
-      next: () => this.snackBar.open(`First day of the week set to ${day === 'sunday' ? 'Sunday' : 'Monday'}`, 'Dismiss', { duration: 3000 }),
+      next: () => this.snackBar.open(`First day of the week set to ${day}`, 'Dismiss', { duration: 3000 }),
       error: () => this.snackBar.open('Could not save the setting', 'Dismiss', { duration: 4000 })
     });
   }

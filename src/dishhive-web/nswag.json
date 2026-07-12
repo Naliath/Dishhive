@@ -20,6 +20,7 @@
       "dateTimeType": "string",
       "operationGenerationMode": "MultipleClientsFromOperationId",
       "generateClientInterfaces": true,
+      "generateClientClasses": false,
       "generateOptionalParameters": true,
       "exportTypes": true,
       "output": "src/app/api/generated/dishhive-api.client.ts",

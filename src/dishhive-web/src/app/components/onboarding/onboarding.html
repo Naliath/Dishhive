@@ -42,8 +42,8 @@
               <mat-form-field appearance="outline">
                 <mat-label>{{ 'Language' | translate }}</mat-label>
                 <mat-select formControlName="preferredLanguage" (selectionChange)="languageService.use($event.value)">
-                  @for (language of supportedLanguages; track language.code) {
-                    <mat-option [value]="language.code">{{ language.labelKey | translate }}</mat-option>
+                  @for (language of settingsService.supportedLanguages(); track language.code) {
+                    <mat-option [value]="language.code">{{ language.displayName }}</mat-option>
                   }
                 </mat-select>
               </mat-form-field>
@@ -53,16 +53,16 @@
             <fieldset class="choice-group">
               <legend class="mat-title-medium">{{ 'First day of the week' | translate }}</legend>
               <mat-radio-group formControlName="firstDayOfWeek" aria-label="First day of the week">
-                <mat-radio-button value="monday">{{ 'Monday' | translate }}</mat-radio-button>
-                <mat-radio-button value="sunday">{{ 'Sunday' | translate }}</mat-radio-button>
+                <mat-radio-button [value]="FirstDayOfWeek.Monday">{{ 'Monday' | translate }}</mat-radio-button>
+                <mat-radio-button [value]="FirstDayOfWeek.Sunday">{{ 'Sunday' | translate }}</mat-radio-button>
               </mat-radio-group>
             </fieldset>
 
             <fieldset class="choice-group">
               <legend class="mat-title-medium">{{ 'Measurements' | translate }}</legend>
               <mat-radio-group formControlName="measurementSystem" aria-label="Measurement system">
-                <mat-radio-button value="metric">Metric (g, ml, °C)</mat-radio-button>
-                <mat-radio-button value="imperial">Imperial (oz, cups, °F)</mat-radio-button>
+                <mat-radio-button [value]="MeasurementSystem.Metric">Metric (g, ml, °C)</mat-radio-button>
+                <mat-radio-button [value]="MeasurementSystem.Imperial">Imperial (oz, cups, °F)</mat-radio-button>
               </mat-radio-group>
             </fieldset>
 

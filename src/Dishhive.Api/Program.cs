@@ -5,6 +5,7 @@ using Dishhive.Api.Services.Demo;
 using Dishhive.Api.Services.Facts;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
+using Dishhive.Api.Services.Localization;
 using Dishhive.Api.Services.ShoppingList;
 using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.WebSearch;
@@ -182,6 +183,7 @@ builder.Services.AddScoped<IShoppingListService, ShoppingListService>();
 builder.Services.AddScoped<Dishhive.Api.Services.Collections.AutoCollectionProvider>();
 
 // Controllers
+builder.Services.AddSingleton<SupportedLanguageCatalog>();
 builder.Services.AddControllers();
 
 // Native OpenAPI

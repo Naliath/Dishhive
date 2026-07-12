@@ -9,6 +9,60 @@ namespace Dishhive.Api.Tests.Integration;
 public class SettingsControllerIntegrationTests : TestBase
 {
     [Fact]
+    public async Task Preferences_UsesTypedEnumsAndLanguagesDiscoveredFromResources()
+    {
+        var response = await Client.GetAsync("/api/settings/preferences");
+        var preferences = await response.Content.ReadFromJsonAsync<UserPreferencesDto>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        preferences!.MeasurementSystem.Should().Be(MeasurementSystem.Metric);
+        preferences.FirstDayOfWeek.Should().Be(FirstDayOfWeek.Monday);
+        preferences.SupportedLanguages.Select(language => language.Code)
+            .Should().BeEquivalentTo("en", "nl");
+    }
+
+    [Fact]
+    public async Task Preferences_TypedWritesOnlyChangeTheirOwnSetting()
+    {
+        await Client.PatchAsJsonAsync("/api/settings/preferences",
+            new UpdateUserPreferencesDto(MeasurementSystem: MeasurementSystem.Imperial));
+        await Client.PatchAsJsonAsync("/api/settings/preferences",
+            new UpdateUserPreferencesDto(PreferredLanguage: "nl"));
+        var preferences = await Client.GetFromJsonAsync<UserPreferencesDto>("/api/settings/preferences");
+
+        preferences.Should().BeEquivalentTo(new
+        {
+            MeasurementSystem = MeasurementSystem.Imperial,
+            FirstDayOfWeek = FirstDayOfWeek.Monday,
+            PreferredLanguage = "nl",
+            TranslateImportedRecipes = false
+        });
+    }
+
+    [Fact]
+    public async Task Preferences_RejectsLanguageWithoutTranslationResource()
+    {
+        var response = await Client.PatchAsJsonAsync("/api/settings/preferences",
+            new UpdateUserPreferencesDto(PreferredLanguage: "fr"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Preferences_UpdateRequiresExactlyOneValue()
+    {
+        var empty = await Client.PatchAsJsonAsync("/api/settings/preferences",
+            new UpdateUserPreferencesDto());
+        var multiple = await Client.PatchAsJsonAsync("/api/settings/preferences",
+            new UpdateUserPreferencesDto(
+                MeasurementSystem: MeasurementSystem.Imperial,
+                FirstDayOfWeek: FirstDayOfWeek.Sunday));
+
+        empty.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        multiple.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task GetSetting_UnknownKey_ReturnsNotFound()
     {
         // measurementSystem is metric by absence: no row until the user changes it

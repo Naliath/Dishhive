@@ -57,10 +57,9 @@ export class App implements OnInit {
 
   ngOnInit(): void {
     // Load display preferences once so all pages use them from the start
-    this.settingsService.loadMeasurementSystem().subscribe();
-    this.settingsService.loadFirstDayOfWeek().subscribe();
-    this.settingsService.loadPreferredLanguage().subscribe(language => this.languageService.use(language));
-    this.settingsService.loadTranslateImportedRecipes().subscribe();
+    this.settingsService.loadPreferences().subscribe(preferences => {
+      if (preferences) this.languageService.use(preferences.preferredLanguage);
+    });
     this.onboardingService.start().subscribe({
       next: status => {
         this.showOnboarding.set(status.shouldShow);

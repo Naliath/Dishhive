@@ -7,6 +7,8 @@ import { OnboardingService } from '../../services/onboarding.service';
 import { SettingsService } from '../../services/settings.service';
 import { LanguageService } from '../../services/language.service';
 import { OnboardingComponent } from './onboarding';
+import { FirstDayOfWeek, MeasurementSystem } from '../../api/generated/dishhive-api.client';
+import { signal } from '@angular/core';
 
 describe('OnboardingComponent', () => {
   const complete = vi.fn(() => of({ shouldShow: false }));
@@ -30,6 +32,8 @@ describe('OnboardingComponent', () => {
     complete.mockClear();
     setMeasurementSystem.mockClear();
     setFirstDayOfWeek.mockClear();
+    setPreferredLanguage.mockClear();
+    setTranslateImportedRecipes.mockClear();
     createMember.mockClear();
 
     await TestBed.configureTestingModule({
@@ -38,14 +42,17 @@ describe('OnboardingComponent', () => {
         {
           provide: SettingsService,
           useValue: {
-            loadMeasurementSystem: () => of('metric'),
-            loadFirstDayOfWeek: () => of('monday'),
-            loadPreferredLanguage: () => of('en'),
-            loadTranslateImportedRecipes: () => of(false),
+            loadPreferences: () => of({
+              measurementSystem: MeasurementSystem.Metric,
+              firstDayOfWeek: FirstDayOfWeek.Monday,
+              preferredLanguage: 'en',
+              translateImportedRecipes: false
+            }),
             setMeasurementSystem,
             setFirstDayOfWeek,
             setPreferredLanguage,
-            setTranslateImportedRecipes
+            setTranslateImportedRecipes,
+            supportedLanguages: signal([{ code: 'en', displayName: 'English' }])
           }
         },
         {
@@ -63,8 +70,8 @@ describe('OnboardingComponent', () => {
     const component = TestBed.createComponent(OnboardingComponent).componentInstance;
 
     expect(component.preferencesForm.getRawValue()).toEqual({
-      firstDayOfWeek: 'monday',
-      measurementSystem: 'metric',
+      firstDayOfWeek: FirstDayOfWeek.Monday,
+      measurementSystem: MeasurementSystem.Metric,
       preferredLanguage: 'en',
       translateImportedRecipes: false
     });
@@ -85,16 +92,16 @@ describe('OnboardingComponent', () => {
     const component = TestBed.createComponent(OnboardingComponent).componentInstance;
     const stepper = { next: vi.fn() };
     component.preferencesForm.setValue({
-      firstDayOfWeek: 'sunday',
-      measurementSystem: 'imperial',
+      firstDayOfWeek: FirstDayOfWeek.Sunday,
+      measurementSystem: MeasurementSystem.Imperial,
       preferredLanguage: 'nl',
       translateImportedRecipes: true
     });
 
     component.savePreferences(stepper as never);
 
-    expect(setMeasurementSystem).toHaveBeenCalledWith('imperial');
-    expect(setFirstDayOfWeek).toHaveBeenCalledWith('sunday');
+    expect(setMeasurementSystem).toHaveBeenCalledWith(MeasurementSystem.Imperial);
+    expect(setFirstDayOfWeek).toHaveBeenCalledWith(FirstDayOfWeek.Sunday);
     expect(setPreferredLanguage).toHaveBeenCalledWith('nl');
     expect(setTranslateImportedRecipes).toHaveBeenCalledWith(true);
     expect(stepper.next).toHaveBeenCalledOnce();

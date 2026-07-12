@@ -3,15 +3,14 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import {
-  AiPromptSettings,
-  FIRST_DAY_OF_WEEK_KEY,
   FirstDayOfWeek,
   MeasurementSystem,
-  MEASUREMENT_SYSTEM_KEY,
-  UserSetting,
-  SupportedLanguage,
-  PREFERRED_LANGUAGE_KEY,
-  TRANSLATE_IMPORTED_RECIPES_KEY
+  UpdateUserPreferencesDto,
+  UserPreferencesDto
+} from '../api/generated/dishhive-api.client';
+import {
+  AiPromptSettings,
+  SupportedLanguage
 } from '../models/user-setting.model';
 
 @Injectable({ providedIn: 'root' })
@@ -19,73 +18,68 @@ export class SettingsService {
   private apiUrl = '/api/settings';
 
   /** Current measurement system; metric is the default by absence */
-  readonly measurementSystem = signal<MeasurementSystem>('metric');
+  readonly measurementSystem = signal(MeasurementSystem.Metric);
 
   /** Current first day of the week; Monday is the default by absence */
-  readonly firstDayOfWeek = signal<FirstDayOfWeek>('monday');
+  readonly firstDayOfWeek = signal(FirstDayOfWeek.Monday);
   readonly preferredLanguage = signal<SupportedLanguage>(this.browserLanguage());
   readonly translateImportedRecipes = signal(false);
+  readonly supportedLanguages = signal<ReadonlyArray<{ code: string; displayName: string }>>([]);
 
   constructor(private http: HttpClient) {}
 
-  /** Loads the measurement preference from the backend into the signal */
-  loadMeasurementSystem(): Observable<MeasurementSystem> {
-    return this.http.get<UserSetting>(`${this.apiUrl}/${MEASUREMENT_SYSTEM_KEY}`).pipe(
-      map((setting): MeasurementSystem => setting.value === 'imperial' ? 'imperial' : 'metric'),
-      // 404 means the setting was never changed: metric default
-      catchError(() => of<MeasurementSystem>('metric')),
-      tap(system => this.measurementSystem.set(system))
+  loadPreferences(): Observable<UserPreferencesDto | null> {
+    return this.http.get<UserPreferencesDto>(`${this.apiUrl}/preferences`).pipe(
+      tap(preferences => this.apply(preferences)),
+      catchError(() => of(null))
     );
   }
 
-  setMeasurementSystem(system: MeasurementSystem): Observable<UserSetting> {
-    return this.http.put<UserSetting>(`${this.apiUrl}/${MEASUREMENT_SYSTEM_KEY}`, { value: system }).pipe(
-      tap(() => this.measurementSystem.set(system))
-    );
+  /** Loads the measurement preference from the backend into the signal */
+  loadMeasurementSystem(): Observable<MeasurementSystem> {
+    return this.loadPreferences().pipe(map(() => this.measurementSystem()));
+  }
+
+  setMeasurementSystem(system: MeasurementSystem): Observable<UserPreferencesDto> {
+    return this.updatePreference({ measurementSystem: system });
   }
 
   /** Loads the first-day-of-week preference from the backend into the signal */
   loadFirstDayOfWeek(): Observable<FirstDayOfWeek> {
-    return this.http.get<UserSetting>(`${this.apiUrl}/${FIRST_DAY_OF_WEEK_KEY}`).pipe(
-      map((setting): FirstDayOfWeek => setting.value === 'sunday' ? 'sunday' : 'monday'),
-      // 404 means the setting was never changed: Monday default
-      catchError(() => of<FirstDayOfWeek>('monday')),
-      tap(day => this.firstDayOfWeek.set(day))
-    );
+    return this.loadPreferences().pipe(map(() => this.firstDayOfWeek()));
   }
 
-  setFirstDayOfWeek(day: FirstDayOfWeek): Observable<UserSetting> {
-    return this.http.put<UserSetting>(`${this.apiUrl}/${FIRST_DAY_OF_WEEK_KEY}`, { value: day }).pipe(
-      tap(() => this.firstDayOfWeek.set(day))
-    );
+  setFirstDayOfWeek(day: FirstDayOfWeek): Observable<UserPreferencesDto> {
+    return this.updatePreference({ firstDayOfWeek: day });
   }
 
   loadPreferredLanguage(): Observable<SupportedLanguage> {
-    return this.http.get<UserSetting>(`${this.apiUrl}/${PREFERRED_LANGUAGE_KEY}`).pipe(
-      map((setting): SupportedLanguage => setting.value === 'nl' ? 'nl' : 'en'),
-      catchError(() => of<SupportedLanguage>(this.browserLanguage())),
-      tap(language => this.preferredLanguage.set(language))
-    );
+    return this.loadPreferences().pipe(map(() => this.preferredLanguage()));
   }
 
-  setPreferredLanguage(language: SupportedLanguage): Observable<UserSetting> {
-    return this.http.put<UserSetting>(`${this.apiUrl}/${PREFERRED_LANGUAGE_KEY}`, { value: language }).pipe(
-      tap(() => this.preferredLanguage.set(language))
-    );
+  setPreferredLanguage(language: SupportedLanguage): Observable<UserPreferencesDto> {
+    return this.updatePreference({ preferredLanguage: language });
   }
 
   loadTranslateImportedRecipes(): Observable<boolean> {
-    return this.http.get<UserSetting>(`${this.apiUrl}/${TRANSLATE_IMPORTED_RECIPES_KEY}`).pipe(
-      map(setting => setting.value === 'true'),
-      catchError(() => of(false)),
-      tap(enabled => this.translateImportedRecipes.set(enabled))
-    );
+    return this.loadPreferences().pipe(map(() => this.translateImportedRecipes()));
   }
 
-  setTranslateImportedRecipes(enabled: boolean): Observable<UserSetting> {
-    return this.http.put<UserSetting>(`${this.apiUrl}/${TRANSLATE_IMPORTED_RECIPES_KEY}`, { value: String(enabled) }).pipe(
-      tap(() => this.translateImportedRecipes.set(enabled))
-    );
+  setTranslateImportedRecipes(enabled: boolean): Observable<UserPreferencesDto> {
+    return this.updatePreference({ translateImportedRecipes: enabled });
+  }
+
+  private apply(preferences: UserPreferencesDto): void {
+    this.measurementSystem.set(preferences.measurementSystem);
+    this.firstDayOfWeek.set(preferences.firstDayOfWeek);
+    this.preferredLanguage.set(preferences.preferredLanguage);
+    this.translateImportedRecipes.set(preferences.translateImportedRecipes);
+    this.supportedLanguages.set(preferences.supportedLanguages);
+  }
+
+  private updatePreference(change: Partial<UpdateUserPreferencesDto>): Observable<UserPreferencesDto> {
+    return this.http.patch<UserPreferencesDto>(`${this.apiUrl}/preferences`,
+      new UpdateUserPreferencesDto(change)).pipe(tap(preferences => this.apply(preferences)));
   }
 
   private browserLanguage(): SupportedLanguage {
@@ -96,7 +90,7 @@ export class SettingsService {
   startOfWeek(date: Date): Date {
     const start = new Date(date);
     start.setHours(0, 0, 0, 0);
-    const firstDay = this.firstDayOfWeek() === 'sunday' ? 0 : 1;
+    const firstDay = this.firstDayOfWeek() === FirstDayOfWeek.Sunday ? 0 : 1;
     start.setDate(start.getDate() - ((start.getDay() - firstDay + 7) % 7));
     return start;
   }

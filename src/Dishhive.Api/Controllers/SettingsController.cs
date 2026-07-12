@@ -2,6 +2,7 @@ using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Suggestions;
+using Dishhive.Api.Services.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,11 +21,73 @@ public class SettingsController : ControllerBase
 {
     private readonly DishhiveDbContext _context;
     private readonly ILogger<SettingsController> _logger;
+    private readonly SupportedLanguageCatalog _languages;
 
-    public SettingsController(DishhiveDbContext context, ILogger<SettingsController> logger)
+    public SettingsController(DishhiveDbContext context, ILogger<SettingsController> logger,
+        SupportedLanguageCatalog languages)
     {
         _context = context;
         _logger = logger;
+        _languages = languages;
+    }
+
+    [HttpGet("preferences")]
+    [ProducesResponseType(typeof(UserPreferencesDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<UserPreferencesDto>> GetPreferences(CancellationToken cancellationToken)
+    {
+        var values = await _context.UserSettings.AsNoTracking()
+            .Where(setting => setting.Key == UserSettingKeys.MeasurementSystem
+                || setting.Key == UserSettingKeys.FirstDayOfWeek
+                || setting.Key == UserSettingKeys.PreferredLanguage
+                || setting.Key == UserSettingKeys.TranslateImportedRecipes)
+            .ToDictionaryAsync(setting => setting.Key, setting => setting.Value, cancellationToken);
+        return BuildPreferences(values);
+    }
+
+    [HttpPatch("preferences")]
+    [ProducesResponseType(typeof(UserPreferencesDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<UserPreferencesDto>> UpdatePreference(
+        UpdateUserPreferencesDto dto, CancellationToken cancellationToken)
+    {
+        var updates = new List<(string Key, string Value)>();
+        if (dto.MeasurementSystem is { } measurementSystem)
+            updates.Add((UserSettingKeys.MeasurementSystem,
+                EnumNames.ToName(measurementSystem).ToLowerInvariant()));
+        if (dto.FirstDayOfWeek is { } firstDayOfWeek)
+            updates.Add((UserSettingKeys.FirstDayOfWeek,
+                EnumNames.ToName(firstDayOfWeek).ToLowerInvariant()));
+        if (dto.PreferredLanguage is { } preferredLanguage)
+            updates.Add((UserSettingKeys.PreferredLanguage, preferredLanguage.ToLowerInvariant()));
+        if (dto.TranslateImportedRecipes is { } translateImportedRecipes)
+            updates.Add((UserSettingKeys.TranslateImportedRecipes,
+                translateImportedRecipes.ToString().ToLowerInvariant()));
+
+        if (updates.Count != 1)
+        {
+            return ValidationProblem("Supply exactly one preference to update.");
+        }
+        var (key, value) = updates[0];
+        if (!IsValidKnownValue(key, value))
+        {
+            return ValidationProblem($"Unsupported value '{value}' for setting '{key}'.");
+        }
+
+        await UpsertSettingAsync(key, value, cancellationToken);
+        return await GetPreferences(cancellationToken);
+    }
+
+    private UserPreferencesDto BuildPreferences(IReadOnlyDictionary<string, string> values)
+    {
+        var defaultLanguage = _languages.DefaultCode;
+        var language = values.GetValueOrDefault(UserSettingKeys.PreferredLanguage);
+        return new(
+            EnumNames.TryParse<MeasurementSystem>(values.GetValueOrDefault(UserSettingKeys.MeasurementSystem), out var measurement)
+                ? measurement : MeasurementSystem.Metric,
+            EnumNames.TryParse<FirstDayOfWeek>(values.GetValueOrDefault(UserSettingKeys.FirstDayOfWeek), out var firstDay)
+                ? firstDay : FirstDayOfWeek.Monday,
+            _languages.Contains(language) ? language!.ToLowerInvariant() : defaultLanguage,
+            bool.TryParse(values.GetValueOrDefault(UserSettingKeys.TranslateImportedRecipes), out var translate) && translate,
+            _languages.Languages.Select(language => new SupportedLanguageDto(language.Code, language.DisplayName)).ToList());
     }
 
     /// <summary>
@@ -142,36 +205,17 @@ public class SettingsController : ControllerBase
     [HttpPut("{key}")]
     [ProducesResponseType(typeof(UserSettingDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(UserSettingDto), StatusCodes.Status201Created)]
-    public async Task<ActionResult<UserSettingDto>> SetSetting(string key, [FromBody] UpsertUserSettingDto dto)
+    public async Task<ActionResult<UserSettingDto>> SetSetting(
+        string key, [FromBody] UpsertUserSettingDto dto, CancellationToken cancellationToken)
     {
         if (!IsValidKnownValue(key, dto.Value))
         {
             return ValidationProblem($"Unsupported value '{dto.Value}' for setting '{key}'.");
         }
-        var setting = await _context.UserSettings.FindAsync(key);
-
-        if (setting == null)
-        {
-            setting = new UserSetting
-            {
-                Key = key,
-                Value = dto.Value,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            _context.UserSettings.Add(setting);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Created setting {Key}", key);
-            return CreatedAtAction(nameof(GetSetting), new { key }, ToDto(setting));
-        }
-
-        setting.Value = dto.Value;
-        setting.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-
-        _logger.LogInformation("Updated setting {Key}", key);
-        return ToDto(setting);
+        var (setting, created) = await UpsertSettingAsync(key, dto.Value, cancellationToken);
+        return created
+            ? CreatedAtAction(nameof(GetSetting), new { key }, ToDto(setting))
+            : ToDto(setting);
     }
 
     /// <summary>
@@ -204,12 +248,32 @@ public class SettingsController : ControllerBase
         UpdatedAt = setting.UpdatedAt
     };
 
-    private static bool IsValidKnownValue(string key, string value) => key switch
+    private async Task<(UserSetting Setting, bool Created)> UpsertSettingAsync(
+        string key, string value, CancellationToken cancellationToken)
     {
-        UserSettingKeys.PreferredLanguage => value is "en" or "nl",
+        var setting = await _context.UserSettings.FindAsync([key], cancellationToken);
+        var created = setting == null;
+        if (setting == null)
+        {
+            setting = new UserSetting { Key = key, Value = value };
+            _context.UserSettings.Add(setting);
+        }
+        else
+        {
+            setting.Value = value;
+            setting.UpdatedAt = DateTime.UtcNow;
+        }
+        await _context.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("{Action} setting {Key}", created ? "Created" : "Updated", key);
+        return (setting, created);
+    }
+
+    private bool IsValidKnownValue(string key, string value) => key switch
+    {
+        UserSettingKeys.PreferredLanguage => _languages.Contains(value),
         UserSettingKeys.TranslateImportedRecipes => bool.TryParse(value, out _),
-        UserSettingKeys.MeasurementSystem => value is "metric" or "imperial",
-        UserSettingKeys.FirstDayOfWeek => value is "monday" or "sunday",
+        UserSettingKeys.MeasurementSystem => EnumNames.TryParse<MeasurementSystem>(value, out _),
+        UserSettingKeys.FirstDayOfWeek => EnumNames.TryParse<FirstDayOfWeek>(value, out _),
         _ => true
     };
 }

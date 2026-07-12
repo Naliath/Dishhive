@@ -1,6 +1,7 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
+using Dishhive.Api.Services.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,11 +16,14 @@ public class FamilyMembersController : ControllerBase
 {
     private readonly DishhiveDbContext _context;
     private readonly ILogger<FamilyMembersController> _logger;
+    private readonly UserMessageLocalizer _messages;
 
-    public FamilyMembersController(DishhiveDbContext context, ILogger<FamilyMembersController> logger)
+    public FamilyMembersController(DishhiveDbContext context, ILogger<FamilyMembersController> logger,
+        UserMessageLocalizer messages)
     {
         _context = context;
         _logger = logger;
+        _messages = messages;
     }
 
     /// <summary>
@@ -79,11 +83,11 @@ public class FamilyMembersController : ControllerBase
     {
         if (HasOverlongTag(dto.AllergyTags) || HasOverlongTag(dto.DietTags))
         {
-            return TagTooLong();
+            return await TagTooLongAsync();
         }
         if (HasUnknownClass(dto.AllergyTags) || HasUnknownClass(dto.DietTags))
         {
-            return UnknownClass();
+            return await UnknownClassAsync();
         }
 
         var member = new FamilyMember
@@ -113,11 +117,11 @@ public class FamilyMembersController : ControllerBase
     {
         if (HasOverlongTag(dto.AllergyTags) || HasOverlongTag(dto.DietTags))
         {
-            return TagTooLong();
+            return await TagTooLongAsync();
         }
         if (HasUnknownClass(dto.AllergyTags) || HasUnknownClass(dto.DietTags))
         {
-            return UnknownClass();
+            return await UnknownClassAsync();
         }
 
         var member = await _context.FamilyMembers
@@ -231,8 +235,8 @@ public class FamilyMembersController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Empty favorite",
-                Detail = "Set a recipe or a dish name."
+                Title = await _messages.GetAsync("familyMember.emptyFavoriteTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("familyMember.emptyFavoriteDetail", HttpContext.RequestAborted)
             });
         }
 
@@ -247,8 +251,9 @@ public class FamilyMembersController : ControllerBase
             {
                 return BadRequest(new ProblemDetails
                 {
-                    Title = "Unknown recipe",
-                    Detail = $"Recipe '{dto.RecipeId}' does not exist."
+                    Title = await _messages.GetAsync("common.unknownRecipeTitle", HttpContext.RequestAborted),
+                    Detail = await _messages.GetAsync("common.unknownRecipeDetail", HttpContext.RequestAborted,
+                        ("recipeId", dto.RecipeId))
                 });
             }
 
@@ -400,16 +405,16 @@ public class FamilyMembersController : ControllerBase
         .Any(e => e.ExcludedClasses != null
             && e.ExcludedClasses.Any(n => !IngredientClasses.TryParse(n, out _)));
 
-    private BadRequestObjectResult TagTooLong() => BadRequest(new ProblemDetails
+    private async Task<BadRequestObjectResult> TagTooLongAsync() => BadRequest(new ProblemDetails
     {
-        Title = "Tag too long",
-        Detail = "Tags are at most 50 characters."
+        Title = await _messages.GetAsync("recipe.tagTooLongTitle", HttpContext.RequestAborted),
+        Detail = await _messages.GetAsync("recipe.tagTooLongDetail", HttpContext.RequestAborted)
     });
 
-    private BadRequestObjectResult UnknownClass() => BadRequest(new ProblemDetails
+    private async Task<BadRequestObjectResult> UnknownClassAsync() => BadRequest(new ProblemDetails
     {
-        Title = "Unknown ingredient class",
-        Detail = "Excluded classes must be valid IngredientClass names (e.g. \"TreeNuts\", \"Milk\", \"Pork\")."
+        Title = await _messages.GetAsync("recipe.unknownClassTitle", HttpContext.RequestAborted),
+        Detail = await _messages.GetAsync("familyMember.excludedClassDetail", HttpContext.RequestAborted)
     });
 
     private static FamilyMemberDto ToDto(FamilyMember member) => new()

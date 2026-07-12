@@ -16,7 +16,7 @@ describe('IntegrationsStatusComponent', () => {
       error: 'JSON search is forbidden'
     };
 
-    expect(component.webSearchChipLabel(status)).toBe('Misconfigured');
+    expect(component.webSearchChipLabel(status)).toBe('common.misconfigured');
     expect(component.webSearchChipIcon(status)).toBe('warning');
     expect(component.webSearchChipClass(status)).toBe('status-chip--warn');
   });
@@ -31,7 +31,7 @@ describe('IntegrationsStatusComponent', () => {
       error: null
     };
 
-    expect(component.webSearchChipLabel(status)).toBe('Active');
+    expect(component.webSearchChipLabel(status)).toBe('common.active');
   });
 
   it('presents model checks as product features without exposing test fixtures', () => {
@@ -42,8 +42,8 @@ describe('IntegrationsStatusComponent', () => {
     });
 
     expect(feature).toEqual({
-      name: 'Specific meal instructions',
-      detail: 'The model can place a requested meal on the requested day.'
+      name: 'integration.specificMealInstructions',
+      detail: 'integration.theModelCanPlaceARequestedMealOnTheRequestedDay'
     });
     expect(JSON.stringify(feature)).not.toContain('Chicken curry');
   });
@@ -54,8 +54,8 @@ describe('IntegrationsStatusComponent', () => {
       passed: false,
       detail: 'Diagnostic research-intent evidence'
     })).toEqual({
-      name: 'External recipe discovery',
-      detail: 'The model cannot reliably interpret external recipe requests.'
+      name: 'integration.externalRecipeDiscovery',
+      detail: 'integration.theModelCannotReliablyInterpretExternalRecipeRequests'
     });
   });
 
@@ -65,8 +65,8 @@ describe('IntegrationsStatusComponent', () => {
       passed: false,
       detail: 'Raw diagnostic detail'
     })).toEqual({
-      name: 'Multilingual source requests',
-      detail: 'At least one English or Dutch source request did not produce a usable count, date and course plan. This is stricter than understanding conversational language.'
+      name: 'integration.multilingualSourceRequests',
+      detail: 'integration.atLeastOneEnglishOrDutchSourceRequestDidNotProduceAUsableCountDateAndCoursePlanThisIsStricterThanUnderstandingConversationalLanguage'
     });
   });
 });

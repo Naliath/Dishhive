@@ -4,30 +4,59 @@ import { SupportedLanguage } from '../models/user-setting.model';
 
 @Injectable({ providedIn: 'root' })
 export class LanguageService {
-  private readonly messages = signal<Record<string, string>>({});
+  private readonly messages = signal<TranslationTree>({});
   readonly language = signal<SupportedLanguage>('en');
+  private loadSequence = 0;
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(private readonly http: HttpClient) {
+    // Translations must not depend on the preferences endpoint being available.
+    // Preferences can replace this with the user's language once they are loaded.
+    this.use('en');
+  }
 
   use(language: SupportedLanguage): void {
+    const loadSequence = ++this.loadSequence;
     this.language.set(language);
     document.documentElement.lang = language;
-    this.http.get<Record<string, string>>(`/i18n/${language}.json`).subscribe({
-      next: messages => this.messages.set(messages),
-      error: () => language !== 'en' && this.use('en')
+    this.http.get<TranslationTree>(`/i18n/${language}.json`).subscribe({
+      next: messages => {
+        if (loadSequence === this.loadSequence) {
+          this.messages.set(messages);
+        }
+      },
+      error: () => {
+        if (loadSequence === this.loadSequence && language !== 'en') {
+          this.use('en');
+        }
+      }
     });
   }
 
-  t(key: string): string {
-    return this.messages()[key] ?? key;
+  t(key: string, params: TranslationParams = {}): string {
+    const value = this.resolve(key);
+    if (typeof value !== 'string') return key;
+    return value.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? `{${name}}`));
+  }
+
+  plural(key: string, count: number, params: TranslationParams = {}): string {
+    const category = new Intl.PluralRules(this.language()).select(count);
+    const value = this.resolve(`${key}.${category}`) ?? this.resolve(`${key}.other`);
+    if (typeof value !== 'string') return key;
+    return value.replace(/\{(\w+)\}/g, (_, name: string) =>
+      String(name === 'count' ? count : params[name] ?? `{${name}}`));
+  }
+
+  private resolve(key: string): string | TranslationTree | undefined {
+    return key.split('.').reduce<string | TranslationTree | undefined>((current, segment) =>
+      current && typeof current === 'object' ? current[segment] : undefined, this.messages());
   }
 
   /** Localizes computed collection labels while keeping manual collection names verbatim. */
   autoCollectionName(collection: { id: string; name: string }): string {
     switch (collection.id) {
-      case 'auto-top-rated': return this.t('Top rated');
-      case 'auto-quick': return this.t('Quick (max 30 min)');
-      case 'auto-recent': return this.t('Recently added');
+      case 'auto-top-rated': return this.t('collection.topRated');
+      case 'auto-quick': return this.t('collection.quickMax30Min');
+      case 'auto-recent': return this.t('collection.recentlyAdded');
     }
 
     if (collection.id.startsWith('auto-fav-')) {
@@ -35,7 +64,7 @@ export class LanguageService {
       const memberName = collection.name.endsWith(suffix)
         ? collection.name.slice(0, -suffix.length)
         : collection.name;
-      return this.t('{name} favorites').replace('{name}', memberName);
+      return this.t('collection.nameFavorites', { name: memberName });
     }
 
     return collection.name;
@@ -45,8 +74,19 @@ export class LanguageService {
 @Pipe({ name: 'translate', standalone: true, pure: false })
 export class TranslatePipe implements PipeTransform {
   constructor(private readonly language: LanguageService) {}
-  transform(key: string): string { return this.language.t(key); }
+  transform(key: string, params?: TranslationParams): string { return this.language.t(key, params); }
 }
+
+@Pipe({ name: 'translatePlural', standalone: true, pure: false })
+export class TranslatePluralPipe implements PipeTransform {
+  constructor(private readonly language: LanguageService) {}
+  transform(key: string, count: number, params?: TranslationParams): string {
+    return this.language.plural(key, count, params);
+  }
+}
+
+type TranslationTree = { [key: string]: string | TranslationTree };
+export type TranslationParams = Record<string, string | number>;
 
 @Pipe({ name: 'autoCollectionName', standalone: true, pure: false })
 export class AutoCollectionNamePipe implements PipeTransform {

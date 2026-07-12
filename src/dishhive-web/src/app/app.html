@@ -23,32 +23,32 @@
     <mat-nav-list>
       <a mat-list-item routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" (click)="sidenav.close()">
         <mat-icon matListItemIcon>calendar_month</mat-icon>
-        <span matListItemTitle>{{ 'Week Planner' | translate }}</span>
+        <span matListItemTitle>{{ 'navigation.weekPlanner' | translate }}</span>
       </a>
       <a mat-list-item routerLink="/recipes" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>menu_book</mat-icon>
-        <span matListItemTitle>{{ 'Recipes' | translate }}</span>
+        <span matListItemTitle>{{ 'navigation.recipes' | translate }}</span>
       </a>
       <a mat-list-item routerLink="/family" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>group</mat-icon>
-        <span matListItemTitle>{{ 'Family' | translate }}</span>
+        <span matListItemTitle>{{ 'navigation.family' | translate }}</span>
       </a>
       <a mat-list-item routerLink="/shopping-list" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>shopping_cart</mat-icon>
-        <span matListItemTitle>{{ 'Shopping List' | translate }}</span>
+        <span matListItemTitle>{{ 'navigation.shoppingList' | translate }}</span>
       </a>
       <a mat-list-item routerLink="/history" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>history</mat-icon>
-        <span matListItemTitle>{{ 'Past Dishes' | translate }}</span>
+        <span matListItemTitle>{{ 'navigation.pastDishes' | translate }}</span>
       </a>
       <a mat-list-item routerLink="/statistics" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>insights</mat-icon>
-        <span matListItemTitle>{{ 'Statistics' | translate }}</span>
+        <span matListItemTitle>{{ 'navigation.statistics' | translate }}</span>
       </a>
       <mat-divider></mat-divider>
       <a mat-list-item routerLink="/settings" routerLinkActive="active" (click)="sidenav.close()">
         <mat-icon matListItemIcon>settings</mat-icon>
-        <span matListItemTitle>{{ 'Settings' | translate }}</span>
+        <span matListItemTitle>{{ 'settings.settings' | translate }}</span>
       </a>
     </mat-nav-list>
   </mat-sidenav>

@@ -1,7 +1,11 @@
 :host {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+}
+
+.class-group {
+  min-width: 0;
 }
 
 .class-group-label {
@@ -11,13 +15,25 @@
 }
 
 .class-group-options {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
 
   // Compact checkboxes: the default Material touch target is oversized for a
   // 20-option matrix
   mat-checkbox {
     margin-right: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .class-group-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .class-group-options {
+    grid-template-columns: 1fr;
   }
 }

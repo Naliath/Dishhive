@@ -1,13 +1,13 @@
-<h1 class="mat-headline-medium">{{ 'Settings' | translate }}</h1>
+<h1 class="mat-headline-medium">{{ 'settings.settings' | translate }}</h1>
 
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
     <mat-icon mat-card-avatar>language</mat-icon>
-    <mat-card-title>{{ 'Language' | translate }}</mat-card-title>
+    <mat-card-title>{{ 'onboarding.language' | translate }}</mat-card-title>
   </mat-card-header>
   <mat-card-content>
     <mat-form-field appearance="outline">
-      <mat-label>{{ 'Language' | translate }}</mat-label>
+      <mat-label>{{ 'onboarding.language' | translate }}</mat-label>
       <mat-select [value]="settingsService.preferredLanguage()" (selectionChange)="setLanguage($event.value)">
         @for (language of settingsService.supportedLanguages(); track language.code) {
           <mat-option [value]="language.code">{{ language.displayName }}</mat-option>
@@ -16,16 +16,16 @@
     </mat-form-field>
     <mat-slide-toggle [checked]="settingsService.translateImportedRecipes()"
       (change)="setTranslateImportedRecipes($event.checked)">
-      {{ 'Translate imported recipes' | translate }}
+      {{ 'onboarding.translateImportedRecipes' | translate }}
     </mat-slide-toggle>
-    <p>{{ 'When enabled, AI translates imported titles, ingredients and steps while preserving the source text.' | translate }}</p>
+    <p>{{ 'settings.whenEnabledAITranslatesImportedTitlesIngredientsAndStepsWhilePreservingTheSourceText' | translate }}</p>
   </mat-card-content>
 </mat-card>
 
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
     <mat-icon mat-card-avatar>palette</mat-icon>
-    <mat-card-title>{{ 'Appearance' | translate }}</mat-card-title>
+    <mat-card-title>{{ 'settings.appearance' | translate }}</mat-card-title>
   </mat-card-header>
   <mat-card-content>
     <mat-button-toggle-group
@@ -36,22 +36,22 @@
       aria-label="Colour scheme">
       <mat-button-toggle value="auto">
         <mat-icon>brightness_auto</mat-icon>
-        {{ 'Auto' | translate }}
+        {{ 'settings.auto' | translate }}
       </mat-button-toggle>
       <mat-button-toggle value="light">
         <mat-icon>light_mode</mat-icon>
-        {{ 'Light' | translate }}
+        {{ 'settings.light' | translate }}
       </mat-button-toggle>
       <mat-button-toggle value="dark">
         <mat-icon>dark_mode</mat-icon>
-        {{ 'Dark' | translate }}
+        {{ 'settings.dark' | translate }}
       </mat-button-toggle>
     </mat-button-toggle-group>
     <p class="theme-hint">
       @if (themeService.currentTheme() === 'auto') {
-        {{ 'Following system preference' | translate }} <strong>{{ themeService.effectiveTheme() | translate }}</strong>
+        {{ 'settings.followingSystemPreference' | translate }} <strong>{{ ('settings.' + themeService.effectiveTheme()) | translate }}</strong>
       } @else {
-        {{ 'Theme locked to' | translate }} <strong>{{ themeService.currentTheme() | translate }}</strong>
+        {{ 'settings.themeLockedTo' | translate }} <strong>{{ ('settings.' + themeService.currentTheme()) | translate }}</strong>
       }
     </p>
   </mat-card-content>
@@ -60,9 +60,9 @@
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
     <mat-icon mat-card-avatar>straighten</mat-icon>
-    <mat-card-title>{{ 'Measurement system' | translate }}</mat-card-title>
+    <mat-card-title>{{ 'onboarding.measurementSystem' | translate }}</mat-card-title>
     <mat-card-subtitle>
-      {{ 'Measurements explanation' | translate }}
+      {{ 'settings.measurementsExplanation' | translate }}
     </mat-card-subtitle>
   </mat-card-header>
   <mat-card-content>
@@ -70,9 +70,9 @@
       class="measurement-group"
       [value]="settingsService.measurementSystem()"
       (change)="setMeasurementSystem($event.value)"
-      aria-label="Measurement system">
-      <mat-radio-button [value]="MeasurementSystem.Metric">{{ 'Metric default' | translate }}</mat-radio-button>
-      <mat-radio-button [value]="MeasurementSystem.Imperial">{{ 'Imperial units' | translate }}</mat-radio-button>
+      aria-label="onboarding.measurementSystem">
+      <mat-radio-button [value]="MeasurementSystem.Metric">{{ 'settings.metricDefault' | translate }}</mat-radio-button>
+      <mat-radio-button [value]="MeasurementSystem.Imperial">{{ 'settings.imperialUnits' | translate }}</mat-radio-button>
     </mat-radio-group>
   </mat-card-content>
 </mat-card>
@@ -80,9 +80,9 @@
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
     <mat-icon mat-card-avatar>calendar_view_week</mat-icon>
-    <mat-card-title>{{ 'First day of the week' | translate }}</mat-card-title>
+    <mat-card-title>{{ 'onboarding.firstDayOfTheWeek' | translate }}</mat-card-title>
     <mat-card-subtitle>
-      {{ 'Week start explanation' | translate }}
+      {{ 'settings.weekStartExplanation' | translate }}
     </mat-card-subtitle>
   </mat-card-header>
   <mat-card-content>
@@ -90,9 +90,9 @@
       class="first-day-group"
       [value]="settingsService.firstDayOfWeek()"
       (change)="setFirstDayOfWeek($event.value)"
-      aria-label="First day of the week">
-      <mat-radio-button [value]="FirstDayOfWeek.Monday">{{ 'Monday default' | translate }}</mat-radio-button>
-      <mat-radio-button [value]="FirstDayOfWeek.Sunday">{{ 'Sunday' | translate }}</mat-radio-button>
+      aria-label="onboarding.firstDayOfTheWeek">
+      <mat-radio-button [value]="FirstDayOfWeek.Monday">{{ 'settings.mondayDefault' | translate }}</mat-radio-button>
+      <mat-radio-button [value]="FirstDayOfWeek.Sunday">{{ 'common.sunday' | translate }}</mat-radio-button>
     </mat-radio-group>
   </mat-card-content>
 </mat-card>
@@ -100,14 +100,14 @@
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
     <mat-icon mat-card-avatar>auto_awesome</mat-icon>
-    <mat-card-title>{{ 'Automatic collections' | translate }}</mat-card-title>
+    <mat-card-title>{{ 'settings.automaticCollections' | translate }}</mat-card-title>
     <mat-card-subtitle>
-      {{ 'Automatic collections explanation' | translate }}
+      {{ 'settings.automaticCollectionsExplanation' | translate }}
     </mat-card-subtitle>
   </mat-card-header>
   <mat-card-content>
     @if (autoCollections().length === 0) {
-      <p class="auto-empty">{{ 'No automatic collections available.' | translate }}</p>
+      <p class="auto-empty">{{ 'settings.noAutomaticCollectionsAvailable' | translate }}</p>
     } @else {
       <div class="auto-collection-list">
         @for (collection of autoCollections(); track collection.id) {
@@ -117,7 +117,7 @@
               (change)="toggleAutoCollection(collection, $event.checked)">
               {{ collection | autoCollectionName }}
             </mat-slide-toggle>
-            <span class="auto-collection-count">{{ collection.recipeCount }} {{ 'recipes' | translate }}</span>
+            <span class="auto-collection-count">{{ 'settings.recipeCount' | translatePlural: collection.recipeCount }}</span>
           </div>
         }
       </div>
@@ -134,26 +134,26 @@
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
     <mat-icon mat-card-avatar>import_export</mat-icon>
-    <mat-card-title>{{ 'Recipe library backup' | translate }}</mat-card-title>
+    <mat-card-title>{{ 'settings.recipeLibraryBackup' | translate }}</mat-card-title>
     <mat-card-subtitle>
-      {{ 'Recipe backup explanation' | translate }}
+      {{ 'settings.recipeBackupExplanation' | translate }}
     </mat-card-subtitle>
   </mat-card-header>
   <mat-card-content>
     <div class="exchange-actions">
       <a mat-stroked-button [href]="recipesService.exportUrl" download>
         <mat-icon>download</mat-icon>
-        {{ 'Export recipes' | translate }}
+        {{ 'settings.exportRecipes' | translate }}
       </a>
       <button mat-stroked-button (click)="fileInput.click()" [disabled]="importing()">
         <mat-icon>upload</mat-icon>
-        {{ (importing() ? 'Importing…' : 'Import recipes') | translate }}
+        {{ (importing() ? 'settings.importing' : 'settings.importRecipes') | translate }}
       </button>
       <input #fileInput type="file" accept=".json,application/json" hidden
              (change)="importRecipes(fileInput.files); fileInput.value = ''" />
     </div>
     @if (importSkipped().length > 0) {
-      <p class="skipped-title">{{ 'Skipped during the last import:' | translate }}</p>
+      <p class="skipped-title">{{ 'settings.skippedDuringTheLastImport' | translate }}</p>
       <ul class="skipped-list">
         @for (skipped of importSkipped(); track skipped.title) {
           <li>{{ skipped.title }} — {{ skipped.reason }}</li>
@@ -167,15 +167,15 @@
   <mat-card appearance="raised" class="settings-card">
     <mat-card-header>
       <mat-icon mat-card-avatar>install_mobile</mat-icon>
-      <mat-card-title>{{ 'Install app' | translate }}</mat-card-title>
+      <mat-card-title>{{ 'settings.installApp' | translate }}</mat-card-title>
       <mat-card-subtitle>
-        {{ 'Install app explanation' | translate }}
+        {{ 'settings.installAppExplanation' | translate }}
       </mat-card-subtitle>
     </mat-card-header>
     <mat-card-content>
       <button mat-flat-button (click)="installApp()">
         <mat-icon>download</mat-icon>
-        {{ 'Install Dishhive' | translate }}
+        {{ 'settings.installDishhive' | translate }}
       </button>
     </mat-card-content>
   </mat-card>
@@ -184,9 +184,9 @@
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
     <mat-icon mat-card-avatar>info</mat-icon>
-    <mat-card-title>{{ 'About' | translate }}</mat-card-title>
+    <mat-card-title>{{ 'settings.about' | translate }}</mat-card-title>
   </mat-card-header>
   <mat-card-content>
-    <p>{{ 'Dishhive version' | translate }} {{ version }}</p>
+    <p>{{ 'settings.dishhiveVersion' | translate }} {{ version }}</p>
   </mat-card-content>
 </mat-card>

@@ -2,6 +2,7 @@ using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Collections;
+using Dishhive.Api.Services.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,14 +21,17 @@ public class CookbooksController : ControllerBase
     private readonly DishhiveDbContext _context;
     private readonly AutoCollectionProvider _autoCollections;
     private readonly ILogger<CookbooksController> _logger;
+    private readonly UserMessageLocalizer _messages;
 
     public CookbooksController(
         DishhiveDbContext context,
         AutoCollectionProvider autoCollections,
+        UserMessageLocalizer messages,
         ILogger<CookbooksController> logger)
     {
         _context = context;
         _autoCollections = autoCollections;
+        _messages = messages;
         _logger = logger;
     }
 
@@ -232,8 +236,9 @@ public class CookbooksController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Unknown recipes",
-                Detail = $"No recipe found for: {string.Join(", ", unknown)}"
+                Title = await _messages.GetAsync("collection.unknownRecipesTitle", cancellationToken),
+                Detail = await _messages.GetAsync("collection.unknownRecipesDetail", cancellationToken,
+                    ("ids", string.Join(", ", unknown)))
             });
         }
 
@@ -276,8 +281,8 @@ public class CookbooksController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Empty name",
-                Detail = "Give the collection a name."
+                Title = await _messages.GetAsync("collection.emptyNameTitle", cancellationToken),
+                Detail = await _messages.GetAsync("collection.emptyNameDetail", cancellationToken)
             });
         }
 
@@ -285,8 +290,8 @@ public class CookbooksController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Invalid collection name",
-                Detail = "Square brackets are not allowed in collection names — they delimit #[Name] references in planning instructions."
+                Title = await _messages.GetAsync("collection.invalidNameTitle", cancellationToken),
+                Detail = await _messages.GetAsync("collection.invalidNameDetail", cancellationToken)
             });
         }
 
@@ -297,8 +302,8 @@ public class CookbooksController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Duplicate collection",
-                Detail = $"A collection named '{name}' already exists."
+                Title = await _messages.GetAsync("collection.duplicateTitle", cancellationToken),
+                Detail = await _messages.GetAsync("collection.duplicateDetail", cancellationToken, ("name", name))
             });
         }
 
@@ -306,8 +311,8 @@ public class CookbooksController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Reserved name",
-                Detail = $"'{name}' is the name of a built-in automatic collection."
+                Title = await _messages.GetAsync("collection.reservedTitle", cancellationToken),
+                Detail = await _messages.GetAsync("collection.reservedDetail", cancellationToken, ("name", name))
             });
         }
 

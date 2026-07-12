@@ -8,7 +8,7 @@ public sealed record SupportedLanguage(string Code, string DisplayName);
 /// <summary>Discovers supported languages from the localization resources shipped by the API.</summary>
 public sealed class SupportedLanguageCatalog
 {
-    private const string ResourceMarker = ".UiTranslations.";
+    private const string ResourceMarker = ".Resources.Localization.";
 
     public IReadOnlyList<SupportedLanguage> Languages { get; } = Assembly.GetExecutingAssembly()
         .GetManifestResourceNames()

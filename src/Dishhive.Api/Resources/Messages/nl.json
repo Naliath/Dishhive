@@ -1,0 +1,92 @@
+{
+  "common": {
+    "invalidRangeTitle": "Ongeldig bereik",
+    "invalidRangeDetail": "De begindatum moet op of voor de einddatum liggen.",
+    "unknownRecipeTitle": "Onbekend recept",
+    "unknownRecipeDetail": "Recept '{recipeId}' bestaat niet."
+  },
+  "settings": {
+    "singlePreferenceRequired": "Geef precies één voorkeur op om bij te werken.",
+    "unsupportedValue": "Waarde '{value}' wordt niet ondersteund voor instelling '{key}'."
+  },
+  "plannedMeal": {
+    "emptyTitle": "Lege maaltijdplanning",
+    "emptyDetail": "Selecteer een recept, vul een gerechtnaam in of geef een planningsinstructie op.",
+    "invalidSuggestionTitle": "Ongeldige suggestieselectie",
+    "invalidSuggestionDetail": "Een batch-ID en minstens één geïdentificeerde suggestie zijn vereist.",
+    "futureTitle": "Maaltijd ligt in de toekomst",
+    "futureEatenDetail": "Een maaltijd kan pas op of na de geplande datum als gegeten of overgeslagen worden gemarkeerd.",
+    "futureRatingDetail": "Een maaltijd kan pas op of na de geplande datum worden beoordeeld.",
+    "unknownMemberTitle": "Onbekend gezinslid",
+    "unknownMemberDetail": "Gezinslid '{memberId}' bestaat niet."
+  },
+  "suggestionAcceptance": {
+    "noActiveAttendees": "Geen van de geselecteerde deelnemers is een actief gezinslid.",
+    "stockUnavailable": "Het geselecteerde diepvriesitem is niet meer in de gevraagde hoeveelheid beschikbaar.",
+    "recipeMissing": "Het gekoppelde recept bestaat niet meer.",
+    "importFailed": "Het geselecteerde recept kon niet worden geïmporteerd.",
+    "saveFailed": "De geplande maaltijd kon niet worden opgeslagen.",
+    "applyFailed": "De suggestie kon niet worden toegepast."
+  },
+  "recipe": {
+    "unsupportedSourceTitle": "Niet-ondersteunde receptbron",
+    "unsupportedSourceDetail": "Dit adres is niet afkomstig van een ondersteunde receptbron.",
+    "notFoundOnPageTitle": "Geen recept op de pagina gevonden",
+    "notFoundOnPageDetail": "Er kon geen bruikbaar recept uit deze pagina worden gehaald.",
+    "fetchFailedTitle": "Pagina kon niet worden opgehaald",
+    "fetchFailedDetail": "De receptpagina kon niet worden gedownload.",
+    "noFileTitle": "Geen bestand geselecteerd",
+    "noFileDetail": "Selecteer een JSON-bestand om te importeren.",
+    "invalidFileTitle": "Geen JSON-bestand",
+    "invalidFileDetail": "Het geselecteerde bestand bevat geen geldige JSON.",
+    "noRecipesTitle": "Geen recepten in het bestand",
+    "noRecipesDetail": "Het geselecteerde bestand bevat geen recepten.",
+    "noImageTitle": "Geen afbeelding aangeleverd",
+    "imageTooLargeTitle": "Afbeelding is te groot",
+    "imageTooLargeDetail": "Afbeeldingen mogen maximaal {maxMb} MB groot zijn.",
+    "invalidImageTitle": "Ongeldige receptafbeelding",
+    "unknownCollectionsTitle": "Onbekende collecties",
+    "unknownCollectionsDetail": "Geen collectie gevonden voor: {ids}",
+    "tagTooLongTitle": "Label is te lang",
+    "tagTooLongDetail": "Labels mogen maximaal 50 tekens bevatten.",
+    "unknownClassTitle": "Onbekende ingrediëntklasse",
+    "containedClassDetail": "Opgegeven klassen moeten geldige ingrediëntklassen zijn.",
+    "invalidImageUrlTitle": "Ongeldige afbeeldings-URL",
+    "downloadImageTitle": "Afbeelding kon niet worden gedownload",
+    "downloadImageDetail": "De afbeeldings-URL kon niet worden gedownload."
+  },
+  "familyMember": {
+    "emptyFavoriteTitle": "Lege favoriet",
+    "emptyFavoriteDetail": "Selecteer een recept of vul een gerechtnaam in.",
+    "excludedClassDetail": "Uitgesloten klassen moeten geldige ingrediëntklassen zijn."
+  },
+  "collection": {
+    "unknownRecipesTitle": "Onbekende recepten",
+    "unknownRecipesDetail": "Geen recept gevonden voor: {ids}",
+    "emptyNameTitle": "Lege naam",
+    "emptyNameDetail": "Geef de collectie een naam.",
+    "invalidNameTitle": "Ongeldige collectienaam",
+    "invalidNameDetail": "Vierkante haken zijn niet toegestaan omdat ze collectieverwijzingen in planningsinstructies afbakenen.",
+    "duplicateTitle": "Dubbele collectie",
+    "duplicateDetail": "Er bestaat al een collectie met de naam '{name}'.",
+    "reservedTitle": "Gereserveerde naam",
+    "reservedDetail": "'{name}' is de naam van een ingebouwde automatische collectie."
+  },
+  "integration": {
+    "searchForbidden": "SearXNG is bereikbaar, maar JSON-zoeken is verboden. Schakel JSON in bij de zoekformaten in settings.yml en herstart SearXNG.",
+    "searchHttpStatus": "De zoekservice gaf HTTP {statusCode} ({reason}) terug voor het JSON-eindpunt.",
+    "searchUnexpectedResponse": "De zoekservice antwoordde, maar gaf niet het verwachte SearXNG-JSON-resultaat terug. Controleer de zoek-URL en JSON-configuratie.",
+    "searchInvalidJson": "Het antwoord van de zoekservice was geen geldige JSON. Controleer of JSON bij de zoekformaten is ingeschakeld.",
+    "searchTimeout": "De zoekservice antwoordde niet binnen 5 seconden. Controleer de URL en of de service actief is.",
+    "searchUnreachable": "De zoekservice kon niet worden bereikt. Controleer de ingestelde URL en of de service actief is.",
+    "scraperUnavailableTitle": "Scraperservice niet beschikbaar",
+    "scraperUnreachableDetail": "De receptscraperservice kon niet worden bereikt.",
+    "scraperNotConfiguredDetail": "De receptscraperservice is niet geconfigureerd.",
+    "scraperUpdateFailedTitle": "Bijwerken van scraper mislukt",
+    "aiNotConfiguredTitle": "AI is niet geconfigureerd",
+    "aiNotConfiguredDetail": "Configureer een AI-provider en model voordat je het test."
+  },
+  "recipeAssessment": {
+    "failed": "Beoordeling van '{recipeTitle}' mislukt. Bekijk de applicatielogs voor details."
+  }
+}

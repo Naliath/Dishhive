@@ -4,6 +4,7 @@ using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.WebSearch;
+using Dishhive.Api.Services.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Net;
@@ -14,7 +15,7 @@ namespace Dishhive.Api.Controllers;
 
 [ApiController]
 [Route("api/integrations")]
-public class IntegrationsController(IHttpClientFactory httpClientFactory) : ControllerBase
+public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMessageLocalizer messages) : ControllerBase
 {
     [HttpGet("status")]
     public async Task<IntegrationStatusResponseDto> GetStatus(
@@ -95,7 +96,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
                 return new WebSearchProbe(
                     Reachable: true,
                     Operational: false,
-                    Error: "SearXNG is reachable, but JSON search is forbidden. In settings.yml, use a nested search section with a formats list (not a search.formats key), include json, and restart SearXNG.");
+                    Error: await messages.GetAsync("integration.searchForbidden", cancellationToken));
             }
 
             if (!response.IsSuccessStatusCode)
@@ -103,7 +104,8 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
                 return new WebSearchProbe(
                     Reachable: true,
                     Operational: false,
-                    Error: $"The search service returned {(int)response.StatusCode} ({response.ReasonPhrase}) for its JSON search endpoint.");
+                    Error: await messages.GetAsync("integration.searchHttpStatus", cancellationToken,
+                        ("statusCode", (int)response.StatusCode), ("reason", response.ReasonPhrase)));
             }
 
             await using var body = await response.Content.ReadAsStreamAsync(cts.Token);
@@ -115,7 +117,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
                 return new WebSearchProbe(
                     Reachable: true,
                     Operational: false,
-                    Error: "The search service responded, but not with the expected SearXNG JSON search result. Check WebSearch__BaseUrl and the SearXNG JSON format configuration.");
+                    Error: await messages.GetAsync("integration.searchUnexpectedResponse", cancellationToken));
             }
 
             return new WebSearchProbe(Reachable: true, Operational: true, Error: null);
@@ -125,21 +127,21 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
             return new WebSearchProbe(
                 Reachable: true,
                 Operational: false,
-                Error: "The search service responded, but its search response was not valid JSON. Ensure json is enabled under search: formats: in SearXNG settings.yml.");
+                Error: await messages.GetAsync("integration.searchInvalidJson", cancellationToken));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return new WebSearchProbe(
                 Reachable: false,
                 Operational: false,
-                Error: "The search service did not respond within 5 seconds. Check the URL and that the service is running.");
+                Error: await messages.GetAsync("integration.searchTimeout", cancellationToken));
         }
         catch (Exception ex) when (ex is HttpRequestException or UriFormatException)
         {
             return new WebSearchProbe(
                 Reachable: false,
                 Operational: false,
-                Error: "Could not reach the search service. Check WebSearch__BaseUrl and that the service is running.");
+                Error: await messages.GetAsync("integration.searchUnreachable", cancellationToken));
         }
     }
 
@@ -164,10 +166,10 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
             {
-                Title = "Scraper service unavailable",
+                Title = await messages.GetAsync("integration.scraperUnavailableTitle", cancellationToken),
                 Detail = scrapersClient.IsConfigured
-                    ? "The recipe scraper service could not be reached."
-                    : "The recipe scraper service is not configured (RecipeScrapers__BaseUrl)."
+                    ? await messages.GetAsync("integration.scraperUnreachableDetail", cancellationToken)
+                    : await messages.GetAsync("integration.scraperNotConfiguredDetail", cancellationToken)
             });
         }
 
@@ -192,7 +194,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
         {
             return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
             {
-                Title = "Scraper update failed",
+                Title = await messages.GetAsync("integration.scraperUpdateFailedTitle", cancellationToken),
                 Detail = result.Error
             });
         }
@@ -223,16 +225,16 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory) : Cont
     [HttpPost("ai/test")]
     [ProducesResponseType(typeof(AiModelTestStatusDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public ActionResult<AiModelTestStatusDto> RunAiModelTest(
+    public async Task<ActionResult<AiModelTestStatusDto>> RunAiModelTest(
         [FromServices] IAiModelCapabilityService aiCapability,
-        [FromServices] AiOptions aiOptions)
+        [FromServices] AiOptions aiOptions, CancellationToken cancellationToken)
     {
         if (!aiOptions.IsConfigured)
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "AI is not configured",
-                Detail = "Set Ai__Provider and Ai__Model before testing a model."
+                Title = await messages.GetAsync("integration.aiNotConfiguredTitle", cancellationToken),
+                Detail = await messages.GetAsync("integration.aiNotConfiguredDetail", cancellationToken)
             });
         }
 

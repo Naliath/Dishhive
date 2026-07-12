@@ -111,6 +111,7 @@ public class RecipeFactsAssessmentService : BackgroundService
     {
         using var scope = _scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<DishhiveDbContext>();
+        var messages = scope.ServiceProvider.GetRequiredService<UserMessageLocalizer>();
 
         var recipe = await context.Recipes
             .Include(r => r.Ingredients)
@@ -138,7 +139,8 @@ public class RecipeFactsAssessmentService : BackgroundService
                 recipe.Ingredients.OrderBy(i => i.SortOrder).Select(i => i.Name).ToList(),
                 cancellationToken);
             if (classes == null)
-                _lastError = $"Assessment failed for \"{recipe.Title}\" (see logs)";
+                _lastError = await messages.GetAsync("recipeAssessment.failed", cancellationToken,
+                    ("recipeTitle", recipe.Title));
         }
 
         if (classes != null)

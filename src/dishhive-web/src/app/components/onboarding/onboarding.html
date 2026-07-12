@@ -5,7 +5,7 @@
       <span class="mat-title-large">Dishhive</span>
     </div>
     <button mat-button type="button" (click)="skip()" [disabled]="finishing()">
-      {{ 'Skip setup' | translate }}
+      {{ 'onboarding.skipSetup' | translate }}
     </button>
   </header>
 
@@ -28,39 +28,39 @@
 
       <mat-vertical-stepper #stepper [linear]="true">
         <mat-step [stepControl]="preferencesForm">
-          <ng-template matStepLabel>{{ 'Planning preferences' | translate }}</ng-template>
+          <ng-template matStepLabel>{{ 'onboarding.planningPreferences' | translate }}</ng-template>
           <form [formGroup]="preferencesForm" class="step-content">
             <div>
-              <h2 class="mat-title-large">{{ 'Start with the familiar' | translate }}</h2>
+              <h2 class="mat-title-large">{{ 'onboarding.startWithTheFamiliar' | translate }}</h2>
               <p class="mat-body-medium secondary-copy">
-                {{ 'We picked the most common defaults. You can change these later in Settings.' | translate }}
+                {{ 'onboarding.wePickedTheMostCommonDefaultsYouCanChangeTheseLaterInSettings' | translate }}
               </p>
             </div>
 
             <fieldset class="choice-group">
-              <legend class="mat-title-medium">{{ 'Language' | translate }}</legend>
+              <legend class="mat-title-medium">{{ 'onboarding.language' | translate }}</legend>
               <mat-form-field appearance="outline">
-                <mat-label>{{ 'Language' | translate }}</mat-label>
+                <mat-label>{{ 'onboarding.language' | translate }}</mat-label>
                 <mat-select formControlName="preferredLanguage" (selectionChange)="languageService.use($event.value)">
                   @for (language of settingsService.supportedLanguages(); track language.code) {
                     <mat-option [value]="language.code">{{ language.displayName }}</mat-option>
                   }
                 </mat-select>
               </mat-form-field>
-              <mat-slide-toggle formControlName="translateImportedRecipes">{{ 'Translate imported recipes' | translate }}</mat-slide-toggle>
+              <mat-slide-toggle formControlName="translateImportedRecipes">{{ 'onboarding.translateImportedRecipes' | translate }}</mat-slide-toggle>
             </fieldset>
 
             <fieldset class="choice-group">
-              <legend class="mat-title-medium">{{ 'First day of the week' | translate }}</legend>
-              <mat-radio-group formControlName="firstDayOfWeek" aria-label="First day of the week">
-                <mat-radio-button [value]="FirstDayOfWeek.Monday">{{ 'Monday' | translate }}</mat-radio-button>
-                <mat-radio-button [value]="FirstDayOfWeek.Sunday">{{ 'Sunday' | translate }}</mat-radio-button>
+              <legend class="mat-title-medium">{{ 'onboarding.firstDayOfTheWeek' | translate }}</legend>
+              <mat-radio-group formControlName="firstDayOfWeek" aria-label="onboarding.firstDayOfTheWeek">
+                <mat-radio-button [value]="FirstDayOfWeek.Monday">{{ 'common.monday' | translate }}</mat-radio-button>
+                <mat-radio-button [value]="FirstDayOfWeek.Sunday">{{ 'common.sunday' | translate }}</mat-radio-button>
               </mat-radio-group>
             </fieldset>
 
             <fieldset class="choice-group">
-              <legend class="mat-title-medium">{{ 'Measurements' | translate }}</legend>
-              <mat-radio-group formControlName="measurementSystem" aria-label="Measurement system">
+              <legend class="mat-title-medium">{{ 'onboarding.measurements' | translate }}</legend>
+              <mat-radio-group formControlName="measurementSystem" aria-label="onboarding.measurementSystem">
                 <mat-radio-button [value]="MeasurementSystem.Metric">Metric (g, ml, °C)</mat-radio-button>
                 <mat-radio-button [value]="MeasurementSystem.Imperial">Imperial (oz, cups, °F)</mat-radio-button>
               </mat-radio-group>
@@ -73,7 +73,7 @@
                 </button>
               } @else {
                 <button mat-flat-button type="button" (click)="savePreferences(stepper)">
-                  {{ 'Continue' | translate }}
+                  {{ 'common.continue' | translate }}
                   <mat-icon iconPositionEnd>arrow_forward</mat-icon>
                 </button>
               }

@@ -3,6 +3,7 @@ using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
+using Dishhive.Api.Services.Localization;
 using Dishhive.Api.Services.Suggestions;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +30,7 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
             _context,
             _importService,
             new FreezerAvailabilityService(freezy, _context),
+            new UserMessageLocalizer(_context),
             NullLogger<MealSuggestionAcceptanceService>.Instance);
     }
 

@@ -20,6 +20,7 @@ import { RecipesService } from '../../services/recipes.service';
 import { DietaryTagEntry, DietaryTagKind, FamilyMember, FamilyMemberFavorite } from '../../models/family-member.model';
 import { ingredientClassLabels } from '../../models/ingredient-class.model';
 import { RecipeListItem } from '../../models/recipe.model';
+import { LanguageService, TranslatePipe } from '../../services/language.service';
 
 type TagField = 'allergy' | 'diet';
 
@@ -40,7 +41,8 @@ type TagField = 'allergy' | 'diet';
     MatListModule,
     MatSlideToggleModule,
     MatSnackBarModule,
-    MatTooltipModule
+    MatTooltipModule,
+    TranslatePipe
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './family.page.html',
@@ -90,14 +92,15 @@ export class FamilyPage implements OnInit {
   /** Tooltip text for a tag chip: its excluded classes, human-readable */
   classesTooltip(entry: DietaryTagEntry): string {
     return entry.excludedClasses?.length
-      ? `Excludes: ${ingredientClassLabels(entry.excludedClasses)}`
-      : 'Not machine-checkable (no excluded ingredient classes)';
+      ? this.language.t('family.excludes', { classes: ingredientClassLabels(entry.excludedClasses) })
+      : this.language.t('family.notMachineCheckable');
   }
 
   constructor(
     private familyMembersService: FamilyMembersService,
     private recipesService: RecipesService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private language: LanguageService
   ) {}
 
   ngOnInit(): void {
@@ -115,7 +118,7 @@ export class FamilyPage implements OnInit {
       },
       error: () => {
         this.loading.set(false);
-        this.snackBar.open('Could not load family members', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.language.t('family.loadError'), this.language.t('common.dismiss'), { duration: 4000 });
       }
     });
   }
@@ -186,14 +189,14 @@ export class FamilyPage implements OnInit {
         this.favoriteRecipeResults.set([]);
         this.loadFavorites(this.members());
       },
-      error: () => this.snackBar.open('Could not add the favorite', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.language.t('family.favoriteAddError'), this.language.t('common.dismiss'), { duration: 4000 })
     });
   }
 
   removeFavorite(favorite: FamilyMemberFavorite): void {
     this.familyMembersService.deleteFavorite(favorite.familyMemberId, favorite.id).subscribe({
       next: () => this.loadFavorites(this.members()),
-      error: () => this.snackBar.open('Could not remove the favorite', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.language.t('family.favoriteRemoveError'), this.language.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -329,7 +332,7 @@ export class FamilyPage implements OnInit {
       },
       error: () => {
         this.saving.set(false);
-        this.snackBar.open('Could not save the member', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.language.t('family.saveError'), this.language.t('common.dismiss'), { duration: 4000 });
       }
     });
   }
@@ -337,11 +340,11 @@ export class FamilyPage implements OnInit {
   remove(member: FamilyMember): void {
     this.familyMembersService.deleteMember(member.id).subscribe({
       next: () => {
-        this.snackBar.open(`${member.name} removed`, 'Dismiss', { duration: 3000 });
+        this.snackBar.open(this.language.t('family.removed', { name: member.name }), this.language.t('common.dismiss'), { duration: 3000 });
         this.loadMembers();
         this.loadKnownTags();
       },
-      error: () => this.snackBar.open('Could not remove the member', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.language.t('family.removeError'), this.language.t('common.dismiss'), { duration: 4000 })
     });
   }
 

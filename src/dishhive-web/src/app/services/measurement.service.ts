@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { SettingsService } from './settings.service';
+import { MeasurementSystem } from '../models/user-setting.model';
 
 /**
  * Formats stored (metric) quantities in the household's preferred measurement system.
@@ -31,7 +32,7 @@ export class MeasurementService {
     let value = quantity;
     let displayUnit = unit ?? '';
 
-    if (this.settingsService.measurementSystem() === 'imperial' && unit) {
+    if (this.settingsService.measurementSystem() === MeasurementSystem.Imperial && unit) {
       const imperial = MeasurementService.imperialUnits[unit];
       if (imperial) {
         value = quantity * imperial.factor;

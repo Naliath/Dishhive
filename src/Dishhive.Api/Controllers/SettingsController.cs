@@ -22,13 +22,15 @@ public class SettingsController : ControllerBase
     private readonly DishhiveDbContext _context;
     private readonly ILogger<SettingsController> _logger;
     private readonly SupportedLanguageCatalog _languages;
+    private readonly UserMessageLocalizer _messages;
 
     public SettingsController(DishhiveDbContext context, ILogger<SettingsController> logger,
-        SupportedLanguageCatalog languages)
+        SupportedLanguageCatalog languages, UserMessageLocalizer messages)
     {
         _context = context;
         _logger = logger;
         _languages = languages;
+        _messages = messages;
     }
 
     [HttpGet("preferences")]
@@ -42,6 +44,15 @@ public class SettingsController : ControllerBase
                 || setting.Key == UserSettingKeys.TranslateImportedRecipes)
             .ToDictionaryAsync(setting => setting.Key, setting => setting.Value, cancellationToken);
         return BuildPreferences(values);
+    }
+
+    [HttpGet("languages")]
+    [ProducesResponseType(typeof(IReadOnlyList<SupportedLanguageDto>), StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<SupportedLanguageDto>> GetSupportedLanguages()
+    {
+        return _languages.Languages
+            .Select(language => new SupportedLanguageDto(language.Code, language.DisplayName))
+            .ToList();
     }
 
     [HttpPatch("preferences")]
@@ -64,12 +75,14 @@ public class SettingsController : ControllerBase
 
         if (updates.Count != 1)
         {
-            return ValidationProblem("Supply exactly one preference to update.");
+            return ValidationProblem(await _messages.GetAsync(
+                "settings.singlePreferenceRequired", cancellationToken));
         }
         var (key, value) = updates[0];
         if (!IsValidKnownValue(key, value))
         {
-            return ValidationProblem($"Unsupported value '{value}' for setting '{key}'.");
+            return ValidationProblem(await _messages.GetAsync("settings.unsupportedValue", cancellationToken,
+                ("value", value), ("key", key)));
         }
 
         await UpsertSettingAsync(key, value, cancellationToken);
@@ -210,7 +223,8 @@ public class SettingsController : ControllerBase
     {
         if (!IsValidKnownValue(key, dto.Value))
         {
-            return ValidationProblem($"Unsupported value '{dto.Value}' for setting '{key}'.");
+            return ValidationProblem(await _messages.GetAsync("settings.unsupportedValue", cancellationToken,
+                ("value", dto.Value), ("key", key)));
         }
         var (setting, created) = await UpsertSettingAsync(key, dto.Value, cancellationToken);
         return created

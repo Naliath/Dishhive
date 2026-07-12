@@ -206,10 +206,10 @@
 
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Contains</mat-card-title>
+        <mat-card-title>{{ 'recipeForm.contains' | translate }}</mat-card-title>
         <mat-card-subtitle>
-          Allergens and ingredient classes in this dish — the week planner checks
-          them against everyone's allergies and diets. {{ factsStatusLabel() }}
+          {{ 'recipeForm.containsExplanation' | translate }}
+          {{ factsStatusKey() | translate }}
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content class="form-section">

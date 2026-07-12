@@ -81,9 +81,9 @@ export class IntegrationsStatusComponent implements OnInit {
 
   aiVerdictLabel(verdict: AiModelTestVerdict): string {
     switch (verdict) {
-      case 'passed': return 'All tested AI planning features are available';
-      case 'warnings': return 'AI planning works, but some features are unavailable';
-      case 'failed': return 'AI planning is unavailable — suggestions will use the rules fallback';
+      case 'passed': return 'integration.allTestedAIPlanningFeaturesAreAvailable';
+      case 'warnings': return 'integration.aIPlanningWorksButSomeFeaturesAreUnavailable';
+      case 'failed': return 'integration.aIPlanningIsUnavailableSuggestionsWillUseTheRulesFallback';
     }
   }
 
@@ -91,49 +91,49 @@ export class IntegrationsStatusComponent implements OnInit {
   aiFeature(check: AiModelTestCheck): { name: string; detail: string } {
     const features: Record<string, { name: string; supported: string; unsupported: string }> = {
       Endpoint: {
-        name: 'AI service connection',
-        supported: 'Dishhive can connect to the configured AI service.',
-        unsupported: 'Dishhive cannot connect to the configured AI service.'
+        name: 'integration.aIServiceConnection',
+        supported: 'integration.dishhiveCanConnectToTheConfiguredAIService',
+        unsupported: 'integration.dishhiveCannotConnectToTheConfiguredAIService'
       },
       'Model available': {
-        name: 'Configured model',
-        supported: 'The configured model is available for meal planning.',
-        unsupported: 'The configured model is not available from the AI service.'
+        name: 'integration.configuredModel',
+        supported: 'integration.theConfiguredModelIsAvailableForMealPlanning',
+        unsupported: 'integration.theConfiguredModelIsNotAvailableFromTheAIService'
       },
       'Structured JSON reply': {
-        name: 'Structured meal plans',
-        supported: 'The model returns meal plans in a format Dishhive can use.',
-        unsupported: 'The model does not return meal plans in a usable format.'
+        name: 'integration.structuredMealPlans',
+        supported: 'integration.theModelReturnsMealPlansInAFormatDishhiveCanUse',
+        unsupported: 'integration.theModelDoesNotReturnMealPlansInAUsableFormat'
       },
       'All days filled': {
-        name: 'Complete week planning',
-        supported: 'The model can propose meals for every requested day.',
-        unsupported: 'The model may leave requested days without a meal suggestion.'
+        name: 'integration.completeWeekPlanning',
+        supported: 'integration.theModelCanProposeMealsForEveryRequestedDay',
+        unsupported: 'integration.theModelMayLeaveRequestedDaysWithoutAMealSuggestion'
       },
       'Collection day': {
-        name: 'Recipe collection instructions',
-        supported: 'The model can choose recipes from a requested collection.',
-        unsupported: 'The model does not reliably follow recipe collection requests.'
+        name: 'integration.recipeCollectionInstructions',
+        supported: 'integration.theModelCanChooseRecipesFromARequestedCollection',
+        unsupported: 'integration.theModelDoesNotReliablyFollowRecipeCollectionRequests'
       },
       'Specific dish': {
-        name: 'Specific meal instructions',
-        supported: 'The model can place a requested meal on the requested day.',
-        unsupported: 'The model does not reliably follow meal and day instructions.'
+        name: 'integration.specificMealInstructions',
+        supported: 'integration.theModelCanPlaceARequestedMealOnTheRequestedDay',
+        unsupported: 'integration.theModelDoesNotReliablyFollowMealAndDayInstructions'
       },
       'Vegetarian days': {
-        name: 'Dietary planning instructions',
-        supported: 'The model can follow dietary planning instructions across the week.',
-        unsupported: 'The model does not reliably follow dietary planning instructions.'
+        name: 'integration.dietaryPlanningInstructions',
+        supported: 'integration.theModelCanFollowDietaryPlanningInstructionsAcrossTheWeek',
+        unsupported: 'integration.theModelDoesNotReliablyFollowDietaryPlanningInstructions'
       },
       'External recipe intent': {
-        name: 'External recipe discovery',
-        supported: 'The model can interpret source, count, date, and course requests for verified recipe research.',
-        unsupported: 'The model cannot reliably interpret external recipe requests.'
+        name: 'integration.externalRecipeDiscovery',
+        supported: 'integration.theModelCanInterpretSourceCountDateAndCourseRequestsForVerifiedRecipeResearch',
+        unsupported: 'integration.theModelCannotReliablyInterpretExternalRecipeRequests'
       },
       'Multilingual planning instructions': {
-        name: 'Multilingual source requests',
-        supported: 'The model can turn equivalent English and Dutch source requests into usable counts, dates and courses.',
-        unsupported: 'At least one English or Dutch source request did not produce a usable count, date and course plan. This is stricter than understanding conversational language.'
+        name: 'integration.multilingualSourceRequests',
+        supported: 'integration.theModelCanTurnEquivalentEnglishAndDutchSourceRequestsIntoUsableCountsDatesAndCourses',
+        unsupported: 'integration.atLeastOneEnglishOrDutchSourceRequestDidNotProduceAUsableCountDateAndCoursePlanThisIsStricterThanUnderstandingConversationalLanguage'
       },
       'Test run': {
         name: 'Capability test',
@@ -177,8 +177,8 @@ export class IntegrationsStatusComponent implements OnInit {
   }
 
   chipLabel(integration: { configured: boolean; reachable: boolean }): string {
-    if (!integration.configured) return 'Not configured';
-    return integration.reachable ? 'Active' : 'Unreachable';
+    if (!integration.configured) return 'common.notConfigured';
+    return integration.reachable ? 'common.active' : 'common.unreachable';
   }
 
   webSearchChipClass(integration: IntegrationStatusResponse['webSearch']): string {
@@ -192,9 +192,9 @@ export class IntegrationsStatusComponent implements OnInit {
   }
 
   webSearchChipLabel(integration: IntegrationStatusResponse['webSearch']): string {
-    if (!integration.configured) return 'Not configured';
-    if (integration.operational) return 'Active';
-    return integration.reachable ? 'Misconfigured' : 'Unreachable';
+    if (!integration.configured) return 'common.notConfigured';
+    if (integration.operational) return 'common.active';
+    return integration.reachable ? 'common.misconfigured' : 'common.unreachable';
   }
 
   checkForUpdates(): void {

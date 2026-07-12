@@ -3,12 +3,31 @@ using System.Net.Http.Json;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using FluentAssertions;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Dishhive.Api.Tests.Integration;
 
 public class PlannedMealsControllerIntegrationTests : TestBase
 {
     private static readonly DateOnly Monday = new(2026, 6, 15);
+
+    [Fact]
+    public async Task ValidationProblem_UsesSavedPreferredLanguage()
+    {
+        DbContext.UserSettings.Add(new UserSetting
+        {
+            Key = UserSettingKeys.PreferredLanguage,
+            Value = "nl"
+        });
+        await DbContext.SaveChangesAsync();
+
+        var response = await Client.GetAsync("/api/plannedmeals?from=2026-06-16&to=2026-06-15");
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        problem!.Title.Should().Be("Ongeldig bereik");
+        problem.Detail.Should().Be("De begindatum moet op of voor de einddatum liggen.");
+    }
 
     [Fact]
     public async Task SetRecipe_LinksRecipeAndResolvesVagueInstruction()

@@ -184,6 +184,7 @@ builder.Services.AddScoped<Dishhive.Api.Services.Collections.AutoCollectionProvi
 
 // Controllers
 builder.Services.AddSingleton<SupportedLanguageCatalog>();
+builder.Services.AddScoped<UserMessageLocalizer>();
 builder.Services.AddControllers();
 
 // Native OpenAPI

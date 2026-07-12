@@ -1,12 +1,15 @@
 using System.Net;
 using Dishhive.Api.Controllers;
+using Dishhive.Api.Data;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
+using Dishhive.Api.Services.Localization;
 using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.WebSearch;
 using Dishhive.Api.Tests.Mocks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 
 namespace Dishhive.Api.Tests.Controllers;
@@ -27,7 +30,7 @@ public class IntegrationsControllerTests
         status.WebSearch.Reachable.Should().BeTrue();
         status.WebSearch.Operational.Should().BeFalse();
         status.WebSearch.Error.Should().Contain("JSON search is forbidden");
-        status.WebSearch.Error.Should().Contain("not a search.formats key");
+        status.WebSearch.Error.Should().Contain("search formats");
     }
 
     [Fact]
@@ -68,7 +71,9 @@ public class IntegrationsControllerTests
         var scrapersClient = Substitute.For<IRecipeScrapersClient>();
         scrapersClient.GetInstalledVersionAsync(Arg.Any<CancellationToken>()).Returns((string?)null);
 
-        var controller = new IntegrationsController(httpClientFactory);
+        await using var context = new DishhiveDbContext(new DbContextOptionsBuilder<DishhiveDbContext>()
+            .UseInMemoryDatabase($"Integrations_{Guid.NewGuid()}").Options);
+        var controller = new IntegrationsController(httpClientFactory, new UserMessageLocalizer(context));
         return await controller.GetStatus(
             new AiOptions(),
             freezyClient,

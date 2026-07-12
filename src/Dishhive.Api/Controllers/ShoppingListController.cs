@@ -1,5 +1,6 @@
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.ShoppingList;
+using Dishhive.Api.Services.Localization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dishhive.Api.Controllers;
@@ -12,10 +13,12 @@ namespace Dishhive.Api.Controllers;
 public class ShoppingListController : ControllerBase
 {
     private readonly IShoppingListService _shoppingListService;
+    private readonly UserMessageLocalizer _messages;
 
-    public ShoppingListController(IShoppingListService shoppingListService)
+    public ShoppingListController(IShoppingListService shoppingListService, UserMessageLocalizer messages)
     {
         _shoppingListService = shoppingListService;
+        _messages = messages;
     }
 
     /// <summary>
@@ -29,7 +32,11 @@ public class ShoppingListController : ControllerBase
     {
         if (from > to)
         {
-            return BadRequest(new ProblemDetails { Title = "Invalid range", Detail = "'from' must be before 'to'." });
+            return BadRequest(new ProblemDetails
+            {
+                Title = await _messages.GetAsync("common.invalidRangeTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("common.invalidRangeDetail", HttpContext.RequestAborted)
+            });
         }
 
         return Ok(await _shoppingListService.GenerateAsync(from, to));

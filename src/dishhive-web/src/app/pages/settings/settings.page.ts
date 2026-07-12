@@ -18,7 +18,7 @@ import { IntegrationsStatusComponent } from '../../components/integrations-statu
 import { RecipeFactsSettingsComponent } from '../../components/recipe-facts-settings/recipe-facts-settings';
 import { FirstDayOfWeek, MeasurementSystem } from '../../models/user-setting.model';
 import { SupportedLanguage } from '../../models/user-setting.model';
-import { AutoCollectionNamePipe, LanguageService, TranslatePipe } from '../../services/language.service';
+import { AutoCollectionNamePipe, LanguageService, TranslatePipe, TranslatePluralPipe } from '../../services/language.service';
 import { AutoCollectionInfo } from '../../models/recipe.model';
 import { environment } from '../../../environments/environment';
 
@@ -28,7 +28,7 @@ import { environment } from '../../../environments/environment';
   imports: [
     MatButtonModule, MatButtonToggleModule, MatCardModule, MatFormFieldModule, MatIconModule, MatRadioModule,
     MatSlideToggleModule, MatSelectModule, MatSnackBarModule, AiPromptSettingsComponent, IntegrationsStatusComponent,
-    RecipeFactsSettingsComponent, TranslatePipe, AutoCollectionNamePipe
+    RecipeFactsSettingsComponent, TranslatePipe, TranslatePluralPipe, AutoCollectionNamePipe
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings.page.html',

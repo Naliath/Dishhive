@@ -3,6 +3,7 @@ using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
+using Dishhive.Api.Services.Localization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -12,6 +13,7 @@ public class MealSuggestionAcceptanceService(
     DishhiveDbContext context,
     IRecipeImportService importService,
     FreezerAvailabilityService freezerAvailability,
+    UserMessageLocalizer messages,
     ILogger<MealSuggestionAcceptanceService> logger)
 {
     public async Task<AcceptMealSuggestionsResponseDto> AcceptAsync(
@@ -52,7 +54,8 @@ public class MealSuggestionAcceptanceService(
             : item.AttendeeIds.Where(attendeeIds.Contains).Distinct().ToList();
         if (item.AttendeeIds.Count > 0 && requestedAttendees.Count == 0)
         {
-            return Result(item, "planningFailed", error: "None of the selected attendees are active household members.");
+            return Result(item, "planningFailed", error: await messages.GetAsync(
+                "suggestionAcceptance.noActiveAttendees", cancellationToken));
         }
 
         var quantity = Math.Max(1, item.FreezyItemQuantity);
@@ -62,7 +65,8 @@ public class MealSuggestionAcceptanceService(
             var stock = available.FirstOrDefault(candidate => candidate.Id == item.FreezyItemRef);
             if (stock == null || stock.Quantity < quantity)
             {
-                return Result(item, "stockUnavailable", error: "The selected freezer item is no longer available in the requested quantity.");
+                return Result(item, "stockUnavailable", error: await messages.GetAsync(
+                    "suggestionAcceptance.stockUnavailable", cancellationToken));
             }
         }
 
@@ -72,7 +76,8 @@ public class MealSuggestionAcceptanceService(
             recipe = await context.Recipes.FindAsync([item.RecipeId.Value], cancellationToken);
             if (recipe == null)
             {
-                return Result(item, "planningFailed", error: "The linked recipe no longer exists.");
+                return Result(item, "planningFailed", error: await messages.GetAsync(
+                    "suggestionAcceptance.recipeMissing", cancellationToken));
             }
         }
         else if (!string.IsNullOrWhiteSpace(item.SourceUrl))
@@ -86,14 +91,16 @@ public class MealSuggestionAcceptanceService(
                 logger.LogWarning(ex,
                     "Could not import accepted suggestion {SuggestionId} from {Url}",
                     item.Id, item.SourceUrl);
-                return Result(item, "importFailed", error: ex.Message);
+                return Result(item, "importFailed", error: await messages.GetAsync(
+                    "suggestionAcceptance.importFailed", cancellationToken));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 logger.LogWarning(ex,
                     "Could not import accepted suggestion {SuggestionId} from {Url}",
                     item.Id, item.SourceUrl);
-                return Result(item, "importFailed", error: ex.Message);
+                return Result(item, "importFailed", error: await messages.GetAsync(
+                    "suggestionAcceptance.importFailed", cancellationToken));
             }
         }
 
@@ -156,7 +163,8 @@ public class MealSuggestionAcceptanceService(
                 }
 
                 logger.LogWarning(ex, "Could not persist accepted suggestion {SuggestionId}", item.Id);
-                return Result(item, "planningFailed", recipeId: recipe?.Id, error: "The planned meal could not be saved.");
+                return Result(item, "planningFailed", recipeId: recipe?.Id, error: await messages.GetAsync(
+                    "suggestionAcceptance.saveFailed", cancellationToken));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -166,7 +174,8 @@ public class MealSuggestionAcceptanceService(
                 }
                 context.ChangeTracker.Clear();
                 logger.LogWarning(ex, "Could not apply accepted suggestion {SuggestionId}", item.Id);
-                return Result(item, "planningFailed", recipeId: recipe?.Id, error: "The suggestion could not be applied.");
+                return Result(item, "planningFailed", recipeId: recipe?.Id, error: await messages.GetAsync(
+                    "suggestionAcceptance.applyFailed", cancellationToken));
             }
         }
     }

@@ -2,41 +2,41 @@
   <mat-card appearance="raised" class="settings-card">
     <mat-card-header>
       <mat-icon mat-card-avatar>fact_check</mat-icon>
-      <mat-card-title>{{ 'Recipe dietary facts' | translate }}</mat-card-title>
+      <mat-card-title>{{ 'recipeFacts.recipeDietaryFacts' | translate }}</mat-card-title>
       <mat-card-subtitle>
-        {{ 'Recipe facts explanation' | translate }}
+        {{ 'recipeFacts.recipeFactsExplanation' | translate }}
       </mat-card-subtitle>
     </mat-card-header>
     <mat-card-content>
       <div class="facts-counts">
         <span class="facts-count facts-count--unassessed">
-          <strong>{{ s.unassessed }}</strong> {{ 'not assessed' | translate }}
+          <strong>{{ s.unassessed }}</strong> {{ 'recipeFacts.notAssessed' | translate }}
         </span>
         <span class="facts-count">
-          <strong>{{ s.aiDetected }}</strong> {{ 'AI-detected' | translate }}
+          <strong>{{ s.aiDetected }}</strong> {{ 'recipeFacts.aIDetected' | translate }}
         </span>
         <span class="facts-count">
-          <strong>{{ s.userConfirmed }}</strong> {{ 'confirmed by you' | translate }}
+          <strong>{{ s.userConfirmed }}</strong> {{ 'recipeFacts.confirmedByYou' | translate }}
         </span>
       </div>
 
       @if (!s.available) {
         <p class="facts-hint">
-          {{ 'Configure an AI provider to detect facts automatically; recipes can still be classified manually.' | translate }}
+          {{ 'recipeFacts.configureAnAIProviderToDetectFactsAutomaticallyRecipesCanStillBeClassifiedManually' | translate }}
         </p>
       } @else if (running()) {
         <div class="facts-progress">
           <app-cooking-loader diameter="28" />
-          <span>{{ 'Assessing recipes…' | translate }} {{ s.queueDepth }} {{ 'remaining' | translate }}</span>
+          <span>{{ 'recipeFacts.assessingRecipes' | translate }} {{ s.queueDepth }} {{ 'recipeFacts.remaining' | translate }}</span>
         </div>
       } @else {
         <button mat-stroked-button (click)="backfill()"
                 [disabled]="starting() || s.unassessed === 0">
           <mat-icon>fact_check</mat-icon>
           @if (s.unassessed === 0) {
-            {{ 'Everything assessed' | translate }}
+            {{ 'recipeFacts.everythingAssessed' | translate }}
           } @else {
-            {{ 'Assess' | translate }} {{ s.unassessed }} {{ 'unclassified recipes' | translate }}
+            {{ 'recipeFacts.assess' | translate }} {{ s.unassessed }} {{ 'recipeFacts.unclassifiedRecipes' | translate }}
           }
         </button>
       }

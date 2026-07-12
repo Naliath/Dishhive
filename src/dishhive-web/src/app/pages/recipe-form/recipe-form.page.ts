@@ -17,6 +17,7 @@ import { RecipesService } from '../../services/recipes.service';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { CreateRecipe, DietaryFactsStatus, Recipe } from '../../models/recipe.model';
 import { Observable, map, of, switchMap, tap } from 'rxjs';
+import { TranslatePipe } from '../../services/language.service';
 
 interface IngredientRow {
   name: string;
@@ -49,7 +50,8 @@ interface StepRow {
     MatIconModule,
     MatInputModule,
     MatSnackBarModule,
-    MatTooltipModule
+    MatTooltipModule,
+    TranslatePipe
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './recipe-form.page.html',
@@ -112,14 +114,14 @@ export class RecipeFormPage implements OnInit, OnDestroy {
   readonly containsClasses = signal<string[]>([]);
   readonly factsStatus = signal<DietaryFactsStatus>(DietaryFactsStatus.Unassessed);
   readonly factsTouched = signal(false);
-  readonly factsStatusLabel = computed(() => {
+  readonly factsStatusKey = computed(() => {
     if (this.factsTouched()) {
-      return 'Will be saved as confirmed by you';
+      return 'recipeForm.factsWillBeConfirmed';
     }
     switch (this.factsStatus()) {
-      case DietaryFactsStatus.AiDetected: return 'AI-detected — tick/untick to confirm or correct';
-      case DietaryFactsStatus.UserConfirmed: return 'Confirmed by you';
-      default: return 'Not assessed yet — leave untouched to let AI detect them on save';
+      case DietaryFactsStatus.AiDetected: return 'recipeForm.factsAiDetected';
+      case DietaryFactsStatus.UserConfirmed: return 'recipeForm.factsConfirmed';
+      default: return 'recipeForm.factsNotAssessed';
     }
   });
 

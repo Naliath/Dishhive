@@ -6,7 +6,8 @@ import {
   FirstDayOfWeek,
   MeasurementSystem,
   UpdateUserPreferencesDto,
-  UserPreferencesDto
+  UserPreferencesDto,
+  SupportedLanguageDto
 } from '../api/generated/dishhive-api.client';
 import {
   AiPromptSettings,
@@ -26,7 +27,18 @@ export class SettingsService {
   readonly translateImportedRecipes = signal(false);
   readonly supportedLanguages = signal<ReadonlyArray<{ code: string; displayName: string }>>([]);
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) {
+    // Language selection remains available even when loading database-backed
+    // preferences fails (for example during initial setup or a database outage).
+    this.loadSupportedLanguages().subscribe();
+  }
+
+  loadSupportedLanguages(): Observable<SupportedLanguageDto[]> {
+    return this.http.get<SupportedLanguageDto[]>(`${this.apiUrl}/languages`).pipe(
+      tap(languages => this.supportedLanguages.set(languages)),
+      catchError(() => of([]))
+    );
+  }
 
   loadPreferences(): Observable<UserPreferencesDto | null> {
     return this.http.get<UserPreferencesDto>(`${this.apiUrl}/preferences`).pipe(

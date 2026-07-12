@@ -9,6 +9,15 @@ namespace Dishhive.Api.Tests.Integration;
 public class SettingsControllerIntegrationTests : TestBase
 {
     [Fact]
+    public async Task Languages_AreDiscoveredFromBackendLocalizationFiles()
+    {
+        var languages = await Client.GetFromJsonAsync<List<SupportedLanguageDto>>(
+            "/api/settings/languages");
+
+        languages!.Select(language => language.Code).Should().BeEquivalentTo("en", "nl");
+    }
+
+    [Fact]
     public async Task Preferences_UsesTypedEnumsAndLanguagesDiscoveredFromResources()
     {
         var response = await Client.GetAsync("/api/settings/preferences");

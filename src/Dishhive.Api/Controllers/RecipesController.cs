@@ -5,6 +5,7 @@ using Dishhive.Api.Services;
 using Dishhive.Api.Services.Collections;
 using Dishhive.Api.Services.Facts;
 using Dishhive.Api.Services.Import;
+using Dishhive.Api.Services.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,7 @@ public class RecipesController : ControllerBase
     private readonly RecipeFactsAssessmentService _factsQueue;
     private readonly ISafeHttpFetcher _httpFetcher;
     private readonly ILogger<RecipesController> _logger;
+    private readonly UserMessageLocalizer _messages;
 
     public RecipesController(
         DishhiveDbContext context,
@@ -30,6 +32,7 @@ public class RecipesController : ControllerBase
         IRecipeExchangeService exchangeService,
         RecipeFactsAssessmentService factsQueue,
         ISafeHttpFetcher httpFetcher,
+        UserMessageLocalizer messages,
         ILogger<RecipesController> logger)
     {
         _context = context;
@@ -37,6 +40,7 @@ public class RecipesController : ControllerBase
         _exchangeService = exchangeService;
         _factsQueue = factsQueue;
         _httpFetcher = httpFetcher;
+        _messages = messages;
         _logger = logger;
     }
 
@@ -196,14 +200,15 @@ public class RecipesController : ControllerBase
         }
         if (file == null || file.Length == 0)
         {
-            return BadRequest(new ProblemDetails { Title = "No image supplied" });
+            return BadRequest(new ProblemDetails { Title = await _messages.GetAsync("recipe.noImageTitle", cancellationToken) });
         }
         if (file.Length > RecipeImageProcessor.MaxSourceBytes)
         {
             return StatusCode(StatusCodes.Status413PayloadTooLarge, new ProblemDetails
             {
-                Title = "Image too large",
-                Detail = $"Images may be at most {RecipeImageProcessor.MaxSourceBytes / 1024 / 1024} MB."
+                Title = await _messages.GetAsync("recipe.imageTooLargeTitle", cancellationToken),
+                Detail = await _messages.GetAsync("recipe.imageTooLargeDetail", cancellationToken,
+                    ("maxMb", RecipeImageProcessor.MaxSourceBytes / 1024 / 1024))
             });
         }
 
@@ -221,7 +226,7 @@ public class RecipesController : ControllerBase
         {
             return UnprocessableEntity(new ProblemDetails
             {
-                Title = "Invalid recipe image",
+                Title = await _messages.GetAsync("recipe.invalidImageTitle", cancellationToken),
                 Detail = ex.Message
             });
         }
@@ -304,8 +309,9 @@ public class RecipesController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Unknown collections",
-                Detail = $"No collection found for: {string.Join(", ", unknown)}"
+                Title = await _messages.GetAsync("recipe.unknownCollectionsTitle", cancellationToken),
+                Detail = await _messages.GetAsync("recipe.unknownCollectionsDetail", cancellationToken,
+                    ("ids", string.Join(", ", unknown)))
             });
         }
 
@@ -336,11 +342,11 @@ public class RecipesController : ControllerBase
     {
         if (dto.Tags.Any(t => t.Trim().Length > 50))
         {
-            return TagTooLong();
+            return await TagTooLongAsync(cancellationToken);
         }
         if (HasUnknownClass(dto.ContainsClasses))
         {
-            return UnknownClass();
+            return await UnknownClassAsync(cancellationToken);
         }
 
         var recipe = new Recipe();
@@ -383,11 +389,11 @@ public class RecipesController : ControllerBase
     {
         if (dto.Tags.Any(t => t.Trim().Length > 50))
         {
-            return TagTooLong();
+            return await TagTooLongAsync(cancellationToken);
         }
         if (HasUnknownClass(dto.ContainsClasses))
         {
-            return UnknownClass();
+            return await UnknownClassAsync(cancellationToken);
         }
 
         var recipe = await _context.Recipes
@@ -526,16 +532,30 @@ public class RecipesController : ControllerBase
         }
         catch (UnsupportedRecipeSourceException ex)
         {
-            return BadRequest(new ProblemDetails { Title = "Unsupported recipe source", Detail = ex.Message });
+            _logger.LogInformation(ex, "Unsupported recipe source {Url}", dto.Url);
+            return BadRequest(new ProblemDetails
+            {
+                Title = await _messages.GetAsync("recipe.unsupportedSourceTitle", cancellationToken),
+                Detail = await _messages.GetAsync("recipe.unsupportedSourceDetail", cancellationToken)
+            });
         }
         catch (RecipeExtractionFailedException ex)
         {
-            return UnprocessableEntity(new ProblemDetails { Title = "No recipe found on page", Detail = ex.Message });
+            _logger.LogInformation(ex, "No recipe found at {Url}", dto.Url);
+            return UnprocessableEntity(new ProblemDetails
+            {
+                Title = await _messages.GetAsync("recipe.notFoundOnPageTitle", cancellationToken),
+                Detail = await _messages.GetAsync("recipe.notFoundOnPageDetail", cancellationToken)
+            });
         }
         catch (HttpRequestException ex)
         {
             _logger.LogWarning(ex, "Failed to fetch recipe page {Url}", dto.Url);
-            return UnprocessableEntity(new ProblemDetails { Title = "Could not fetch page", Detail = ex.Message });
+            return UnprocessableEntity(new ProblemDetails
+            {
+                Title = await _messages.GetAsync("recipe.fetchFailedTitle", cancellationToken),
+                Detail = await _messages.GetAsync("recipe.fetchFailedDetail", cancellationToken)
+            });
         }
     }
 
@@ -552,7 +572,7 @@ public class RecipesController : ControllerBase
     {
         if (HasUnknownClass(dto.Contains))
         {
-            return UnknownClass();
+            return await UnknownClassAsync(HttpContext.RequestAborted);
         }
 
         var recipe = await _context.Recipes
@@ -658,7 +678,11 @@ public class RecipesController : ControllerBase
     {
         if (file == null || file.Length == 0)
         {
-            return BadRequest(new ProblemDetails { Title = "No file", Detail = "Select a JSON file to import." });
+            return BadRequest(new ProblemDetails
+            {
+                Title = await _messages.GetAsync("recipe.noFileTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("recipe.noFileDetail", HttpContext.RequestAborted)
+            });
         }
 
         try
@@ -669,11 +693,21 @@ public class RecipesController : ControllerBase
         }
         catch (System.Text.Json.JsonException ex)
         {
-            return BadRequest(new ProblemDetails { Title = "Not a JSON file", Detail = ex.Message });
+            _logger.LogInformation(ex, "Invalid recipe import JSON file");
+            return BadRequest(new ProblemDetails
+            {
+                Title = await _messages.GetAsync("recipe.invalidFileTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("recipe.invalidFileDetail", HttpContext.RequestAborted)
+            });
         }
         catch (RecipeExtractionFailedException ex)
         {
-            return UnprocessableEntity(new ProblemDetails { Title = "No recipes in file", Detail = ex.Message });
+            _logger.LogInformation(ex, "Recipe import file contained no recipes");
+            return UnprocessableEntity(new ProblemDetails
+            {
+                Title = await _messages.GetAsync("recipe.noRecipesTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("recipe.noRecipesDetail", HttpContext.RequestAborted)
+            });
         }
     }
 
@@ -741,16 +775,16 @@ public class RecipesController : ControllerBase
         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         .ToList();
 
-    private BadRequestObjectResult TagTooLong() => BadRequest(new ProblemDetails
+    private async Task<BadRequestObjectResult> TagTooLongAsync(CancellationToken cancellationToken) => BadRequest(new ProblemDetails
     {
-        Title = "Tag too long",
-        Detail = "Tags are at most 50 characters."
+        Title = await _messages.GetAsync("recipe.tagTooLongTitle", cancellationToken),
+        Detail = await _messages.GetAsync("recipe.tagTooLongDetail", cancellationToken)
     });
 
-    private BadRequestObjectResult UnknownClass() => BadRequest(new ProblemDetails
+    private async Task<BadRequestObjectResult> UnknownClassAsync(CancellationToken cancellationToken) => BadRequest(new ProblemDetails
     {
-        Title = "Unknown ingredient class",
-        Detail = "Contained classes must be valid IngredientClass names (e.g. \"Milk\", \"Gluten\", \"Pork\")."
+        Title = await _messages.GetAsync("recipe.unknownClassTitle", cancellationToken),
+        Detail = await _messages.GetAsync("recipe.containedClassDetail", cancellationToken)
     });
 
     private static bool HasUnknownClass(List<string>? names) =>
@@ -891,7 +925,7 @@ public class RecipesController : ControllerBase
         {
             return UnprocessableEntity(new ProblemDetails
             {
-                Title = "Invalid image URL",
+                Title = await _messages.GetAsync("recipe.invalidImageUrlTitle", cancellationToken),
                 Detail = error
             });
         }
@@ -909,8 +943,9 @@ public class RecipesController : ControllerBase
             _logger.LogWarning(ex, "Could not store recipe image from {Url}", imageUri);
             return UnprocessableEntity(new ProblemDetails
             {
-                Title = "Could not download image",
-                Detail = ex is RecipeImageException ? ex.Message : "The image URL could not be downloaded."
+                Title = await _messages.GetAsync("recipe.downloadImageTitle", cancellationToken),
+                Detail = ex is RecipeImageException ? ex.Message : await _messages.GetAsync(
+                    "recipe.downloadImageDetail", cancellationToken)
             });
         }
     }

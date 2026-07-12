@@ -2,6 +2,7 @@ using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Suggestions;
+using Dishhive.Api.Services.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,18 +23,21 @@ public class PlannedMealsController : ControllerBase
     private readonly MealSuggestionRequestBuilder _suggestionRequestBuilder;
     private readonly MealSuggestionAcceptanceService _suggestionAcceptance;
     private readonly ILogger<PlannedMealsController> _logger;
+    private readonly UserMessageLocalizer _messages;
 
     public PlannedMealsController(
         DishhiveDbContext context,
         IMealSuggestionService suggestionService,
         MealSuggestionRequestBuilder suggestionRequestBuilder,
         MealSuggestionAcceptanceService suggestionAcceptance,
+        UserMessageLocalizer messages,
         ILogger<PlannedMealsController> logger)
     {
         _context = context;
         _suggestionService = suggestionService;
         _suggestionRequestBuilder = suggestionRequestBuilder;
         _suggestionAcceptance = suggestionAcceptance;
+        _messages = messages;
         _logger = logger;
     }
 
@@ -48,7 +52,11 @@ public class PlannedMealsController : ControllerBase
     {
         if (from > to)
         {
-            return BadRequest(new ProblemDetails { Title = "Invalid range", Detail = "'from' must be before 'to'." });
+            return BadRequest(new ProblemDetails
+            {
+                Title = await _messages.GetAsync("common.invalidRangeTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("common.invalidRangeDetail", HttpContext.RequestAborted)
+            });
         }
 
         var meals = await _context.PlannedMeals
@@ -176,8 +184,9 @@ public class PlannedMealsController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Unknown recipe",
-                Detail = $"Recipe '{dto.RecipeId}' does not exist."
+                Title = await _messages.GetAsync("common.unknownRecipeTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("common.unknownRecipeDetail", HttpContext.RequestAborted,
+                    ("recipeId", dto.RecipeId))
             });
         }
 
@@ -305,8 +314,8 @@ public class PlannedMealsController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Invalid suggestion selection",
-                Detail = "A batch id and at least one identified suggestion are required."
+                Title = await _messages.GetAsync("plannedMeal.invalidSuggestionTitle", cancellationToken),
+                Detail = await _messages.GetAsync("plannedMeal.invalidSuggestionDetail", cancellationToken)
             });
         }
 
@@ -337,8 +346,8 @@ public class PlannedMealsController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Meal is in the future",
-                Detail = "A meal can only be marked eaten or skipped on or after its planned date."
+                Title = await _messages.GetAsync("plannedMeal.futureTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("plannedMeal.futureEatenDetail", HttpContext.RequestAborted)
             });
         }
 
@@ -372,8 +381,8 @@ public class PlannedMealsController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Meal is in the future",
-                Detail = "A meal can only be rated on or after its planned date."
+                Title = await _messages.GetAsync("plannedMeal.futureTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("plannedMeal.futureRatingDetail", HttpContext.RequestAborted)
             });
         }
 
@@ -382,8 +391,9 @@ public class PlannedMealsController : ControllerBase
         {
             return NotFound(new ProblemDetails
             {
-                Title = "Unknown family member",
-                Detail = $"Family member '{memberId}' does not exist."
+                Title = await _messages.GetAsync("plannedMeal.unknownMemberTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("plannedMeal.unknownMemberDetail", HttpContext.RequestAborted,
+                    ("memberId", memberId))
             });
         }
 
@@ -436,8 +446,8 @@ public class PlannedMealsController : ControllerBase
         {
             return new ProblemDetails
             {
-                Title = "Empty meal plan",
-                Detail = "Set a recipe, a dish name or a vague instruction."
+                Title = await _messages.GetAsync("plannedMeal.emptyTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("plannedMeal.emptyDetail", HttpContext.RequestAborted)
             };
         }
 
@@ -446,8 +456,9 @@ public class PlannedMealsController : ControllerBase
         {
             return new ProblemDetails
             {
-                Title = "Unknown recipe",
-                Detail = $"Recipe '{dto.RecipeId}' does not exist."
+                Title = await _messages.GetAsync("common.unknownRecipeTitle", HttpContext.RequestAborted),
+                Detail = await _messages.GetAsync("common.unknownRecipeDetail", HttpContext.RequestAborted,
+                    ("recipeId", dto.RecipeId))
             };
         }
 

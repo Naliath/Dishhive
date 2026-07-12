@@ -1,0 +1,92 @@
+{
+  "common": {
+    "invalidRangeTitle": "Invalid range",
+    "invalidRangeDetail": "The start date must be on or before the end date.",
+    "unknownRecipeTitle": "Unknown recipe",
+    "unknownRecipeDetail": "Recipe '{recipeId}' does not exist."
+  },
+  "settings": {
+    "singlePreferenceRequired": "Supply exactly one preference to update.",
+    "unsupportedValue": "Value '{value}' is not supported for setting '{key}'."
+  },
+  "plannedMeal": {
+    "emptyTitle": "Empty meal plan",
+    "emptyDetail": "Select a recipe, enter a dish name, or provide a planning instruction.",
+    "invalidSuggestionTitle": "Invalid suggestion selection",
+    "invalidSuggestionDetail": "A batch ID and at least one identified suggestion are required.",
+    "futureTitle": "Meal is in the future",
+    "futureEatenDetail": "A meal can only be marked eaten or skipped on or after its planned date.",
+    "futureRatingDetail": "A meal can only be rated on or after its planned date.",
+    "unknownMemberTitle": "Unknown family member",
+    "unknownMemberDetail": "Family member '{memberId}' does not exist."
+  },
+  "suggestionAcceptance": {
+    "noActiveAttendees": "None of the selected attendees are active household members.",
+    "stockUnavailable": "The selected freezer item is no longer available in the requested quantity.",
+    "recipeMissing": "The linked recipe no longer exists.",
+    "importFailed": "The selected recipe could not be imported.",
+    "saveFailed": "The planned meal could not be saved.",
+    "applyFailed": "The suggestion could not be applied."
+  },
+  "recipe": {
+    "unsupportedSourceTitle": "Unsupported recipe source",
+    "unsupportedSourceDetail": "This address is not from a supported recipe source.",
+    "notFoundOnPageTitle": "No recipe found on page",
+    "notFoundOnPageDetail": "No usable recipe could be extracted from this page.",
+    "fetchFailedTitle": "Could not fetch page",
+    "fetchFailedDetail": "The recipe page could not be downloaded.",
+    "noFileTitle": "No file selected",
+    "noFileDetail": "Select a JSON file to import.",
+    "invalidFileTitle": "Not a JSON file",
+    "invalidFileDetail": "The selected file is not valid JSON.",
+    "noRecipesTitle": "No recipes in file",
+    "noRecipesDetail": "The selected file does not contain any recipes.",
+    "noImageTitle": "No image supplied",
+    "imageTooLargeTitle": "Image too large",
+    "imageTooLargeDetail": "Images may be at most {maxMb} MB.",
+    "invalidImageTitle": "Invalid recipe image",
+    "unknownCollectionsTitle": "Unknown collections",
+    "unknownCollectionsDetail": "No collection was found for: {ids}",
+    "tagTooLongTitle": "Tag too long",
+    "tagTooLongDetail": "Tags may contain at most 50 characters.",
+    "unknownClassTitle": "Unknown ingredient class",
+    "containedClassDetail": "Contained classes must be valid ingredient-class names.",
+    "invalidImageUrlTitle": "Invalid image URL",
+    "downloadImageTitle": "Could not download image",
+    "downloadImageDetail": "The image URL could not be downloaded."
+  },
+  "familyMember": {
+    "emptyFavoriteTitle": "Empty favorite",
+    "emptyFavoriteDetail": "Select a recipe or enter a dish name.",
+    "excludedClassDetail": "Excluded classes must be valid ingredient-class names."
+  },
+  "collection": {
+    "unknownRecipesTitle": "Unknown recipes",
+    "unknownRecipesDetail": "No recipe was found for: {ids}",
+    "emptyNameTitle": "Empty name",
+    "emptyNameDetail": "Give the collection a name.",
+    "invalidNameTitle": "Invalid collection name",
+    "invalidNameDetail": "Square brackets are not allowed because they delimit collection references in planning instructions.",
+    "duplicateTitle": "Duplicate collection",
+    "duplicateDetail": "A collection named '{name}' already exists.",
+    "reservedTitle": "Reserved name",
+    "reservedDetail": "'{name}' is the name of a built-in automatic collection."
+  },
+  "integration": {
+    "searchForbidden": "SearXNG is reachable, but JSON search is forbidden. Enable JSON under search formats in settings.yml and restart SearXNG.",
+    "searchHttpStatus": "The search service returned HTTP {statusCode} ({reason}) for its JSON endpoint.",
+    "searchUnexpectedResponse": "The search service responded, but did not return the expected SearXNG JSON result. Check the search URL and JSON format configuration.",
+    "searchInvalidJson": "The search service response was not valid JSON. Ensure JSON is enabled under search formats in settings.yml.",
+    "searchTimeout": "The search service did not respond within 5 seconds. Check the URL and whether the service is running.",
+    "searchUnreachable": "Could not reach the search service. Check the configured URL and whether the service is running.",
+    "scraperUnavailableTitle": "Scraper service unavailable",
+    "scraperUnreachableDetail": "The recipe scraper service could not be reached.",
+    "scraperNotConfiguredDetail": "The recipe scraper service is not configured.",
+    "scraperUpdateFailedTitle": "Scraper update failed",
+    "aiNotConfiguredTitle": "AI is not configured",
+    "aiNotConfiguredDetail": "Configure an AI provider and model before testing it."
+  },
+  "recipeAssessment": {
+    "failed": "Assessment failed for '{recipeTitle}'. See the application logs for details."
+  }
+}

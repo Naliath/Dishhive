@@ -84,7 +84,7 @@ export class CollectionMentionDirective implements OnInit, AfterViewInit {
         name: c.name,
         displayName,
         icon: c.kind === 'auto' ? 'auto_awesome' : 'bookmark',
-        detail: `${c.recipeCount} ${this.language.t('recipes')}`
+        detail: this.language.plural('settings.recipeCount', c.recipeCount)
       }));
   });
 

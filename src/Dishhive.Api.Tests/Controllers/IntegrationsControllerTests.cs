@@ -6,6 +6,7 @@ using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.WebSearch;
 using Dishhive.Api.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace Dishhive.Api.Tests.Controllers;
@@ -74,6 +75,7 @@ public class IntegrationsControllerTests
             scrapersClient,
             new WebSearchOptions { Provider = "searxng", BaseUrl = BaseUrl },
             new NoOpAiModelCapabilityService(),
+            NullLogger<LlmMealSuggestionService>.Instance,
             CancellationToken.None);
     }
 }

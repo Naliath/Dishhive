@@ -17,7 +17,17 @@ Map spelling variants ("ui"/"uien") to one ingredient for cleaner shopping aggre
 ### Reorde planned meals
 Allow switching planned meals of meals that are being planned in an easy fashion. Perhaps drag and drop them to another day. This allows the user to quickly match planning to reality.
 
+### Add ID matching to freezy recepies comming from the AI
+Currently it is possible for a recipe comming from the AI to reference a freezy dish but it not be marked as such.
+
 ## Medium Scope Features
+
+### Preferred language selection
+Support multiple inteface languages based on industry standard multi-lingual support practices. Start with Dutch and English (currently the only language). Add a global setting to the settings page and also allow it to be set during onboarding (default to the preffered browser language and when not an available language set to english).
+
+There should be a translation file for things like interface elements, ingriedient normalization lists, alergens, etc.
+
+During recipe import there is an AI step to to determine the alergens and classifications. During that step we should add a translation to the user set language (governed by a toggle in the settings). Further ingiedient normalization might be warrented as well. The full steps etc should have an original just like we have for the ingriedients so that errors can be compared to the original.
 
 ### Persisted shopping list with check-off
 Promote the computed shopping list to a persisted, checkable list with manually added extra

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evaluate AI Week Planning"
+  short_description: "Run and assess Dishhive week-planning regressions"
+  default_prompt: "Use $evaluate-ai-week-planning to run the Dishhive AI week-planning regression corpus and diagnose any failures."

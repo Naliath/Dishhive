@@ -1,26 +1,26 @@
-<h2 mat-dialog-title>Suggested dinners</h2>
+<h2 mat-dialog-title>{{ 'weekPlanner.suggestions.title' | translate }}</h2>
 
 <mat-dialog-content>
   @switch (phase()) {
     @case ('checking') {
       <div class="suggestion-loading">
         <app-cooking-loader diameter="56" />
-        <p>Checking the AI assistant…</p>
+        <p>{{ 'weekPlanner.suggestions.checkingAi' | translate }}</p>
       </div>
     }
     @case ('compose') {
       <p class="compose-hint">
-        Any wishes for this week? They are passed to the AI before it plans the menu.
+        {{ 'weekPlanner.suggestions.composeHint' | translate }}
         @if (webSearchAvailable()) {
-          Reference a website with <code>&#64;</code> to have it find and import a new recipe.
+          {{ 'weekPlanner.suggestions.websiteHint' | translate }}
         }
       </p>
       <div class="instructions-row">
         <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
-          <mat-label>Instructions (optional)</mat-label>
+          <mat-label>{{ 'weekPlanner.suggestions.instructions' | translate }}</mat-label>
           <textarea matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
                  rows="3" cdkTextareaAutosize cdkAutosizeMinRows="3"
-                 placeholder="e.g. vegetarian under 30 min from @[Dagelijkse Kost]"
+                 [placeholder]="'weekPlanner.suggestions.instructionsPlaceholder' | translate"
                  appCollectionMention #composeMention="appCollectionMention"
                  [matAutocomplete]="composeAuto"></textarea>
           <mat-autocomplete #composeAuto="matAutocomplete">
@@ -40,28 +40,28 @@
     @case ('generating') {
       <div class="suggestion-loading">
         <app-cooking-loader diameter="56" />
-        <p>Cooking up a delicious week…</p>
+        <p>{{ 'weekPlanner.suggestions.generating' | translate }}</p>
       </div>
     }
     @case ('review') {
       @if (failed()) {
         <div class="suggestion-empty">
           <mat-icon>error_outline</mat-icon>
-          <p>Could not get suggestions. Try again later.</p>
+          <p>{{ 'weekPlanner.suggestions.loadError' | translate }}</p>
         </div>
       } @else if (suggestions().length === 0) {
         <div class="suggestion-empty">
           <mat-icon>event_available</mat-icon>
-          <p>Nothing to suggest — every day already has a dinner planned.</p>
+          <p>{{ 'weekPlanner.suggestions.nothingToSuggest' | translate }}</p>
         </div>
       } @else {
         @if (allFromFallback()) {
           <div class="fallback-banner">
             <mat-icon>info</mat-icon>
             <span>
-              The AI did not answer, so these are rule-based suggestions (freezer and
-              favorites rotation){{ instructions.trim() ? ' — your instructions were not applied' : '' }}.
-              Check the model on the Settings page.
+              {{ (instructions.trim()
+                ? 'weekPlanner.suggestions.fallbackWithInstructions'
+                : 'weekPlanner.suggestions.fallback') | translate }}
             </span>
           </div>
         }
@@ -69,10 +69,7 @@
           <div class="fallback-banner excluded-banner">
             <mat-icon>no_meals</mat-icon>
             <span>
-              {{ excludedForAllergies() }}
-              {{ excludedForAllergies() === 1 ? 'recipe was' : 'recipes were' }} excluded
-              because of household allergies. Wrongly excluded? Correct the facts on the
-              recipe's page.
+              {{ 'weekPlanner.suggestions.excludedForAllergies' | translatePlural:excludedForAllergies() }}
             </span>
           </div>
         }
@@ -91,16 +88,16 @@
                     <span class="suggestion-dish">
                       {{ item.suggestion.dishName }}
                       @if (item.suggestion.recipeId) {
-                        <mat-icon class="recipe-icon" matTooltip="Matches a recipe in your store">menu_book</mat-icon>
+                        <mat-icon class="recipe-icon" [matTooltip]="'weekPlanner.suggestions.matchesStoredRecipe' | translate">menu_book</mat-icon>
                       }
                       @if (item.suggestion.freezyItemRef) {
-                        <mat-icon class="recipe-icon" matTooltip="From the freezer">ac_unit</mat-icon>
+                        <mat-icon class="recipe-icon" [matTooltip]="'weekPlanner.fromFreezer' | translate">ac_unit</mat-icon>
                       }
                       @if (item.suggestion.sourceUrl) {
-                        <mat-icon class="recipe-icon" matTooltip="Found online — imported when you add it">travel_explore</mat-icon>
+                        <mat-icon class="recipe-icon" [matTooltip]="'weekPlanner.suggestions.foundOnline' | translate">travel_explore</mat-icon>
                       }
                       @if (item.suggestion.fromFallback) {
-                        <span class="suggestion-tag" matTooltip="Filled from your rules, not the AI">rules</span>
+                        <span class="suggestion-tag" [matTooltip]="'weekPlanner.suggestions.rulesFallback' | translate">{{ 'weekPlanner.suggestions.rules' | translate }}</span>
                       }
                     </span>
                     @if (suggestionContext(item.suggestion); as context) {
@@ -109,7 +106,7 @@
                     @if (item.suggestion.sourceUrl) {
                       <a class="suggestion-source" [href]="item.suggestion.sourceUrl" target="_blank" rel="noopener"
                          (click)="$event.stopPropagation()">
-                        Will import from {{ item.suggestion.sourceName || 'the web' }}
+                        {{ 'weekPlanner.suggestions.willImportFrom' | translate:{ source: item.suggestion.sourceName || ('weekPlanner.suggestions.theWeb' | translate) } }}
                       </a>
                     }
                     @if (item.suggestion.allergyWarning) {
@@ -137,10 +134,10 @@
 
       <div class="instructions-row">
         <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
-          <mat-label>Instructions (optional)</mat-label>
+          <mat-label>{{ 'weekPlanner.suggestions.instructions' | translate }}</mat-label>
           <textarea matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
                  rows="3" cdkTextareaAutosize cdkAutosizeMinRows="3"
-                 placeholder="e.g. vegetarian under 30 min from @[Dagelijkse Kost]"
+                 [placeholder]="'weekPlanner.suggestions.instructionsPlaceholder' | translate"
                  appCollectionMention #reviewMention="appCollectionMention"
                  [matAutocomplete]="reviewAuto"></textarea>
           <mat-autocomplete #reviewAuto="matAutocomplete">
@@ -157,7 +154,7 @@
         </mat-form-field>
         <button mat-stroked-button type="button" (click)="fetch()">
           <mat-icon>refresh</mat-icon>
-          Regenerate
+          {{ 'weekPlanner.suggestions.regenerate' | translate }}
         </button>
       </div>
     }
@@ -165,16 +162,16 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-button mat-dialog-close>{{ 'weekPlanner.suggestions.cancel' | translate }}</button>
   @if (phase() === 'compose') {
     <button mat-flat-button (click)="fetch()">
       <mat-icon>auto_awesome</mat-icon>
-      Generate
+      {{ 'weekPlanner.suggestions.generate' | translate }}
     </button>
   }
   @if (phase() === 'review' && !failed() && suggestions().length > 0) {
     <button mat-flat-button [disabled]="selectedCount() === 0" (click)="addSelected()">
-      Add {{ selectedCount() }} to plan
+      {{ 'weekPlanner.suggestions.addToPlan' | translate:{ count: selectedCount() } }}
     </button>
   }
 </mat-dialog-actions>

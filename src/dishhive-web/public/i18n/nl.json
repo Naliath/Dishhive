@@ -41,7 +41,42 @@
     "statistics": "Statistieken"
   },
   "weekPlanner": {
-    "nothingPlanned": "Niets gepland"
+    "title": "Weekplanner",
+    "previousWeek": "Vorige week",
+    "nextWeek": "Volgende week",
+    "suggestWeek": "Week voorstellen",
+    "shoppingList": "Boodschappenlijst",
+    "addDish": "Gerecht toevoegen",
+    "plan": "Plannen",
+    "fromFreezer": "Uit de diepvries",
+    "nothingPlanned": "Niets gepland",
+    "suggestions": {
+      "title": "Voorgestelde avondmaaltijden",
+      "checkingAi": "De AI-assistent controleren…",
+      "composeHint": "Wensen voor deze week? Ze worden aan de AI doorgegeven voordat die het menu plant.",
+      "websiteHint": "Verwijs met @ naar een website om een nieuw recept te zoeken en importeren.",
+      "instructions": "Instructies (optioneel)",
+      "instructionsPlaceholder": "bv. vegetarisch onder 30 min van @[Dagelijkse Kost]",
+      "generating": "Een heerlijke week samenstellen…",
+      "loadError": "Kon geen voorstellen ophalen. Probeer het later opnieuw.",
+      "nothingToSuggest": "Niets voor te stellen — elke dag heeft al een avondmaaltijd.",
+      "fallback": "De AI antwoordde niet. Dit zijn daarom voorstellen op basis van regels (diepvries en roulatie van favorieten). Controleer het model bij Instellingen.",
+      "fallbackWithInstructions": "De AI antwoordde niet. Dit zijn daarom voorstellen op basis van regels (diepvries en roulatie van favorieten) — je instructies zijn niet toegepast. Controleer het model bij Instellingen.",
+      "excludedForAllergies": {
+        "one": "{count} recept is uitgesloten vanwege allergieën in het gezin. Onterecht uitgesloten? Corrigeer de eigenschappen op de receptpagina.",
+        "other": "{count} recepten zijn uitgesloten vanwege allergieën in het gezin. Onterecht uitgesloten? Corrigeer de eigenschappen op de receptpagina."
+      },
+      "matchesStoredRecipe": "Komt overeen met een recept in je verzameling",
+      "foundOnline": "Online gevonden — wordt geïmporteerd wanneer je het toevoegt",
+      "rulesFallback": "Ingevuld op basis van je regels, niet door de AI",
+      "rules": "regels",
+      "willImportFrom": "Wordt geïmporteerd van {source}",
+      "theWeb": "het web",
+      "regenerate": "Opnieuw genereren",
+      "cancel": "Annuleren",
+      "generate": "Genereren",
+      "addToPlan": "{count} aan planning toevoegen"
+    }
   },
   "recipeForm": {
     "contains": "Bevat",

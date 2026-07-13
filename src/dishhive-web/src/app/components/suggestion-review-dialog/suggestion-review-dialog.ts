@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, Inject, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { LocalizedDatePipe } from '../../services/language.service';
+import { LocalizedDatePipe, TranslatePipe, TranslatePluralPipe } from '../../services/language.service';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -50,6 +50,8 @@ type DialogPhase = 'checking' | 'compose' | 'generating' | 'review';
   imports: [
     CookingLoaderComponent,
     LocalizedDatePipe,
+    TranslatePipe,
+    TranslatePluralPipe,
     FormsModule,
     TextFieldModule,
     CollectionMentionDirective,

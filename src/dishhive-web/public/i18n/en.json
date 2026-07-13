@@ -41,7 +41,42 @@
     "statistics": "Statistics"
   },
   "weekPlanner": {
-    "nothingPlanned": "Nothing planned"
+    "title": "Week Planner",
+    "previousWeek": "Previous week",
+    "nextWeek": "Next week",
+    "suggestWeek": "Suggest week",
+    "shoppingList": "Shopping list",
+    "addDish": "Add dish",
+    "plan": "Plan",
+    "fromFreezer": "From the freezer",
+    "nothingPlanned": "Nothing planned",
+    "suggestions": {
+      "title": "Suggested dinners",
+      "checkingAi": "Checking the AI assistant…",
+      "composeHint": "Any wishes for this week? They are passed to the AI before it plans the menu.",
+      "websiteHint": "Reference a website with @ to have it find and import a new recipe.",
+      "instructions": "Instructions (optional)",
+      "instructionsPlaceholder": "e.g. vegetarian under 30 min from @[Dagelijkse Kost]",
+      "generating": "Cooking up a delicious week…",
+      "loadError": "Could not get suggestions. Try again later.",
+      "nothingToSuggest": "Nothing to suggest — every day already has a dinner planned.",
+      "fallback": "The AI did not answer, so these are rule-based suggestions (freezer and favorites rotation). Check the model on the Settings page.",
+      "fallbackWithInstructions": "The AI did not answer, so these are rule-based suggestions (freezer and favorites rotation) — your instructions were not applied. Check the model on the Settings page.",
+      "excludedForAllergies": {
+        "one": "{count} recipe was excluded because of household allergies. Wrongly excluded? Correct the facts on the recipe's page.",
+        "other": "{count} recipes were excluded because of household allergies. Wrongly excluded? Correct the facts on the recipe's page."
+      },
+      "matchesStoredRecipe": "Matches a recipe in your store",
+      "foundOnline": "Found online — imported when you add it",
+      "rulesFallback": "Filled from your rules, not the AI",
+      "rules": "rules",
+      "willImportFrom": "Will import from {source}",
+      "theWeb": "the web",
+      "regenerate": "Regenerate",
+      "cancel": "Cancel",
+      "generate": "Generate",
+      "addToPlan": "Add {count} to plan"
+    }
   },
   "recipeForm": {
     "contains": "Contains",

@@ -5,8 +5,8 @@
     <mat-icon mat-card-avatar>language</mat-icon>
     <mat-card-title>{{ 'onboarding.language' | translate }}</mat-card-title>
   </mat-card-header>
-  <mat-card-content>
-    <mat-form-field appearance="outline">
+  <mat-card-content class="language-settings-content">
+    <mat-form-field appearance="outline" class="language-field">
       <mat-label>{{ 'onboarding.language' | translate }}</mat-label>
       <mat-select [value]="settingsService.preferredLanguage()" (selectionChange)="setLanguage($event.value)">
         @for (language of settingsService.supportedLanguages(); track language.code) {

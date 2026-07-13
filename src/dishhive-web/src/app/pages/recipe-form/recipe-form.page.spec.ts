@@ -60,4 +60,23 @@ describe('RecipeFormPage image URL editor', () => {
     expect(page.sourceInfoOpen()).toBe(false);
     expect(page.imageRemoved()).toBe(true);
   });
+
+  it('offers original ingredient and step comparisons only when values differ', () => {
+    const { page } = createPage();
+    page.ingredients = [
+      { name: 'butter', quantity: 200, unit: 'g', originalText: '200 g boter' },
+      { name: 'salt', quantity: 1, unit: 'tsp', originalText: '1 tsp salt' }
+    ];
+    page.steps = [
+      { instruction: 'Melt the butter.', originalInstruction: 'Smelt de boter.' },
+      { instruction: 'Serve.', originalInstruction: 'Serve.' }
+    ];
+
+    expect(page.hasOriginalIngredients()).toBe(true);
+    expect(page.originalIngredientText(page.ingredients[0])).toBe('200 g boter');
+    expect(page.originalIngredientText(page.ingredients[1])).toBeNull();
+    expect(page.hasOriginalSteps()).toBe(true);
+    expect(page.originalStepInstruction(page.steps[0])).toBe('Smelt de boter.');
+    expect(page.originalStepInstruction(page.steps[1])).toBeNull();
+  });
 });

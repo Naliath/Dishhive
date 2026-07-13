@@ -4,6 +4,12 @@
 
 /* You can add global styles to this file, and also import other style files */
 
+// Match the breathing room used by other labeled controls. Material's default
+// switch label inset is quite tight, especially beside the larger M3 track.
+.mat-mdc-slide-toggle .mdc-label {
+  padding-inline-start: 12px;
+}
+
 // Global utility classes following Material Design patterns
 // These are reusable patterns used across multiple components
 

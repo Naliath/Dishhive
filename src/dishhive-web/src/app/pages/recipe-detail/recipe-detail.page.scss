@@ -13,6 +13,19 @@
   flex-shrink: 0;
 }
 
+@media (max-width: 600px) {
+  .detail-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+
+    .plan-now-button {
+      grid-column: 2;
+      justify-self: start;
+    }
+  }
+}
+
 .detail-layout {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
@@ -235,6 +248,18 @@
   }
 }
 
+.section-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+
+  h2 {
+    margin: 0;
+  }
+}
+
 .steps {
   display: flex;
   flex-direction: column;
@@ -251,15 +276,38 @@
 
 .ingredients-card {
   align-self: start;
+
+  mat-card-header {
+    display: block;
+  }
+}
+
+.comparison-toggle {
+  display: block;
+  width: max-content;
+  margin-inline-start: auto;
+  margin-block-end: 8px;
+}
+
+.original-value {
+  display: block;
+  margin-block-start: 4px;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .ingredients-title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   width: 100%;
+
+  .comparison-toggle {
+    margin-block-end: 0;
+  }
 }
 
 .servings-stepper {
@@ -289,4 +337,14 @@
   gap: 8px;
   padding-inline-start: 20px;
   margin-block-start: 16px;
+}
+
+@media (max-width: 600px) {
+  .comparison-toggle {
+    margin-inline-start: 0;
+  }
+
+  .ingredients-title-row .comparison-toggle {
+    flex-basis: 100%;
+  }
 }

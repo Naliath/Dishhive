@@ -174,10 +174,23 @@
         </div>
       }
 
-      <h2 class="mat-title-large">Preparation</h2>
+      <div class="section-heading-row">
+        <h2 class="mat-title-large">Preparation</h2>
+        @if (hasOriginalSteps()) {
+          <mat-slide-toggle [checked]="showOriginalSteps()"
+                            (change)="showOriginalSteps.set($event.checked)">
+            Show original
+          </mat-slide-toggle>
+        }
+      </div>
       <ol class="steps">
         @for (step of r.steps; track step.id) {
-          <li>{{ step.instruction }}</li>
+          <li>
+            <span>{{ step.instruction }}</span>
+            @if (showOriginalSteps() && originalStepInstruction(step); as original) {
+              <span class="original-value"><strong>Original:</strong> {{ original }}</span>
+            }
+          </li>
         }
       </ol>
 
@@ -227,29 +240,31 @@
               <mat-icon>add</mat-icon>
             </button>
           </span>
+          @if (hasOriginalIngredients()) {
+            <mat-slide-toggle class="comparison-toggle"
+                              [checked]="showOriginalIngredients()"
+                              [disabled]="selectedServings() !== r.servings"
+                              [matTooltip]="selectedServings() !== r.servings
+                                ? 'Original values are available at the recipe\'s original serving count'
+                                : ''"
+                              (change)="showOriginalIngredients.set($event.checked)">
+              Show original
+            </mat-slide-toggle>
+          }
         </mat-card-title>
       </mat-card-header>
       <mat-card-content>
-        @if (r.sourceUrl) {
-          <mat-slide-toggle [checked]="showOriginal()"
-                            [disabled]="selectedServings() !== r.servings"
-                            [matTooltip]="selectedServings() !== r.servings
-                              ? 'Original values are available at the recipe\'s original serving count'
-                              : ''"
-                            (change)="showOriginal.set($event.checked)">
-            Show original values
-          </mat-slide-toggle>
-        }
         <ul class="ingredients">
           @for (ingredient of r.ingredients; track ingredient.id) {
             <li>
-              @if (showOriginal()) {
-                {{ ingredient.originalText }}
-              } @else {
+              <span>
                 @if (formatQuantity(ingredient.quantity, ingredient.unit); as qty) {
                   <strong>{{ qty }}</strong>
                 }
                 {{ ingredient.name }}
+              </span>
+              @if (showOriginalIngredients() && originalIngredientText(ingredient); as original) {
+                <span class="original-value"><strong>Original:</strong> {{ original }}</span>
               }
             </li>
           }

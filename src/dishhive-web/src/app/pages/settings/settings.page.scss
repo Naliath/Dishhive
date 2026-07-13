@@ -76,3 +76,31 @@ h1 {
   font-size: 14px;
   color: var(--mat-sys-on-surface-variant);
 }
+
+.language-settings-content {
+  mat-slide-toggle {
+    margin-inline-start: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .language-settings-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+
+    .language-field {
+      width: 100%;
+    }
+
+    mat-slide-toggle {
+      align-self: flex-start;
+      margin-inline-start: 0;
+    }
+
+    p {
+      margin: 0;
+    }
+  }
+}

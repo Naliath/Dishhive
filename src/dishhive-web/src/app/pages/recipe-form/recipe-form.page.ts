@@ -10,6 +10,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ClassPickerComponent } from '../../components/class-picker/class-picker';
 import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
@@ -23,6 +24,7 @@ interface IngredientRow {
   name: string;
   quantity: number | null;
   unit: string;
+  originalText?: string;
 }
 
 interface StepRow {
@@ -49,6 +51,7 @@ interface StepRow {
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatSlideToggleModule,
     MatSnackBarModule,
     MatTooltipModule,
     TranslatePipe
@@ -93,6 +96,8 @@ export class RecipeFormPage implements OnInit, OnDestroy {
   videoUrl = '';
   ingredients: IngredientRow[] = [{ name: '', quantity: null, unit: '' }];
   steps: StepRow[] = [{ instruction: '' }];
+  readonly showOriginalIngredients = signal(false);
+  readonly showOriginalSteps = signal(false);
 
   // Tags as signals so the autocomplete suggestions stay reactive
   readonly tags = signal<string[]>([]);
@@ -185,7 +190,12 @@ export class RecipeFormPage implements OnInit, OnDestroy {
         this.imageSourceUrl.set(recipe.imageSourceUrl ?? '');
         this.videoUrl = recipe.videoUrl ?? '';
         this.ingredients = recipe.ingredients.length > 0
-          ? recipe.ingredients.map(i => ({ name: i.name, quantity: i.quantity ?? null, unit: i.unit ?? '' }))
+          ? recipe.ingredients.map(i => ({
+              name: i.name,
+              quantity: i.quantity ?? null,
+              unit: i.unit ?? '',
+              originalText: i.originalText
+            }))
           : [{ name: '', quantity: null, unit: '' }];
         this.steps = recipe.steps.length > 0
           ? recipe.steps.map(s => ({ instruction: s.instruction, originalInstruction: s.originalInstruction }))
@@ -330,6 +340,17 @@ export class RecipeFormPage implements OnInit, OnDestroy {
     this.ingredients.splice(index, 1);
   }
 
+  hasOriginalIngredients(): boolean {
+    return this.ingredients.some(ingredient => this.originalIngredientText(ingredient) !== null);
+  }
+
+  originalIngredientText(ingredient: IngredientRow): string | null {
+    const current = [ingredient.quantity, ingredient.unit, ingredient.name]
+      .filter(value => value !== undefined && value !== null && String(value).trim())
+      .join(' ');
+    return this.comparisonOriginal(ingredient.originalText, current);
+  }
+
   addTagFromInput(event: MatChipInputEvent): void {
     this.addTag(event.value);
     event.chipInput.clear();
@@ -360,6 +381,23 @@ export class RecipeFormPage implements OnInit, OnDestroy {
 
   removeStep(index: number): void {
     this.steps.splice(index, 1);
+  }
+
+  hasOriginalSteps(): boolean {
+    return this.steps.some(step => this.originalStepInstruction(step) !== null);
+  }
+
+  originalStepInstruction(step: StepRow): string | null {
+    return this.comparisonOriginal(step.originalInstruction, step.instruction);
+  }
+
+  private comparisonOriginal(original: string | undefined, current: string): string | null {
+    const originalValue = original?.trim();
+    if (!originalValue) {
+      return null;
+    }
+    const normalize = (value: string) => value.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+    return normalize(originalValue) === normalize(current) ? null : originalValue;
   }
 
   canSave(): boolean {
@@ -399,7 +437,8 @@ export class RecipeFormPage implements OnInit, OnDestroy {
         .map(i => ({
           name: i.name.trim(),
           quantity: i.quantity ?? undefined,
-          unit: i.unit.trim() || undefined
+          unit: i.unit.trim() || undefined,
+          originalText: i.originalText
         })),
       steps: this.steps
         .filter(s => s.instruction.trim())

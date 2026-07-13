@@ -68,11 +68,33 @@ describe('RecipeDetailPage serving scaling', () => {
 
   it('switches away from unscalable verbatim values when servings change', () => {
     const { page } = createPage();
-    page.showOriginal.set(true);
+    page.showOriginalIngredients.set(true);
 
     page.adjustServings(1);
 
-    expect(page.showOriginal()).toBe(false);
+    expect(page.showOriginalIngredients()).toBe(false);
+  });
+
+  it('only exposes original comparisons when source content differs', () => {
+    const { page } = createPage();
+    page.recipe.set({
+      servings: 4,
+      ingredients: [
+        { id: '1', name: 'butter', quantity: 200, unit: 'g', originalText: '200 g boter' },
+        { id: '2', name: 'salt', quantity: 1, unit: 'tsp', originalText: '1 tsp salt' }
+      ],
+      steps: [
+        { id: '1', stepNumber: 1, instruction: 'Melt the butter.', originalInstruction: 'Smelt de boter.' },
+        { id: '2', stepNumber: 2, instruction: 'Serve.', originalInstruction: 'Serve.' }
+      ]
+    } as Recipe);
+
+    expect(page.hasOriginalIngredients()).toBe(true);
+    expect(page.originalIngredientText(page.recipe()!.ingredients[0])).toBe('200 g boter');
+    expect(page.originalIngredientText(page.recipe()!.ingredients[1])).toBeNull();
+    expect(page.hasOriginalSteps()).toBe(true);
+    expect(page.originalStepInstruction(page.recipe()!.steps[0])).toBe('Smelt de boter.');
+    expect(page.originalStepInstruction(page.recipe()!.steps[1])).toBeNull();
   });
 
   it('loads occupied dates and creates the meal returned by quick planning', () => {

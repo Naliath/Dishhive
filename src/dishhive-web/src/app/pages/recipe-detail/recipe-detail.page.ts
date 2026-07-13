@@ -24,7 +24,13 @@ import {
   QuickPlanDialog,
   QuickPlanDialogData
 } from '../../components/quick-plan-dialog/quick-plan-dialog';
-import { Cookbook, DietaryFactsStatus, Recipe } from '../../models/recipe.model';
+import {
+  Cookbook,
+  DietaryFactsStatus,
+  Recipe,
+  RecipeIngredient,
+  RecipeStep
+} from '../../models/recipe.model';
 import { CreatePlannedMeal } from '../../models/planned-meal.model';
 import { ingredientClassLabel } from '../../models/ingredient-class.model';
 import { DishStatistic } from '../../models/statistics.model';
@@ -66,8 +72,9 @@ export class RecipeDetailPage implements OnInit {
   readonly quickPlanLoading = signal(false);
   /** Temporary serving count used to scale ingredient quantities on this page. */
   readonly selectedServings = signal(1);
-  /** Show the verbatim source lines next to normalized values (imported recipes) */
-  readonly showOriginal = signal(false);
+  /** Show verbatim source content below normalized values for comparison. */
+  readonly showOriginalIngredients = signal(false);
+  readonly showOriginalSteps = signal(false);
 
   readonly members = signal<FamilyMember[]>([]);
   readonly favoritesByMember = signal<Map<string, FamilyMemberFavorite[]>>(new Map());
@@ -89,6 +96,12 @@ export class RecipeDetailPage implements OnInit {
   /** Members offered in the "mark as favorite" menu */
   readonly otherMembers = computed(() =>
     this.members().filter(m => this.favoriteEntry(m.id) === null));
+
+  readonly hasOriginalIngredients = computed(() =>
+    this.recipe()?.ingredients.some(ingredient => this.originalIngredientText(ingredient) !== null)
+      ?? false);
+  readonly hasOriginalSteps = computed(() =>
+    this.recipe()?.steps.some(step => this.originalStepInstruction(step) !== null) ?? false);
 
   /** Manual collections, split by this recipe's membership */
   private readonly manualCookbooks = computed(() =>
@@ -389,8 +402,28 @@ export class RecipeDetailPage implements OnInit {
     // Verbatim source lines describe the recipe's original serving count and cannot
     // be safely rewritten. Keep scaled displays on normalized, structured values.
     if (next !== this.recipe()?.servings) {
-      this.showOriginal.set(false);
+      this.showOriginalIngredients.set(false);
     }
+  }
+
+  originalIngredientText(ingredient: RecipeIngredient): string | null {
+    const current = [ingredient.quantity, ingredient.unit, ingredient.name]
+      .filter(value => value !== undefined && value !== null && String(value).trim())
+      .join(' ');
+    return this.comparisonOriginal(ingredient.originalText, current);
+  }
+
+  originalStepInstruction(step: RecipeStep): string | null {
+    return this.comparisonOriginal(step.originalInstruction, step.instruction);
+  }
+
+  private comparisonOriginal(original: string | undefined, current: string): string | null {
+    const originalValue = original?.trim();
+    if (!originalValue) {
+      return null;
+    }
+    const normalize = (value: string) => value.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+    return normalize(originalValue) === normalize(current) ? null : originalValue;
   }
 
   formatQuantity(quantity?: number, unit?: string): string {

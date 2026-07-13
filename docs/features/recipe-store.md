@@ -125,7 +125,13 @@ source line. The edit form exposes these originals for comparison.
 - Page `pages/recipe-detail/` — full view incl. original ingredient text toggle and
   a history widget (last planned, planned/eaten counts, rating button → shared rating
   dialog, see meal-feedback.md). Favorites show as heart chips only for members who
-  favorited the dish, plus a quiet "mark as favorite" menu for the rest
+  favorited the dish, plus a quiet "mark as favorite" menu for the rest. An accessible
+  1–100 servings stepper temporarily scales structured ingredient quantities by
+  `selected servings / recipe servings` before measurement-preference conversion.
+  Unquantified ingredients stay unchanged, scaling is display-only, and verbatim imported
+  lines remain available at the recipe's stored serving count. A **Plan now!** action after
+  the title shows the next seven days without hiding occupied dates, lists their existing
+  meals, and creates the recipe as a dinner for the selected course and date
 - Page `pages/recipe-form/` — manual create/edit (dynamic ingredient + step rows);
   ingredient names autocomplete from the library's known ingredients; the form displays the
   current image, shows a prominent skeleton/empty state, and offers file, camera and a
@@ -171,7 +177,8 @@ source line. The edit form exposes these originals for comparison.
 - [x] Integration tests for recipe CRUD (create, search, update wholesale, delete + history survival)
 - [x] `recipes.service.ts` + models
 - [x] Recipe list page with search
-- [x] Recipe detail page (incl. original ingredient text toggle, edit, delete)
+- [x] Recipe detail page (incl. original ingredient text toggle, servings scaling, quick planning,
+      edit, delete)
 - [x] Recipe create/edit form (dynamic ingredient + step rows)
 - [x] Central image validation, auto-orientation, resize (1600 px), and WebP encoding
 - [x] New/changed image URLs download locally while retaining the original URL as a reference

@@ -8,6 +8,11 @@
       <mat-icon>arrow_back</mat-icon>
     </a>
     <h1 class="mat-headline-medium">{{ r.title }}</h1>
+    <button mat-flat-button class="plan-now-button" type="button"
+            [disabled]="quickPlanLoading()" (click)="openQuickPlan()">
+      <mat-icon>calendar_add_on</mat-icon>
+      Plan now!
+    </button>
   </div>
 
   <div class="detail-layout">
@@ -21,7 +26,7 @@
       }
 
       <div class="meta-row">
-        <span><mat-icon>group</mat-icon> {{ r.servings }} servings</span>
+        <span><mat-icon>group</mat-icon> {{ selectedServings() }} {{ selectedServings() === 1 ? 'serving' : 'servings' }}</span>
         @if (r.prepTimeMinutes) {
           <span><mat-icon>schedule</mat-icon> prep {{ r.prepTimeMinutes }} min</span>
         }
@@ -202,11 +207,36 @@
 
     <mat-card class="ingredients-card" appearance="raised">
       <mat-card-header>
-        <mat-card-title>Ingredients</mat-card-title>
+        <mat-card-title class="ingredients-title-row">
+          <span>Ingredients</span>
+          <span class="servings-stepper" aria-label="Servings">
+            <button mat-icon-button type="button"
+                    aria-label="Decrease servings"
+                    [disabled]="selectedServings() <= 1"
+                    (click)="adjustServings(-1)">
+              <mat-icon>remove</mat-icon>
+            </button>
+            <span class="servings-value" aria-live="polite">
+              <strong>{{ selectedServings() }}</strong>
+              {{ selectedServings() === 1 ? 'serving' : 'servings' }}
+            </span>
+            <button mat-icon-button type="button"
+                    aria-label="Increase servings"
+                    [disabled]="selectedServings() >= 100"
+                    (click)="adjustServings(1)">
+              <mat-icon>add</mat-icon>
+            </button>
+          </span>
+        </mat-card-title>
       </mat-card-header>
       <mat-card-content>
         @if (r.sourceUrl) {
-          <mat-slide-toggle [checked]="showOriginal()" (change)="showOriginal.set($event.checked)">
+          <mat-slide-toggle [checked]="showOriginal()"
+                            [disabled]="selectedServings() !== r.servings"
+                            [matTooltip]="selectedServings() !== r.servings
+                              ? 'Original values are available at the recipe\'s original serving count'
+                              : ''"
+                            (change)="showOriginal.set($event.checked)">
             Show original values
           </mat-slide-toggle>
         }

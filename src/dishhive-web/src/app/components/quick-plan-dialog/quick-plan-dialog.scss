@@ -1,0 +1,109 @@
+.dialog-intro {
+  margin-block: 0 16px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.course-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-block-end: 16px;
+}
+
+.course-label {
+  font-weight: 500;
+}
+
+.date-options {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.date-option {
+  display: grid;
+  grid-template-columns: minmax(105px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: none;
+  border-block-end: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &:last-child {
+    border-block-end: none;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: var(--mat-sys-surface-container);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+
+  > mat-icon {
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.date-label,
+.day-plan,
+.planned-meal {
+  display: flex;
+  flex-direction: column;
+}
+
+.date-label span,
+.nothing-planned {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 13px;
+}
+
+.day-plan {
+  gap: 5px;
+  min-width: 0;
+}
+
+.planned-meal {
+  min-width: 0;
+
+  span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.meal-type {
+  color: var(--mat-sys-primary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 600px) {
+  .course-row mat-button-toggle-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    width: 100%;
+  }
+
+  .date-option {
+    grid-template-columns: minmax(88px, auto) minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+}

@@ -20,7 +20,12 @@ import { StatisticsService } from '../../services/statistics.service';
 import { ClassPickerComponent } from '../../components/class-picker/class-picker';
 import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { MealRatingDialog, MealRatingDialogData } from '../../components/meal-rating-dialog/meal-rating-dialog';
+import {
+  QuickPlanDialog,
+  QuickPlanDialogData
+} from '../../components/quick-plan-dialog/quick-plan-dialog';
 import { Cookbook, DietaryFactsStatus, Recipe } from '../../models/recipe.model';
+import { CreatePlannedMeal } from '../../models/planned-meal.model';
 import { ingredientClassLabel } from '../../models/ingredient-class.model';
 import { DishStatistic } from '../../models/statistics.model';
 import { FamilyMember, FamilyMemberFavorite } from '../../models/family-member.model';
@@ -58,6 +63,9 @@ function toIso(date: Date): string {
 export class RecipeDetailPage implements OnInit {
   readonly recipe = signal<Recipe | null>(null);
   readonly loading = signal(true);
+  readonly quickPlanLoading = signal(false);
+  /** Temporary serving count used to scale ingredient quantities on this page. */
+  readonly selectedServings = signal(1);
   /** Show the verbatim source lines next to normalized values (imported recipes) */
   readonly showOriginal = signal(false);
 
@@ -122,6 +130,7 @@ export class RecipeDetailPage implements OnInit {
     this.recipesService.getRecipe(id).subscribe({
       next: recipe => {
         this.recipe.set(recipe);
+        this.selectedServings.set(recipe.servings);
         this.loading.set(false);
       },
       error: () => {
@@ -293,6 +302,71 @@ export class RecipeDetailPage implements OnInit {
     });
   }
 
+  openQuickPlan(): void {
+    const recipe = this.recipe();
+    if (!recipe || this.quickPlanLoading()) {
+      return;
+    }
+
+    const start = new Date();
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    this.quickPlanLoading.set(true);
+
+    forkJoin({
+      meals: this.plannedMealsService.getMeals(toIso(start), toIso(end)),
+      members: this.familyMembersService.getMembers()
+    }).subscribe({
+      next: ({ meals, members }) => {
+        this.quickPlanLoading.set(false);
+        const data: QuickPlanDialogData = {
+          recipe: { id: recipe.id, title: recipe.title },
+          startDate: toIso(start),
+          meals,
+          members
+        };
+        this.dialog.open<QuickPlanDialog, QuickPlanDialogData, CreatePlannedMeal>(
+          QuickPlanDialog,
+          { data }
+        ).afterClosed().subscribe(result => {
+          if (!result) {
+            return;
+          }
+
+          this.quickPlanLoading.set(true);
+          this.plannedMealsService.createMeal(result).subscribe({
+            next: () => {
+              this.quickPlanLoading.set(false);
+              this.snackBar.open(
+                `Planned ${recipe.title} for ${this.planDateLabel(result.date)}`,
+                'Dismiss',
+                { duration: 3500 }
+              );
+              this.refreshStatistics();
+            },
+            error: () => {
+              this.quickPlanLoading.set(false);
+              this.snackBar.open('Could not plan the recipe', 'Dismiss', { duration: 4000 });
+            }
+          });
+        });
+      },
+      error: () => {
+        this.quickPlanLoading.set(false);
+        this.snackBar.open('Could not load the upcoming plan', 'Dismiss', { duration: 4000 });
+      }
+    });
+  }
+
+  private planDateLabel(iso: string): string {
+    const date = new Date(`${iso}T00:00:00`);
+    return new Intl.DateTimeFormat(undefined, {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long'
+    }).format(date);
+  }
+
   remove(): void {
     const recipe = this.recipe();
     if (!recipe) {
@@ -308,8 +382,23 @@ export class RecipeDetailPage implements OnInit {
     });
   }
 
+  adjustServings(delta: number): void {
+    const next = Math.min(100, Math.max(1, this.selectedServings() + delta));
+    this.selectedServings.set(next);
+
+    // Verbatim source lines describe the recipe's original serving count and cannot
+    // be safely rewritten. Keep scaled displays on normalized, structured values.
+    if (next !== this.recipe()?.servings) {
+      this.showOriginal.set(false);
+    }
+  }
+
   formatQuantity(quantity?: number, unit?: string): string {
     // Honors the household measurement preference (metric default)
-    return this.measurementService.format(quantity, unit);
+    const baseServings = this.recipe()?.servings ?? 0;
+    const scaledQuantity = quantity == null || baseServings < 1
+      ? quantity
+      : quantity * this.selectedServings() / baseServings;
+    return this.measurementService.format(scaledQuantity, unit);
   }
 }

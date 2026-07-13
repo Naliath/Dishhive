@@ -7,10 +7,6 @@ not copied blindly. Items graduate from this list into `docs/features/*.md` when
 
 ## Small Scope Features
 
-### Recipe scaling in the UI
-Servings stepper on the recipe detail page that rescales displayed ingredient quantities
-(model already supports it: quantities + servings).
-
 ### Ingredient canonicalization
 Map spelling variants ("ui"/"uien") to one ingredient for cleaner shopping aggregation and stats. Manage these mappings in the settings so they can be manually tweaked
 

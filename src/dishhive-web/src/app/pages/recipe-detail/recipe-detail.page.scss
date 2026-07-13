@@ -4,8 +4,13 @@
   gap: 8px;
 
   h1 {
+    flex: 1;
     margin: 0;
   }
+}
+
+.plan-now-button {
+  flex-shrink: 0;
 }
 
 .detail-layout {
@@ -246,6 +251,36 @@
 
 .ingredients-card {
   align-self: start;
+}
+
+.ingredients-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.servings-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 14px;
+  font-weight: 400;
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.servings-value {
+  min-width: 76px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .ingredients {

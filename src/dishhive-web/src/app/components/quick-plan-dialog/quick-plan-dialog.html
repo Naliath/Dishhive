@@ -1,0 +1,48 @@
+<h2 mat-dialog-title>Plan {{ data.recipe.title }}</h2>
+
+<mat-dialog-content>
+  <p class="dialog-intro">
+    Choose a course, then pick a date in the next seven days.
+  </p>
+
+  <div class="course-row">
+    <span class="course-label">Course</span>
+    <mat-button-toggle-group
+      [value]="course()"
+      (change)="course.set($event.value)"
+      aria-label="Course">
+      <mat-button-toggle [value]="Course.Appetizer">Starter</mat-button-toggle>
+      <mat-button-toggle [value]="Course.Main">Main</mat-button-toggle>
+      <mat-button-toggle [value]="Course.Side">Side</mat-button-toggle>
+      <mat-button-toggle [value]="Course.Dessert">Dessert</mat-button-toggle>
+    </mat-button-toggle-group>
+  </div>
+
+  <div class="date-options" aria-label="Choose a planning date">
+    @for (day of days; track day.iso) {
+      <button class="date-option" type="button" (click)="plan(day)">
+        <span class="date-label">
+          <strong>{{ day.isToday ? 'Today' : (day.date | localizedDate:'weekday') }}</strong>
+          <span>{{ day.date | localizedDate:'dayMonth' }}</span>
+        </span>
+        <span class="day-plan">
+          @if (day.meals.length > 0) {
+            @for (meal of day.meals; track meal.id) {
+              <span class="planned-meal">
+                <span class="meal-type">{{ mealLabel(meal) }}</span>
+                <span>{{ mealSummary(meal) }}</span>
+              </span>
+            }
+          } @else {
+            <span class="nothing-planned">Nothing planned yet</span>
+          }
+        </span>
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+    }
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Cancel</button>
+</mat-dialog-actions>

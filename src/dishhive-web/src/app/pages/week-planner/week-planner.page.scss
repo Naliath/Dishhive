@@ -132,3 +132,38 @@
   color: var(--mat-sys-on-surface-variant);
   font-style: italic;
 }
+
+@media (max-width: 600px) {
+  .page-header {
+    align-items: stretch;
+  }
+
+  .page-header h1,
+  .week-nav {
+    width: 100%;
+  }
+
+  .week-nav {
+    display: grid;
+    grid-template-columns: 48px repeat(4, minmax(0, 1fr)) 48px;
+    gap: 8px 4px;
+
+    > :first-child {
+      grid-column: 1;
+    }
+
+    .week-range {
+      grid-column: 2 / 6;
+    }
+
+    > :nth-child(3) {
+      grid-column: 6;
+    }
+
+    .suggest-week-button,
+    .shopping-list-button {
+      grid-column: span 3;
+      min-width: 0;
+    }
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit Dishhive Mobile UI"
+  short_description: "Scan Dishhive pages at 360px for UI regressions"
+  default_prompt: "Use $audit-dishhive-mobile-ui to scan all Dishhive pages and dialogs at 360px and fix mobile-only layout regressions."

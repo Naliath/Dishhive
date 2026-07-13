@@ -19,6 +19,17 @@ table {
   background: transparent;
 }
 
+.statistics-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 600px) {
+  table {
+    min-width: 536px;
+  }
+}
+
 .rating-cell {
   display: inline-flex;
   align-items: center;

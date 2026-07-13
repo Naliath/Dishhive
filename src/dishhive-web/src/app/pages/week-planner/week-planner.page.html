@@ -4,19 +4,19 @@
     <button mat-icon-button (click)="previousWeek()" [attr.aria-label]="'weekPlanner.previousWeek' | translate">
       <mat-icon>chevron_left</mat-icon>
     </button>
-    <button mat-button (click)="goToCurrentWeek()">
+    <button mat-button class="week-range" (click)="goToCurrentWeek()">
       {{ weekStart() | localizedDate:'dayMonth' }} – {{ weekEnd() | localizedDate:'dayMonth' }}
     </button>
     <button mat-icon-button (click)="nextWeek()" [attr.aria-label]="'weekPlanner.nextWeek' | translate">
       <mat-icon>chevron_right</mat-icon>
     </button>
     @if (suggestionsEnabled()) {
-      <button mat-stroked-button (click)="suggestWeek()">
+      <button mat-stroked-button class="suggest-week-button" (click)="suggestWeek()">
         <mat-icon>auto_awesome</mat-icon>
         {{ 'weekPlanner.suggestWeek' | translate }}
       </button>
     }
-    <a mat-stroked-button routerLink="/shopping-list" [queryParams]="shoppingListParams()">
+    <a mat-stroked-button class="shopping-list-button" routerLink="/shopping-list" [queryParams]="shoppingListParams()">
       <mat-icon>shopping_cart</mat-icon>
       {{ 'weekPlanner.shoppingList' | translate }}
     </a>

@@ -19,6 +19,7 @@
     </mat-form-field>
 
     <mat-card appearance="raised">
+      <div class="statistics-table-scroll" tabindex="0" aria-label="Dish statistics table">
       <table mat-table [dataSource]="filteredDishes()">
         <ng-container matColumnDef="dishName">
           <th mat-header-cell *matHeaderCellDef>Dish</th>
@@ -80,6 +81,7 @@
         <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
         <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
       </table>
+      </div>
     </mat-card>
 
     @if (stats.unspecifiedCount > 0) {

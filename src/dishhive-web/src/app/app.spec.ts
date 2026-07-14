@@ -1,5 +1,6 @@
+import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { App } from './app';
@@ -9,12 +10,19 @@ import { SettingsService } from './services/settings.service';
 import { ThemeService } from './services/theme.service';
 import { LanguageService } from './services/language.service';
 
+@Component({ template: '' })
+class TestPage {}
+
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
-        provideRouter([]),
+        provideRouter([
+          { path: '', component: TestPage },
+          { path: 'recipes/:id', component: TestPage },
+          { path: 'settings/ai-stats', component: TestPage }
+        ]),
         {
           provide: SettingsService,
           useValue: {
@@ -46,5 +54,21 @@ describe('App', () => {
 
     expect(fixture.componentInstance.checkingOnboarding()).toBe(false);
     expect(fixture.componentInstance.showOnboarding()).toBe(false);
+  });
+
+  it('should expose the active parent navigation item for a nested route', async () => {
+    const fixture = TestBed.createComponent(App);
+    const router = TestBed.inject(Router);
+
+    fixture.detectChanges();
+    await router.navigateByUrl('/recipes/42');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const recipeLink = fixture.nativeElement.querySelector('a[href="/recipes"]');
+    const weekPlannerLink = fixture.nativeElement.querySelector('a[href="/"]');
+
+    expect(recipeLink.getAttribute('aria-current')).toBe('page');
+    expect(weekPlannerLink.hasAttribute('aria-current')).toBe(false);
   });
 });

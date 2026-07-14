@@ -21,32 +21,40 @@
 <mat-sidenav-container class="app-container">
   <mat-sidenav #sidenav mode="over" class="app-sidenav">
     <mat-nav-list>
-      <a mat-list-item routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" (click)="sidenav.close()">
+      <a mat-list-item routerLink="/" routerLinkActive #weekPlannerLink="routerLinkActive"
+        [routerLinkActiveOptions]="{ exact: true }" [activated]="weekPlannerLink.isActive"
+        (click)="sidenav.close()">
         <mat-icon matListItemIcon>calendar_month</mat-icon>
         <span matListItemTitle>{{ 'navigation.weekPlanner' | translate }}</span>
       </a>
-      <a mat-list-item routerLink="/recipes" routerLinkActive="active" (click)="sidenav.close()">
+      <a mat-list-item routerLink="/recipes" routerLinkActive #recipesLink="routerLinkActive"
+        [activated]="recipesLink.isActive" (click)="sidenav.close()">
         <mat-icon matListItemIcon>menu_book</mat-icon>
         <span matListItemTitle>{{ 'navigation.recipes' | translate }}</span>
       </a>
-      <a mat-list-item routerLink="/family" routerLinkActive="active" (click)="sidenav.close()">
+      <a mat-list-item routerLink="/family" routerLinkActive #familyLink="routerLinkActive"
+        [activated]="familyLink.isActive" (click)="sidenav.close()">
         <mat-icon matListItemIcon>group</mat-icon>
         <span matListItemTitle>{{ 'navigation.family' | translate }}</span>
       </a>
-      <a mat-list-item routerLink="/shopping-list" routerLinkActive="active" (click)="sidenav.close()">
+      <a mat-list-item routerLink="/shopping-list" routerLinkActive #shoppingListLink="routerLinkActive"
+        [activated]="shoppingListLink.isActive" (click)="sidenav.close()">
         <mat-icon matListItemIcon>shopping_cart</mat-icon>
         <span matListItemTitle>{{ 'navigation.shoppingList' | translate }}</span>
       </a>
-      <a mat-list-item routerLink="/history" routerLinkActive="active" (click)="sidenav.close()">
+      <a mat-list-item routerLink="/history" routerLinkActive #historyLink="routerLinkActive"
+        [activated]="historyLink.isActive" (click)="sidenav.close()">
         <mat-icon matListItemIcon>history</mat-icon>
         <span matListItemTitle>{{ 'navigation.pastDishes' | translate }}</span>
       </a>
-      <a mat-list-item routerLink="/statistics" routerLinkActive="active" (click)="sidenav.close()">
+      <a mat-list-item routerLink="/statistics" routerLinkActive #statisticsLink="routerLinkActive"
+        [activated]="statisticsLink.isActive" (click)="sidenav.close()">
         <mat-icon matListItemIcon>insights</mat-icon>
         <span matListItemTitle>{{ 'navigation.statistics' | translate }}</span>
       </a>
       <mat-divider></mat-divider>
-      <a mat-list-item routerLink="/settings" routerLinkActive="active" (click)="sidenav.close()">
+      <a mat-list-item routerLink="/settings" routerLinkActive #settingsLink="routerLinkActive"
+        [activated]="settingsLink.isActive" (click)="sidenav.close()">
         <mat-icon matListItemIcon>settings</mat-icon>
         <span matListItemTitle>{{ 'settings.settings' | translate }}</span>
       </a>

@@ -19,6 +19,10 @@
     </mat-form-field>
 
     <mat-card appearance="raised">
+      <p class="table-scroll-hint mat-label-medium">
+        <mat-icon aria-hidden="true">swipe</mat-icon>
+        Scroll horizontally to see all columns
+      </p>
       <div class="statistics-table-scroll" tabindex="0" aria-label="Dish statistics table">
       <table mat-table [dataSource]="filteredDishes()">
         <ng-container matColumnDef="dishName">

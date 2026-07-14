@@ -1,17 +1,10 @@
 .page-header {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 16px;
-
-  h1 {
-    margin: 0;
-  }
 }
 
 .member-form-card {
   margin-block: 16px;
-  max-width: 600px;
+  max-width: var(--app-content-narrow);
 }
 
 .member-form {
@@ -33,7 +26,7 @@
 }
 
 .definition-editor {
-  border: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
+  border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 8px;
   padding: 12px;
   display: flex;
@@ -93,7 +86,8 @@
   margin-block-start: 8px;
 
   // Long dish names are truncated with an ellipsis instead of overflowing
-  // the chip boundary (full name in the tooltip)
+  // the chip boundary (full name in the tooltip). Material exposes no public
+  // chip-label overflow hook, so verify these internals after upgrades.
   mat-chip {
     max-width: 100%;
   }
@@ -110,13 +104,13 @@
   }
 
   .favorite-heart {
-    color: var(--mat-sys-error, #c2185b);
+    color: var(--mat-sys-error);
     font-size: 16px;
   }
 }
 
 .favorite-recipe-results {
-  border: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
+  border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 8px;
   padding: 0;
   max-height: 240px;
@@ -163,12 +157,12 @@
   }
 
   &--allergy {
-    background-color: color-mix(in srgb, var(--mat-sys-error, #b00020) 12%, transparent);
-    color: var(--mat-sys-error, #b00020);
+    background-color: color-mix(in srgb, var(--mat-sys-error) 12%, transparent);
+    color: var(--mat-sys-error);
   }
 
   &--diet {
-    background-color: color-mix(in srgb, var(--mat-sys-tertiary, #1976d2) 12%, transparent);
-    color: var(--mat-sys-tertiary, #1565c0);
+    background-color: color-mix(in srgb, var(--mat-sys-tertiary) 12%, transparent);
+    color: var(--mat-sys-tertiary);
   }
 }

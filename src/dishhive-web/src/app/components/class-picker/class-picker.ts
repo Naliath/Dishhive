@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { INGREDIENT_CLASS_GROUPS, ingredientClassLabel } from '../../models/ingredient-class.model';
+import { INGREDIENT_CLASS_GROUPS } from '../../models/ingredient-class.model';
+import { TranslatePipe } from '../../services/language.service';
 
 /**
  * Grouped checkbox picker for canonical ingredient classes (EU-14 allergens,
@@ -10,7 +11,7 @@ import { INGREDIENT_CLASS_GROUPS, ingredientClassLabel } from '../../models/ingr
 @Component({
   selector: 'app-class-picker',
   standalone: true,
-  imports: [MatCheckboxModule],
+  imports: [MatCheckboxModule, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './class-picker.html',
   styleUrl: './class-picker.scss'
@@ -20,7 +21,6 @@ export class ClassPickerComponent {
   readonly selectedChange = output<string[]>();
 
   readonly groups = INGREDIENT_CLASS_GROUPS;
-  readonly label = ingredientClassLabel;
 
   isChecked(name: string): boolean {
     return this.selected().includes(name);

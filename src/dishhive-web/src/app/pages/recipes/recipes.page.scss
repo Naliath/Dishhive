@@ -1,13 +1,6 @@
 .page-header {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
-
-  h1 {
-    margin: 0;
-  }
 }
 
 .header-actions {
@@ -67,7 +60,7 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px 4px 12px;
-  border: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
+  border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 16px;
   background: none;
   font: inherit;
@@ -75,13 +68,13 @@
   cursor: pointer;
 
   &:hover {
-    background-color: var(--mat-sys-surface-variant, rgba(0, 0, 0, 0.04));
+    background-color: var(--mat-sys-surface-variant);
   }
 
   &.is-active {
-    background-color: color-mix(in srgb, var(--mat-sys-primary, #1976d2) 14%, transparent);
-    border-color: var(--mat-sys-primary, #1976d2);
-    color: var(--mat-sys-primary, #1565c0);
+    background-color: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
+    border-color: var(--mat-sys-primary);
+    color: var(--mat-sys-primary);
   }
 
   &.is-auto {
@@ -120,7 +113,7 @@
 }
 
 .cookbook-name-input {
-  border: 1px dashed var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.25));
+  border: 1px dashed var(--mat-sys-outline-variant);
   border-radius: 16px;
   padding: 5px 12px;
   font: inherit;
@@ -130,7 +123,7 @@
 
   &:focus {
     outline: none;
-    border-color: var(--mat-sys-primary, #1976d2);
+    border-color: var(--mat-sys-primary);
   }
 }
 
@@ -149,10 +142,10 @@
 
   .card-menu-btn {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    inset-block-start: 4px;
+    inset-inline-end: 4px;
     z-index: 1;
-    background-color: color-mix(in srgb, var(--mat-sys-surface, #fff) 75%, transparent);
+    background-color: color-mix(in srgb, var(--mat-sys-surface) 75%, transparent);
     opacity: 0;
     transition: opacity 120ms ease-in;
   }
@@ -194,8 +187,8 @@
 
 .recipe-image-indicators {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
+  inset-inline-end: 10px;
+  inset-block-end: 10px;
   display: flex;
   gap: 6px;
 }
@@ -206,9 +199,9 @@
   gap: 3px;
   padding: 4px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--mat-sys-surface, #fff) 86%, transparent);
+  background: color-mix(in srgb, var(--mat-sys-surface) 86%, transparent);
   backdrop-filter: blur(6px);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 20%);
+  box-shadow: var(--mat-sys-level1);
   font-size: 12px;
   font-weight: 600;
 
@@ -223,7 +216,7 @@
   }
 
   &--favorite {
-    color: var(--mat-sys-error, #c2185b);
+    color: var(--mat-sys-error);
   }
 }
 
@@ -258,8 +251,8 @@
   &--tag {
     padding: 1px 8px;
     border-radius: 10px;
-    background-color: color-mix(in srgb, var(--mat-sys-primary, #1976d2) 10%, transparent);
-    color: var(--mat-sys-primary, #1565c0);
+    background-color: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
+    color: var(--mat-sys-primary);
     font-weight: 400;
   }
 }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Style Dishhive Angular UI"
+  short_description: "Keep Dishhive styling consistent and responsive"
+  default_prompt: "Use $style-dishhive-angular-ui to implement this Dishhive UI change with Material-first styling and visual regression checks."

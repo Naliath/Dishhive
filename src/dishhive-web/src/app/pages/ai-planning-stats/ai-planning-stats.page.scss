@@ -1,11 +1,9 @@
 .page-header {
-  display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
   margin-block-end: 20px;
 
-  h1, p { margin: 0; }
+  p { margin: 0; }
   p { color: var(--mat-sys-on-surface-variant); }
 }
 

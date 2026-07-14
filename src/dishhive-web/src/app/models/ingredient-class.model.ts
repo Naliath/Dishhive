@@ -7,22 +7,22 @@
  * names in DTOs.
  */
 export const INGREDIENT_CLASS_GROUPS: ReadonlyArray<{
-  label: string;
+  key: 'allergens' | 'meat' | 'other';
   classes: ReadonlyArray<string>;
 }> = [
   {
-    label: 'Allergens (EU-14)',
+    key: 'allergens',
     classes: [
       'Gluten', 'Crustaceans', 'Eggs', 'Fish', 'Peanuts', 'Soybeans', 'Milk',
       'TreeNuts', 'Celery', 'Mustard', 'Sesame', 'Sulphites', 'Lupin', 'Molluscs'
     ]
   },
   {
-    label: 'Meat',
+    key: 'meat',
     classes: ['RedMeat', 'Poultry', 'Pork']
   },
   {
-    label: 'Other',
+    key: 'other',
     classes: ['Gelatin', 'Alcohol', 'Honey']
   }
 ];

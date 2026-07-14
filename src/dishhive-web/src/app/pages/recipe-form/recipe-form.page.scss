@@ -1,18 +1,12 @@
 .page-header {
-  display: flex;
-  align-items: center;
   gap: 8px;
-
-  h1 {
-    margin: 0;
-  }
 }
 
 .recipe-form {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 800px;
+  max-width: var(--app-content-medium);
   margin-inline: auto;
   margin-block-start: 16px;
 }
@@ -71,15 +65,15 @@
 
 .source-tooltip {
   position: absolute;
-  right: 0;
-  bottom: calc(100% + 8px);
+  inset-inline-end: 0;
+  inset-block-end: calc(100% + 8px);
   width: max-content;
   max-width: min(360px, calc(100vw - 72px));
   padding: 8px 12px;
   border-radius: 8px;
   color: var(--mat-sys-inverse-on-surface);
   background: var(--mat-sys-inverse-surface);
-  box-shadow: var(--mat-sys-level2, 0 2px 6px rgb(0 0 0 / 25%));
+  box-shadow: var(--mat-sys-level2);
   font: var(--mat-sys-body-small);
   overflow-wrap: anywhere;
   opacity: 0;
@@ -199,11 +193,6 @@
   }
 }
 
-:host ::ng-deep .ingredient-row > mat-form-field > .mat-mdc-form-field-subscript-wrapper,
-:host ::ng-deep .step-row > mat-form-field > .mat-mdc-form-field-subscript-wrapper {
-  display: none;
-}
-
 .editable-row-group {
   display: flex;
   flex-direction: column;
@@ -274,6 +263,10 @@
 }
 
 @media (max-width: 600px) {
+  .duration-row mat-form-field {
+    flex-basis: 100%;
+  }
+
   .comparison-title-row .comparison-toggle {
     flex-basis: 100%;
     margin-inline-start: 0;

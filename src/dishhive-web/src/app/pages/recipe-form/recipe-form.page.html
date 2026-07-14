@@ -1,8 +1,10 @@
 <div class="page-header">
-  <a mat-icon-button routerLink="/recipes" aria-label="Back to recipes">
+  <a mat-icon-button routerLink="/recipes" [attr.aria-label]="'recipeForm.backToRecipes' | translate">
     <mat-icon>arrow_back</mat-icon>
   </a>
-  <h1 class="mat-headline-medium">{{ editingId() ? 'Edit recipe' : 'New recipe' }}</h1>
+  <h1 class="mat-headline-medium">
+    {{ (editingId() ? 'recipeForm.editRecipe' : 'recipeForm.newRecipe') | translate }}
+  </h1>
 </div>
 
 @if (loading()) {
@@ -13,31 +15,36 @@
   <form class="recipe-form" (ngSubmit)="save()">
     <mat-card appearance="outlined">
       <mat-card-content class="form-section">
-        <mat-form-field appearance="outline">
-          <mat-label>Title</mat-label>
-          <input matInput name="title" [(ngModel)]="title" required maxlength="300">
-          @if (originalTitle && originalTitle !== title) {
-            <mat-hint>Original: {{ originalTitle }}</mat-hint>
+        <div class="editable-row-group">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>{{ 'recipeForm.title' | translate }}</mat-label>
+            <input matInput name="title" [(ngModel)]="title" required maxlength="300">
+          </mat-form-field>
+          @if (originalTitleText(); as original) {
+            <p class="original-value">
+              <strong>{{ 'recipeForm.original' | translate }}:</strong> {{ original }}
+            </p>
           }
-        </mat-form-field>
+        </div>
 
-        <section class="image-editor" aria-label="Recipe image">
+        <section class="image-editor" [attr.aria-label]="'recipeForm.recipeImage' | translate">
           <div class="image-preview" [class.image-placeholder]="!imagePreviewUrl()">
             @if (imagePreviewUrl(); as previewUrl) {
-              <img [src]="previewUrl" [alt]="title || 'Recipe image preview'">
+              <img [src]="previewUrl" [alt]="title || ('recipeForm.imagePreviewAlt' | translate)">
               <button class="image-overlay-button image-remove-button"
                       mat-icon-button type="button" (click)="removeImage()"
-                      matTooltip="Remove image" aria-label="Remove image">
+                      [matTooltip]="'recipeForm.removeImage' | translate"
+                      [attr.aria-label]="'recipeForm.removeImage' | translate">
                 <mat-icon>delete</mat-icon>
               </button>
             } @else {
               <div class="skeleton-block" aria-hidden="true"></div>
               <div class="placeholder-content">
                 <mat-icon>add_a_photo</mat-icon>
-                <strong>Add a photo to this recipe</strong>
+                <strong>{{ 'recipeForm.addPhoto' | translate }}</strong>
                 <button mat-flat-button type="button" (click)="fileInput.click()">
                   <mat-icon>photo_library</mat-icon>
-                  Choose image
+                  {{ 'recipeForm.chooseImage' | translate }}
                 </button>
               </div>
             }
@@ -52,11 +59,11 @@
                         (keydown.escape)="sourceInfoOpen.set(false)"
                         [attr.aria-expanded]="sourceInfoOpen()"
                         aria-describedby="image-source-tooltip"
-                        aria-label="Show image source">
+                        [attr.aria-label]="'recipeForm.showImageSource' | translate">
                   <mat-icon>info</mat-icon>
                 </button>
                 <div id="image-source-tooltip" class="source-tooltip" role="tooltip">
-                  Source: {{ imageSourceUrl() }}
+                  {{ 'recipeForm.source' | translate }}: {{ imageSourceUrl() }}
                 </div>
               </div>
             }
@@ -65,19 +72,19 @@
           <div class="image-actions">
             <button mat-stroked-button type="button" (click)="fileInput.click()">
               <mat-icon>photo_library</mat-icon>
-              Choose image
+              {{ 'recipeForm.chooseImage' | translate }}
             </button>
             @if (cameraCaptureAvailable()) {
               <button mat-stroked-button type="button" (click)="cameraInput.click()">
                 <mat-icon>photo_camera</mat-icon>
-                Take picture
+                {{ 'recipeForm.takePicture' | translate }}
               </button>
               <input #cameraInput class="visually-hidden" type="file" accept="image/*"
                      capture="environment" (change)="selectImage($event)">
             }
             <button mat-stroked-button type="button" (click)="openImageUrlEditor()">
               <mat-icon>link</mat-icon>
-              {{ imageSourceUrl().trim() ? 'Change image URL' : 'Image URL' }}
+              {{ (imageSourceUrl().trim() ? 'recipeForm.changeImageUrl' : 'recipeForm.imageUrl') | translate }}
             </button>
             <input #fileInput class="visually-hidden" type="file" accept="image/*"
                    (change)="selectImage($event)">
@@ -86,59 +93,69 @@
           @if (imageUrlEditorOpen()) {
             <div class="image-url-editor">
               <mat-form-field appearance="outline" class="image-url-field" subscriptSizing="dynamic">
-                <mat-label>Image URL</mat-label>
+                <mat-label>{{ 'recipeForm.imageUrl' | translate }}</mat-label>
                 <input matInput type="url" name="imageUrlDraft"
                        [ngModel]="imageUrlDraft()" (ngModelChange)="imageUrlDraft.set($event)"
                        (keydown.enter)="confirmImageUrl(); $event.preventDefault()"
                        maxlength="1000" placeholder="https://example.com/photo.jpg">
               </mat-form-field>
-              <button mat-button type="button" (click)="cancelImageUrlEditor()">Cancel</button>
-              <button mat-flat-button type="button" (click)="confirmImageUrl()">Use image</button>
+              <button mat-button type="button" (click)="cancelImageUrlEditor()">
+                {{ 'recipeForm.cancel' | translate }}
+              </button>
+              <button mat-flat-button type="button" (click)="confirmImageUrl()">
+                {{ 'recipeForm.useImage' | translate }}
+              </button>
             </div>
           }
         </section>
 
-        <mat-form-field appearance="outline">
-          <mat-label>Description</mat-label>
-          <textarea matInput name="description" [(ngModel)]="description" rows="2" maxlength="2000"></textarea>
-          @if (originalDescription && originalDescription !== description) {
-            <mat-hint>Original: {{ originalDescription }}</mat-hint>
+        <div class="editable-row-group">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>{{ 'recipeForm.description' | translate }}</mat-label>
+            <textarea matInput name="description" [(ngModel)]="description" rows="2" maxlength="2000"></textarea>
+          </mat-form-field>
+          @if (originalDescriptionText(); as original) {
+            <p class="original-value">
+              <strong>{{ 'recipeForm.original' | translate }}:</strong> {{ original }}
+            </p>
           }
-        </mat-form-field>
+        </div>
 
-        <div class="field-row">
-          <mat-form-field appearance="outline">
-            <mat-label>Servings</mat-label>
+        <div class="field-row duration-row">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>{{ 'recipeForm.servings' | translate }}</mat-label>
             <input matInput type="number" name="servings" [(ngModel)]="servings" required min="1" max="100">
           </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Prep time (min)</mat-label>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>{{ 'recipeForm.prepTimeMinutes' | translate }}</mat-label>
             <input matInput type="number" name="prepTimeMinutes" [(ngModel)]="prepTimeMinutes" min="0">
           </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Cook time (min)</mat-label>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>{{ 'recipeForm.cookTimeMinutes' | translate }}</mat-label>
             <input matInput type="number" name="cookTimeMinutes" [(ngModel)]="cookTimeMinutes" min="0">
           </mat-form-field>
         </div>
 
         <div class="field-row">
-          <mat-form-field appearance="outline">
-            <mat-label>Category</mat-label>
-            <input matInput name="category" [(ngModel)]="category" maxlength="100" placeholder="e.g. Dessert">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>{{ 'recipeForm.category' | translate }}</mat-label>
+            <input matInput name="category" [(ngModel)]="category" maxlength="100"
+                   [placeholder]="'recipeForm.categoryPlaceholder' | translate">
           </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Keywords</mat-label>
-            <input matInput name="keywords" [(ngModel)]="keywords" maxlength="500" placeholder="comma-separated">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>{{ 'recipeForm.keywords' | translate }}</mat-label>
+            <input matInput name="keywords" [(ngModel)]="keywords" maxlength="500"
+                   [placeholder]="'recipeForm.keywordsPlaceholder' | translate">
           </mat-form-field>
         </div>
 
-        <mat-form-field appearance="outline">
-          <mat-label>Tags</mat-label>
-          <mat-chip-grid #tagGrid aria-label="Recipe tags">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>{{ 'recipeForm.tags' | translate }}</mat-label>
+          <mat-chip-grid #tagGrid [attr.aria-label]="'recipeForm.recipeTags' | translate">
             @for (tag of tags(); track tag) {
               <mat-chip-row (removed)="removeTag(tag)">
                 {{ tag }}
-                <button matChipRemove [attr.aria-label]="'Remove ' + tag">
+                <button matChipRemove [attr.aria-label]="'recipeForm.removeTag' | translate: { tag: tag }">
                   <mat-icon>cancel</mat-icon>
                 </button>
               </mat-chip-row>
@@ -150,17 +167,17 @@
                  [matChipInputSeparatorKeyCodes]="separatorKeys"
                  (matChipInputTokenEnd)="addTagFromInput($event)"
                  [matAutocomplete]="tagAuto"
-                 placeholder="e.g. pasta, quick, comfort food" maxlength="50">
+                 [placeholder]="'recipeForm.tagsPlaceholder' | translate" maxlength="50">
           <mat-autocomplete #tagAuto="matAutocomplete" (optionSelected)="selectTag($event)">
             @for (option of tagOptions(); track option) {
               <mat-option [value]="option">{{ option }}</mat-option>
             }
           </mat-autocomplete>
-          <mat-hint>Press Enter or comma to add a tag — used to filter the library</mat-hint>
+          <mat-hint>{{ 'recipeForm.tagHint' | translate }}</mat-hint>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
-          <mat-label>Video URL</mat-label>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>{{ 'recipeForm.videoUrl' | translate }}</mat-label>
           <input matInput name="videoUrl" [(ngModel)]="videoUrl" maxlength="1000">
         </mat-form-field>
       </mat-card-content>
@@ -169,12 +186,12 @@
     <mat-card appearance="outlined" class="comparison-card">
       <mat-card-header>
         <mat-card-title class="comparison-title-row">
-          <span>Ingredients</span>
+          <span>{{ 'recipeForm.ingredients' | translate }}</span>
           @if (hasOriginalIngredients()) {
             <mat-slide-toggle class="comparison-toggle"
                               [checked]="showOriginalIngredients()"
                               (change)="showOriginalIngredients.set($event.checked)">
-              Show original ingredients
+              {{ 'recipeForm.showOriginalIngredients' | translate }}
             </mat-slide-toggle>
           }
         </mat-card-title>
@@ -183,16 +200,17 @@
         @for (ingredient of ingredients; track $index) {
           <div class="editable-row-group">
             <div class="ingredient-row">
-              <mat-form-field appearance="outline" class="quantity-field">
-                <mat-label>Qty</mat-label>
+              <mat-form-field appearance="outline" class="quantity-field" subscriptSizing="dynamic">
+                <mat-label>{{ 'recipeForm.quantityShort' | translate }}</mat-label>
                 <input matInput type="number" [name]="'qty' + $index" [(ngModel)]="ingredient.quantity" min="0" step="any">
               </mat-form-field>
-              <mat-form-field appearance="outline" class="unit-field">
-                <mat-label>Unit</mat-label>
-                <input matInput [name]="'unit' + $index" [(ngModel)]="ingredient.unit" maxlength="50" placeholder="g, ml, el">
+              <mat-form-field appearance="outline" class="unit-field" subscriptSizing="dynamic">
+                <mat-label>{{ 'recipeForm.unit' | translate }}</mat-label>
+                <input matInput [name]="'unit' + $index" [(ngModel)]="ingredient.unit" maxlength="50"
+                       [placeholder]="'recipeForm.unitPlaceholder' | translate">
               </mat-form-field>
-              <mat-form-field appearance="outline" class="name-field">
-                <mat-label>Ingredient</mat-label>
+              <mat-form-field appearance="outline" class="name-field" subscriptSizing="dynamic">
+                <mat-label>{{ 'recipeForm.ingredient' | translate }}</mat-label>
                 <input matInput [name]="'ingredient' + $index" [(ngModel)]="ingredient.name" maxlength="200"
                        [matAutocomplete]="ingredientAuto">
                 <mat-autocomplete #ingredientAuto="matAutocomplete">
@@ -202,18 +220,21 @@
                 </mat-autocomplete>
               </mat-form-field>
               <button mat-icon-button type="button" (click)="removeIngredient($index)"
-                      [disabled]="ingredients.length === 1" aria-label="Remove ingredient">
+                      [disabled]="ingredients.length === 1"
+                      [attr.aria-label]="'recipeForm.removeIngredient' | translate">
                 <mat-icon>delete</mat-icon>
               </button>
             </div>
             @if (showOriginalIngredients() && originalIngredientText(ingredient); as original) {
-              <p class="original-value ingredient-original"><strong>Original:</strong> {{ original }}</p>
+              <p class="original-value ingredient-original">
+                <strong>{{ 'recipeForm.original' | translate }}:</strong> {{ original }}
+              </p>
             }
           </div>
         }
         <button mat-stroked-button type="button" (click)="addIngredient()">
           <mat-icon>add</mat-icon>
-          Add ingredient
+          {{ 'recipeForm.addIngredient' | translate }}
         </button>
       </mat-card-content>
     </mat-card>
@@ -235,12 +256,12 @@
     <mat-card appearance="outlined" class="comparison-card">
       <mat-card-header>
         <mat-card-title class="comparison-title-row">
-          <span>Preparation steps</span>
+          <span>{{ 'recipeForm.preparationSteps' | translate }}</span>
           @if (hasOriginalSteps()) {
             <mat-slide-toggle class="comparison-toggle"
                               [checked]="showOriginalSteps()"
                               (change)="showOriginalSteps.set($event.checked)">
-              Show original steps
+              {{ 'recipeForm.showOriginalSteps' | translate }}
             </mat-slide-toggle>
           }
         </mat-card-title>
@@ -250,31 +271,36 @@
           <div class="editable-row-group">
             <div class="step-row">
               <span class="step-number">{{ $index + 1 }}.</span>
-              <mat-form-field appearance="outline" class="step-field">
-                <mat-label>Step</mat-label>
+              <mat-form-field appearance="outline" class="step-field" subscriptSizing="dynamic">
+                <mat-label>{{ 'recipeForm.step' | translate }}</mat-label>
                 <textarea matInput [name]="'step' + $index" [(ngModel)]="step.instruction" rows="2" maxlength="2000"></textarea>
               </mat-form-field>
               <button mat-icon-button type="button" (click)="removeStep($index)"
-                      [disabled]="steps.length === 1" aria-label="Remove step">
+                      [disabled]="steps.length === 1"
+                      [attr.aria-label]="'recipeForm.removeStep' | translate">
                 <mat-icon>delete</mat-icon>
               </button>
             </div>
             @if (showOriginalSteps() && originalStepInstruction(step); as original) {
-              <p class="original-value step-original"><strong>Original:</strong> {{ original }}</p>
+              <p class="original-value step-original">
+                <strong>{{ 'recipeForm.original' | translate }}:</strong> {{ original }}
+              </p>
             }
           </div>
         }
         <button mat-stroked-button type="button" (click)="addStep()">
           <mat-icon>add</mat-icon>
-          Add step
+          {{ 'recipeForm.addStep' | translate }}
         </button>
       </mat-card-content>
     </mat-card>
 
     <div class="form-actions">
-      <a mat-button [routerLink]="editingId() ? ['/recipes', editingId()] : ['/recipes']">Cancel</a>
+      <a mat-button [routerLink]="editingId() ? ['/recipes', editingId()] : ['/recipes']">
+        {{ 'recipeForm.cancel' | translate }}
+      </a>
       <button mat-flat-button type="submit" [disabled]="saving() || !canSave()">
-        {{ editingId() ? 'Save changes' : 'Create recipe' }}
+        {{ (editingId() ? 'recipeForm.saveChanges' : 'recipeForm.createRecipe') | translate }}
       </button>
     </div>
   </form>

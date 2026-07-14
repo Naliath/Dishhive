@@ -3,17 +3,25 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { describe, expect, it, vi } from 'vitest';
 import { RecipesService } from '../../services/recipes.service';
 import { PlannedMealsService } from '../../services/planned-meals.service';
+import { LanguageService } from '../../services/language.service';
 import { RecipeFormPage } from './recipe-form.page';
 
 describe('RecipeFormPage image URL editor', () => {
   function createPage() {
     const snackBar = { open: vi.fn() };
+    const language = {
+      t: (key: string) => ({
+        'recipeForm.invalidImageUrl': 'Enter a valid http(s) image URL',
+        'common.dismiss': 'Dismiss'
+      })[key] ?? key
+    };
     const page = new RecipeFormPage(
       {} as ActivatedRoute,
       {} as Router,
       {} as RecipesService,
       {} as PlannedMealsService,
-      snackBar as unknown as MatSnackBar
+      snackBar as unknown as MatSnackBar,
+      language as unknown as LanguageService
     );
     return { page, snackBar };
   }
@@ -63,6 +71,10 @@ describe('RecipeFormPage image URL editor', () => {
 
   it('offers original ingredient and step comparisons only when values differ', () => {
     const { page } = createPage();
+    page.title = 'Translated title';
+    page.originalTitle = 'Original title';
+    page.description = 'Translated description.';
+    page.originalDescription = 'Original description.';
     page.ingredients = [
       { name: 'butter', quantity: 200, unit: 'g', originalText: '200 g boter' },
       { name: 'salt', quantity: 1, unit: 'tsp', originalText: '1 tsp salt' }
@@ -72,11 +84,18 @@ describe('RecipeFormPage image URL editor', () => {
       { instruction: 'Serve.', originalInstruction: 'Serve.' }
     ];
 
+    expect(page.originalTitleText()).toBe('Original title');
+    expect(page.originalDescriptionText()).toBe('Original description.');
     expect(page.hasOriginalIngredients()).toBe(true);
     expect(page.originalIngredientText(page.ingredients[0])).toBe('200 g boter');
     expect(page.originalIngredientText(page.ingredients[1])).toBeNull();
     expect(page.hasOriginalSteps()).toBe(true);
     expect(page.originalStepInstruction(page.steps[0])).toBe('Smelt de boter.');
     expect(page.originalStepInstruction(page.steps[1])).toBeNull();
+
+    page.title = ' original TITLE ';
+    page.description = 'ORIGINAL DESCRIPTION.';
+    expect(page.originalTitleText()).toBeNull();
+    expect(page.originalDescriptionText()).toBeNull();
   });
 });

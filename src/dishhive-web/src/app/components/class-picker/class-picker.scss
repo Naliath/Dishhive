@@ -11,7 +11,7 @@
 .class-group-label {
   display: block;
   opacity: 0.7;
-  margin-bottom: 2px;
+  margin-block-end: 2px;
 }
 
 .class-group-options {
@@ -22,7 +22,7 @@
   // Compact checkboxes: the default Material touch target is oversized for a
   // 20-option matrix
   mat-checkbox {
-    margin-right: 0;
+    margin-inline-end: 0;
   }
 }
 

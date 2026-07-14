@@ -4,10 +4,30 @@
 
 /* You can add global styles to this file, and also import other style files */
 
-// Match the breathing room used by other labeled controls. Material's default
-// switch label inset is quite tight, especially beside the larger M3 track.
+:root {
+  --app-page-gutter: 16px;
+  --app-content-narrow: 600px;
+  --app-content-reading: 700px;
+  --app-content-medium: 800px;
+  --app-content-wide: 1200px;
+}
+
+// Match the breathing room used by other labeled controls. Material exposes
+// label typography tokens but no public spacing token, so keep this internal
+// selector narrow and verify it when upgrading Angular Material.
 .mat-mdc-slide-toggle .mdc-label {
   padding-inline-start: 12px;
+}
+
+// Shared page-heading structure. Alignment and wrapping variants stay local.
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  h1 {
+    margin: 0;
+  }
 }
 
 // Global utility classes following Material Design patterns
@@ -40,10 +60,4 @@
   p {
     margin: 0;
   }
-}
-
-// Page container widths (see docs/PROJECT_GUIDELINES.md)
-.page-container {
-  margin-inline: auto;
-  padding: 16px;
 }

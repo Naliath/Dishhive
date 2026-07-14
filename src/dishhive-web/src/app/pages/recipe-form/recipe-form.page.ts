@@ -18,7 +18,7 @@ import { RecipesService } from '../../services/recipes.service';
 import { PlannedMealsService } from '../../services/planned-meals.service';
 import { CreateRecipe, DietaryFactsStatus, Recipe } from '../../models/recipe.model';
 import { Observable, map, of, switchMap, tap } from 'rxjs';
-import { TranslatePipe } from '../../services/language.service';
+import { LanguageService, TranslatePipe } from '../../services/language.service';
 
 interface IngredientRow {
   name: string;
@@ -144,7 +144,8 @@ export class RecipeFormPage implements OnInit, OnDestroy {
     private router: Router,
     private recipesService: RecipesService,
     private plannedMealsService: PlannedMealsService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private language: LanguageService
   ) {}
 
   ngOnInit(): void {
@@ -207,7 +208,10 @@ export class RecipeFormPage implements OnInit, OnDestroy {
       },
       error: () => {
         this.loading.set(false);
-        this.snackBar.open('Could not load the recipe', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(
+          this.language.t('recipeForm.loadError'),
+          this.language.t('common.dismiss'),
+          { duration: 4000 });
         this.router.navigate(['/recipes']);
       }
     });
@@ -248,11 +252,17 @@ export class RecipeFormPage implements OnInit, OnDestroy {
       return;
     }
     if (file.type && !file.type.startsWith('image/')) {
-      this.snackBar.open('Choose an image file', 'Dismiss', { duration: 4000 });
+      this.snackBar.open(
+        this.language.t('recipeForm.chooseImageFile'),
+        this.language.t('common.dismiss'),
+        { duration: 4000 });
       return;
     }
     if (file.size > RecipeFormPage.maxImageBytes) {
-      this.snackBar.open('Images may be at most 15 MB', 'Dismiss', { duration: 4000 });
+      this.snackBar.open(
+        this.language.t('recipeForm.imageTooLarge'),
+        this.language.t('common.dismiss'),
+        { duration: 4000 });
       return;
     }
 
@@ -285,7 +295,10 @@ export class RecipeFormPage implements OnInit, OnDestroy {
         throw new Error('Unsupported protocol');
       }
     } catch {
-      this.snackBar.open('Enter a valid http(s) image URL', 'Dismiss', { duration: 4000 });
+      this.snackBar.open(
+        this.language.t('recipeForm.invalidImageUrl'),
+        this.language.t('common.dismiss'),
+        { duration: 4000 });
       return;
     }
 
@@ -349,6 +362,14 @@ export class RecipeFormPage implements OnInit, OnDestroy {
       .filter(value => value !== undefined && value !== null && String(value).trim())
       .join(' ');
     return this.comparisonOriginal(ingredient.originalText, current);
+  }
+
+  originalTitleText(): string | null {
+    return this.comparisonOriginal(this.originalTitle, this.title);
+  }
+
+  originalDescriptionText(): string | null {
+    return this.comparisonOriginal(this.originalDescription, this.description);
   }
 
   addTagFromInput(event: MatChipInputEvent): void {
@@ -469,8 +490,8 @@ export class RecipeFormPage implements OnInit, OnDestroy {
       error: () => {
         this.saving.set(false);
         this.snackBar.open(
-          savedRecipe ? 'Recipe saved, but the image could not be updated' : 'Could not save the recipe',
-          'Dismiss',
+          this.language.t(savedRecipe ? 'recipeForm.imageUpdateError' : 'recipeForm.saveError'),
+          this.language.t('common.dismiss'),
           { duration: 5000 });
         if (savedRecipe && !this.editingId()) {
           // The create succeeded, so move to its edit URL before a retry; otherwise
@@ -497,12 +518,18 @@ export class RecipeFormPage implements OnInit, OnDestroy {
   private linkToMealAndReturn(mealId: string, recipeId: string, title: string): void {
     this.plannedMealsService.setRecipe(mealId, recipeId).subscribe({
       next: () => {
-        this.snackBar.open(`"${title}" created and linked to the plan`, 'Dismiss', { duration: 4000 });
+        this.snackBar.open(
+          this.language.t('recipeForm.createdAndLinked', { title }),
+          this.language.t('common.dismiss'),
+          { duration: 4000 });
         this.router.navigate(['/shopping-list']);
       },
       error: () => {
         // The recipe exists; only the link failed — land on the recipe instead
-        this.snackBar.open('Recipe saved, but linking to the meal failed', 'Dismiss', { duration: 5000 });
+        this.snackBar.open(
+          this.language.t('recipeForm.linkError'),
+          this.language.t('common.dismiss'),
+          { duration: 5000 });
         this.router.navigate(['/recipes', recipeId]);
       }
     });

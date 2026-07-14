@@ -21,9 +21,9 @@
 }
 
 .router-content {
-  max-width: 1200px;
+  max-width: var(--app-content-wide);
   margin-inline: auto;
-  padding: 16px;
+  padding: var(--app-page-gutter);
 }
 
 .onboarding-loading {

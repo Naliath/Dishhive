@@ -239,7 +239,11 @@ export class WeekPlannerPage implements OnInit {
   suggestWeek(): void {
     const data: SuggestionReviewDialogData = { weekStart: toIso(this.weekStart()) };
     this.dialog.open<SuggestionReviewDialog, SuggestionReviewDialogData, SuggestionReviewResult>(
-      SuggestionReviewDialog, { data })
+      SuggestionReviewDialog, {
+        data,
+        panelClass: 'suggestion-review-dialog-panel',
+        maxWidth: '100vw'
+      })
       .afterClosed().subscribe(selection => {
         if (!selection || selection.suggestions.length === 0) {
           return;

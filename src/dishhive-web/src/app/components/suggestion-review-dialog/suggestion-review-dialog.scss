@@ -183,6 +183,10 @@
 }
 
 @media (max-width: 600px) {
+  mat-dialog-content {
+    max-height: none;
+  }
+
   .suggestion-loading,
   .suggestion-empty {
     min-width: 0;

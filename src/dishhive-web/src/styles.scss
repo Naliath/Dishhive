@@ -1,5 +1,6 @@
 // Import custom theme with Material 3 design system
 // Amber/Cyan palettes with automatic light/dark mode support
+@use '@angular/material' as mat;
 @use 'theme.scss';
 
 /* You can add global styles to this file, and also import other style files */
@@ -59,5 +60,21 @@
 
   p {
     margin: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  // This dialog contains a full week of editable suggestions. On phones it is
+  // a dedicated task surface rather than a floating modal.
+  .suggestion-review-dialog-panel {
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+
+    @include mat.dialog-overrides((
+      container-max-width: 100vw,
+      container-small-max-width: 100vw,
+      container-shape: 0
+    ));
   }
 }

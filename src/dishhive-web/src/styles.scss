@@ -31,6 +31,14 @@
   }
 }
 
+// Material projects plain header content after the title block. Keep decorative
+// icons visually leading without applying the avatar shape and dimensions.
+.card-header-icon {
+  order: -1;
+  flex-shrink: 0;
+  margin-inline-end: 16px;
+}
+
 // Global utility classes following Material Design patterns
 // These are reusable patterns used across multiple components
 
@@ -61,6 +69,10 @@
   p {
     margin: 0;
   }
+}
+
+mat-card-content.card-content-padded {
+  padding-block-start: 16px;
 }
 
 @media (max-width: 600px) {

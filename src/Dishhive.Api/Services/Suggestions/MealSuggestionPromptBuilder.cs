@@ -9,8 +9,7 @@ public static class MealSuggestionPromptBuilder
 {
     public const string EditableSystemPromptDefault =
         """
-        You are a meal planner for a family household. Propose a dinner for each
-        requested date.
+        You are a meal planner for a family household. Propose a dinner for each requested date.
         - Prefer variety: avoid dishes eaten in the last two weeks.
         - Favor household favorites and dishes with high ratings; avoid low-rated dishes.
         - Keep each reason to one short sentence.

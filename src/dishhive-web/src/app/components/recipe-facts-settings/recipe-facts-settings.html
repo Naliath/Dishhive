@@ -1,13 +1,13 @@
 @if (status(); as s) {
   <mat-card appearance="raised" class="settings-card">
     <mat-card-header>
-      <mat-icon mat-card-avatar>fact_check</mat-icon>
+      <mat-icon class="card-header-icon">fact_check</mat-icon>
       <mat-card-title>{{ 'recipeFacts.recipeDietaryFacts' | translate }}</mat-card-title>
       <mat-card-subtitle>
         {{ 'recipeFacts.recipeFactsExplanation' | translate }}
       </mat-card-subtitle>
     </mat-card-header>
-    <mat-card-content>
+    <mat-card-content class="card-content-padded">
       <div class="facts-counts">
         <span class="facts-count facts-count--unassessed">
           <strong>{{ s.unassessed }}</strong> {{ 'recipeFacts.notAssessed' | translate }}

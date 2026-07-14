@@ -2,11 +2,11 @@
 
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
-    <mat-icon mat-card-avatar>language</mat-icon>
+    <mat-icon class="card-header-icon">language</mat-icon>
     <mat-card-title>{{ 'onboarding.language' | translate }}</mat-card-title>
   </mat-card-header>
-  <mat-card-content class="language-settings-content">
-    <mat-form-field appearance="outline" class="language-field">
+  <mat-card-content class="language-settings-content card-content-padded">
+    <mat-form-field appearance="outline" class="language-field" subscriptSizing="dynamic">
       <mat-label>{{ 'onboarding.language' | translate }}</mat-label>
       <mat-select [value]="settingsService.preferredLanguage()" (selectionChange)="setLanguage($event.value)">
         @for (language of settingsService.supportedLanguages(); track language.code) {
@@ -24,10 +24,10 @@
 
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
-    <mat-icon mat-card-avatar>palette</mat-icon>
+    <mat-icon class="card-header-icon">palette</mat-icon>
     <mat-card-title>{{ 'settings.appearance' | translate }}</mat-card-title>
   </mat-card-header>
-  <mat-card-content>
+  <mat-card-content class="card-content-padded">
     <mat-button-toggle-group
       class="theme-toggle-group"
       [value]="themeService.currentTheme()"
@@ -59,7 +59,7 @@
 
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
-    <mat-icon mat-card-avatar>straighten</mat-icon>
+    <mat-icon class="card-header-icon">straighten</mat-icon>
     <mat-card-title>{{ 'onboarding.measurementSystem' | translate }}</mat-card-title>
     <mat-card-subtitle>
       {{ 'settings.measurementsExplanation' | translate }}
@@ -79,7 +79,7 @@
 
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
-    <mat-icon mat-card-avatar>calendar_view_week</mat-icon>
+    <mat-icon class="card-header-icon">calendar_view_week</mat-icon>
     <mat-card-title>{{ 'onboarding.firstDayOfTheWeek' | translate }}</mat-card-title>
     <mat-card-subtitle>
       {{ 'settings.weekStartExplanation' | translate }}
@@ -99,7 +99,7 @@
 
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
-    <mat-icon mat-card-avatar>auto_awesome</mat-icon>
+    <mat-icon class="card-header-icon">auto_awesome</mat-icon>
     <mat-card-title>{{ 'settings.automaticCollections' | translate }}</mat-card-title>
     <mat-card-subtitle>
       {{ 'settings.automaticCollectionsExplanation' | translate }}
@@ -133,13 +133,13 @@
 
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
-    <mat-icon mat-card-avatar>import_export</mat-icon>
+    <mat-icon class="card-header-icon">import_export</mat-icon>
     <mat-card-title>{{ 'settings.recipeLibraryBackup' | translate }}</mat-card-title>
     <mat-card-subtitle>
       {{ 'settings.recipeBackupExplanation' | translate }}
     </mat-card-subtitle>
   </mat-card-header>
-  <mat-card-content>
+  <mat-card-content class="card-content-padded">
     <div class="exchange-actions">
       <a mat-stroked-button [href]="recipesService.exportUrl" download>
         <mat-icon>download</mat-icon>
@@ -166,13 +166,13 @@
 @if (pwaService.canInstall()) {
   <mat-card appearance="raised" class="settings-card">
     <mat-card-header>
-      <mat-icon mat-card-avatar>install_mobile</mat-icon>
+      <mat-icon class="card-header-icon">install_mobile</mat-icon>
       <mat-card-title>{{ 'settings.installApp' | translate }}</mat-card-title>
       <mat-card-subtitle>
         {{ 'settings.installAppExplanation' | translate }}
       </mat-card-subtitle>
     </mat-card-header>
-    <mat-card-content>
+    <mat-card-content class="card-content-padded">
       <button mat-flat-button (click)="installApp()">
         <mat-icon>download</mat-icon>
         {{ 'settings.installDishhive' | translate }}
@@ -183,7 +183,7 @@
 
 <mat-card appearance="raised" class="settings-card">
   <mat-card-header>
-    <mat-icon mat-card-avatar>info</mat-icon>
+    <mat-icon class="card-header-icon">info</mat-icon>
     <mat-card-title>{{ 'settings.about' | translate }}</mat-card-title>
   </mat-card-header>
   <mat-card-content>

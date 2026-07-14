@@ -1,7 +1,7 @@
 @if (aiConfigured() && prompt(); as p) {
   <mat-card appearance="raised" class="settings-card">
     <mat-card-header>
-      <mat-icon mat-card-avatar>edit_note</mat-icon>
+      <mat-icon class="card-header-icon">edit_note</mat-icon>
       <mat-card-title>
         {{ 'aiPrompt.aIPlannerPrompt' | translate }}
         @if (p.isCustomized) {
@@ -12,7 +12,7 @@
         {{ 'aiPrompt.aIPromptExplanation' | translate }}
       </mat-card-subtitle>
     </mat-card-header>
-    <mat-card-content>
+    <mat-card-content class="card-content-padded">
       @if (p.defaultChangedSinceCustomized) {
         <div class="prompt-drift-notice">
           <mat-icon>update</mat-icon>

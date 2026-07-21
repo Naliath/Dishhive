@@ -53,8 +53,11 @@
     "suggestions": {
       "title": "Voorgestelde avondmaaltijden",
       "checkingAi": "De AI-assistent controleren…",
+      "chooseDays": "Kies de dagen waarvoor je voorstellen wilt genereren.",
+      "alreadyPlanned": "Avondmaaltijd al gepland",
       "composeHint": "Wensen voor deze week? Ze worden aan de AI doorgegeven voordat die het menu plant.",
       "websiteHint": "Verwijs met @ naar een website om een nieuw recept te zoeken en importeren.",
+      "rulesComposeHint": "De AI is niet beschikbaar. De voorstellen gebruiken daarom diepvriesgerechten en gezinsfavorieten.",
       "instructions": "Instructies (optioneel)",
       "instructionsPlaceholder": "bv. vegetarisch onder 30 min van @[Dagelijkse Kost]",
       "generating": "Een heerlijke week samenstellen…",

@@ -82,7 +82,7 @@ public sealed class LlmMealSuggestionService(
                         new ChatMessage(ChatRole.System, PlanningIntentContract.SystemPrompt),
                         new ChatMessage(ChatRole.User, BuildPlanningIntentPrompt(request))
                     ],
-                    "planning-intent-v1",
+                    "planning-intent-v2",
                     requestId,
                     ResponseFormat: PlanningIntentContract.JsonSchemaFormat), timeout.Token);
                 var intentResponse = intentExecution.Response;
@@ -176,7 +176,7 @@ public sealed class LlmMealSuggestionService(
                 var completion = await executionGate.ExecuteAsync(new AiExecutionRequest(
                     AiTaskKind.WeekPlanning,
                     messages,
-                    "week-suggestions-v2",
+                    "week-suggestions-v3",
                     requestId,
                     attempt + 1,
                     MealSuggestionResponseContract.JsonSchemaFormat,
@@ -351,6 +351,7 @@ public sealed class LlmMealSuggestionService(
             request.SourceConstraints
                 .Select(constraint => new PlanningIntentSource(constraint.Name, constraint.Host))
                 .ToList(),
+            request.DaysToFill,
             Enumerable.Range(0, 7)
                 .Select(request.WeekStart.AddDays)
                 .Select(date => new PlanningIntentDate(date.DayOfWeek.ToString(), date))
@@ -373,6 +374,7 @@ public sealed class LlmMealSuggestionService(
 
     private sealed record PlanningIntentPromptInput(
         IReadOnlyList<PlanningIntentSource> ReferencedSources,
+        IReadOnlyList<DateOnly> SelectedDates,
         IReadOnlyList<PlanningIntentDate> WeekdayMapping,
         string? PlannerInstructions);
 

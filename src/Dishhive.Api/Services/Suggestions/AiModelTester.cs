@@ -228,6 +228,7 @@ public class AiModelTester
             var request = new MealSuggestionRequest
             {
                 WeekStart = new DateOnly(2099, 1, 5),
+                DaysToFill = [new DateOnly(2099, 1, 5), new DateOnly(2099, 1, 11)],
                 SourceConstraints = [new SourceConstraint { Name = "Example", Host = "recipes.example" }]
             };
             var prompts = new[]
@@ -243,9 +244,10 @@ public class AiModelTester
                     [
                         new ChatMessage(ChatRole.System, PlanningIntentContract.SystemPrompt),
                         new ChatMessage(ChatRole.User,
-                            "Referenced source: recipes.example. Monday is 2099-01-05 and Sunday is 2099-01-11. Instructions: " + prompt)
+                            "Referenced source: recipes.example. Selected dates: 2099-01-05 and 2099-01-11. " +
+                            "Weekday mapping: Monday is 2099-01-05 and Sunday is 2099-01-11. Instructions: " + prompt)
                     ],
-                    "capability-planning-intent-v1",
+                    "capability-planning-intent-v2",
                     operationId,
                     promptIndex + 1,
                     ResponseFormatPolicy: AiResponseFormatPolicy.None), timeout.Token);

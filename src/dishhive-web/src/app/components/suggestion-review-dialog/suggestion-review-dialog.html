@@ -9,33 +9,60 @@
       </div>
     }
     @case ('compose') {
-      <p class="compose-hint">
-        {{ 'weekPlanner.suggestions.composeHint' | translate }}
-        @if (webSearchAvailable()) {
-          {{ 'weekPlanner.suggestions.websiteHint' | translate }}
-        }
-      </p>
-      <div class="instructions-row">
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
-          <mat-label>{{ 'weekPlanner.suggestions.instructions' | translate }}</mat-label>
-          <textarea matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
-                 rows="3" cdkTextareaAutosize cdkAutosizeMinRows="3"
-                 [placeholder]="'weekPlanner.suggestions.instructionsPlaceholder' | translate"
-                 appCollectionMention #composeMention="appCollectionMention"
-                 [matAutocomplete]="composeAuto"></textarea>
-          <mat-autocomplete #composeAuto="matAutocomplete">
-            @for (item of composeMention.suggestions(); track item.id) {
-              <mat-option [value]="composeMention.valueFor(item)">
-                <mat-icon>{{ item.icon }}</mat-icon>
-                {{ item.displayName }}
-                @if (item.detail) {
-                  <span class="mention-count">{{ item.detail }}</span>
-                }
-              </mat-option>
-            }
-          </mat-autocomplete>
-        </mat-form-field>
-      </div>
+      <section class="day-selection">
+        <p class="day-selection-hint">{{ 'weekPlanner.suggestions.chooseDays' | translate }}</p>
+        <div
+          class="day-options"
+          role="group"
+          [attr.aria-label]="'weekPlanner.suggestions.chooseDays' | translate">
+          @for (day of planningDays; track day.date) {
+            <div class="day-option" (click)="toggleDay(day.date)">
+              <mat-checkbox
+                [checked]="isDaySelected(day.date)"
+                (click)="$event.stopPropagation()"
+                (change)="toggleDay(day.date)">
+                {{ day.date | localizedDate:'weekdayShort' }}
+              </mat-checkbox>
+              @if (day.hasPlannedDinner) {
+                <span class="planned-day-note">
+                  {{ 'weekPlanner.suggestions.alreadyPlanned' | translate }}
+                </span>
+              }
+            </div>
+          }
+        </div>
+      </section>
+      @if (aiAvailable()) {
+        <p class="compose-hint">
+          {{ 'weekPlanner.suggestions.composeHint' | translate }}
+          @if (webSearchAvailable()) {
+            {{ 'weekPlanner.suggestions.websiteHint' | translate }}
+          }
+        </p>
+        <div class="instructions-row compose-instructions">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
+            <mat-label>{{ 'weekPlanner.suggestions.instructions' | translate }}</mat-label>
+            <textarea matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
+                   rows="3" cdkTextareaAutosize cdkAutosizeMinRows="3"
+                   [placeholder]="'weekPlanner.suggestions.instructionsPlaceholder' | translate"
+                   appCollectionMention #composeMention="appCollectionMention"
+                   [matAutocomplete]="composeAuto"></textarea>
+            <mat-autocomplete #composeAuto="matAutocomplete">
+              @for (item of composeMention.suggestions(); track item.id) {
+                <mat-option [value]="composeMention.valueFor(item)">
+                  <mat-icon>{{ item.icon }}</mat-icon>
+                  {{ item.displayName }}
+                  @if (item.detail) {
+                    <span class="mention-count">{{ item.detail }}</span>
+                  }
+                </mat-option>
+              }
+            </mat-autocomplete>
+          </mat-form-field>
+        </div>
+      } @else {
+        <p class="compose-hint">{{ 'weekPlanner.suggestions.rulesComposeHint' | translate }}</p>
+      }
     }
     @case ('generating') {
       <div class="suggestion-loading">
@@ -133,26 +160,28 @@
       }
 
       <div class="instructions-row">
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
-          <mat-label>{{ 'weekPlanner.suggestions.instructions' | translate }}</mat-label>
-          <textarea matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
-                 rows="3" cdkTextareaAutosize cdkAutosizeMinRows="3"
-                 [placeholder]="'weekPlanner.suggestions.instructionsPlaceholder' | translate"
-                 appCollectionMention #reviewMention="appCollectionMention"
-                 [matAutocomplete]="reviewAuto"></textarea>
-          <mat-autocomplete #reviewAuto="matAutocomplete">
-            @for (item of reviewMention.suggestions(); track item.id) {
-              <mat-option [value]="reviewMention.valueFor(item)">
-                <mat-icon>{{ item.icon }}</mat-icon>
-                {{ item.displayName }}
-                @if (item.detail) {
-                  <span class="mention-count">{{ item.detail }}</span>
-                }
-              </mat-option>
-            }
-          </mat-autocomplete>
-        </mat-form-field>
-        <button mat-stroked-button type="button" (click)="fetch()">
+        @if (aiAvailable()) {
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="instructions-field">
+            <mat-label>{{ 'weekPlanner.suggestions.instructions' | translate }}</mat-label>
+            <textarea matInput name="instructions" [(ngModel)]="instructions" maxlength="500"
+                   rows="3" cdkTextareaAutosize cdkAutosizeMinRows="3"
+                   [placeholder]="'weekPlanner.suggestions.instructionsPlaceholder' | translate"
+                   appCollectionMention #reviewMention="appCollectionMention"
+                   [matAutocomplete]="reviewAuto"></textarea>
+            <mat-autocomplete #reviewAuto="matAutocomplete">
+              @for (item of reviewMention.suggestions(); track item.id) {
+                <mat-option [value]="reviewMention.valueFor(item)">
+                  <mat-icon>{{ item.icon }}</mat-icon>
+                  {{ item.displayName }}
+                  @if (item.detail) {
+                    <span class="mention-count">{{ item.detail }}</span>
+                  }
+                </mat-option>
+              }
+            </mat-autocomplete>
+          </mat-form-field>
+        }
+        <button mat-stroked-button type="button" [disabled]="selectedDayCount() === 0" (click)="fetch()">
           <mat-icon>refresh</mat-icon>
           {{ 'weekPlanner.suggestions.regenerate' | translate }}
         </button>
@@ -164,7 +193,7 @@
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>{{ 'weekPlanner.suggestions.cancel' | translate }}</button>
   @if (phase() === 'compose') {
-    <button mat-flat-button (click)="fetch()">
+    <button mat-flat-button [disabled]="selectedDayCount() === 0" (click)="fetch()">
       <mat-icon>auto_awesome</mat-icon>
       {{ 'weekPlanner.suggestions.generate' | translate }}
     </button>

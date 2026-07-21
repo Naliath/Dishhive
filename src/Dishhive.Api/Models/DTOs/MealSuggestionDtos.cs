@@ -11,6 +11,13 @@ public class SuggestWeekRequestDto
     public List<Guid> AttendeeIds { get; set; } = new();
 
     /// <summary>
+    /// Dates the planner explicitly selected for generation. Null preserves the
+    /// server default (today onward, excluding concretely planned dinner mains);
+    /// an empty list requests no suggestions.
+    /// </summary>
+    public List<DateOnly>? SelectedDates { get; set; }
+
+    /// <summary>
     /// Optional free-text planning instructions for the LLM (e.g. "3 days vegetarian,
     /// at least one fish dish"). Ignored by the deterministic rules fallback.
     /// </summary>

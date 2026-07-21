@@ -13,7 +13,7 @@ namespace Dishhive.Api.Services.Suggestions;
 /// </summary>
 public sealed record PlanningIntent
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     public int Version { get; init; } = CurrentVersion;
     public bool AllowRepeatedDishes { get; init; }
     public IReadOnlyList<PlanningConstraint> Constraints { get; init; } = [];
@@ -104,7 +104,8 @@ internal static class PlanningIntentContract
         return $$"""
         Interpret meal-planning instructions written in any language. Do not plan meals.
         Convert the instructions into a language-neutral JSON intent. Use only exact dates
-        from the supplied week mapping and only source hosts from the supplied source list.
+        from the supplied selected-date list (the week mapping is for weekday translation)
+        and only source hosts from the supplied source list.
 
         Reply with ONLY this JSON shape:
         {{example}}
@@ -114,7 +115,9 @@ internal static class PlanningIntentContract
         - Default to no repeated dishes. Set {{allowRepeatedDishesField}}=true only when repetition
           is explicitly requested.
         - Resolve weekday names in any language through the supplied date mapping.
-        - A duration/count such as four days means four distinct dated selections.
+        - The selected-date list is authoritative. Never emit a date that is not selected.
+        - A duration/count such as four days means four distinct dated selections. When
+          the user does not name dates, assign them in selected-date order.
         - Valid {{mealTypeField}} values are {{mealTypes}}. A dessert is a
           course, not a meal type; unless explicitly requested otherwise use dinner.
         - Valid {{courseField}} values are {{courses}}.
@@ -168,7 +171,7 @@ internal static class PlanningIntentContract
             return null;
         }
 
-        var weekDates = Enumerable.Range(0, 7).Select(request.WeekStart.AddDays).ToHashSet();
+        var selectedDates = request.DaysToFill.ToHashSet();
         var allowedHosts = request.SourceConstraints.Select(source => NormalizeHost(source.Host))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var constraints = new List<PlanningConstraint>();
@@ -184,7 +187,7 @@ internal static class PlanningIntentContract
             var dates = new List<DateOnly>();
             foreach (var value in item.Dates ?? [])
             {
-                if (!DateOnly.TryParse(value, out var date) || !weekDates.Contains(date))
+                if (!DateOnly.TryParse(value, out var date) || !selectedDates.Contains(date))
                 {
                     return null;
                 }

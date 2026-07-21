@@ -153,6 +153,25 @@ public class MealSuggestionsIntegrationTests : TestBase
     }
 
     [Fact]
+    public async Task SuggestWeek_ExplicitSelectedDates_AreTheAuthoritativeDaysToFill()
+    {
+        var stub = new StubSuggestionService();
+        using var factory = new StubbedFactory(stub);
+        using var client = factory.CreateClient();
+        var selected = new[] { Monday.AddDays(4), Monday.AddDays(1) };
+
+        var response = await client.PostAsJsonAsync("/api/plannedmeals/suggestions",
+            new SuggestWeekRequestDto
+            {
+                WeekStart = Monday,
+                SelectedDates = [.. selected, Monday.AddDays(7)]
+            });
+
+        response.IsSuccessStatusCode.Should().BeTrue();
+        stub.LastRequest!.DaysToFill.Should().Equal(Monday.AddDays(1), Monday.AddDays(4));
+    }
+
+    [Fact]
     public async Task SuggestWeek_CollectionMentions_AreResolvedIntoConstraints()
     {
         var stub = new StubSuggestionService();

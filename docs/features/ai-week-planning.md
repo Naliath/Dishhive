@@ -118,9 +118,12 @@ IMealSuggestionService
 
 - **Proposals only**: generation persists nothing. Selected rows are applied through
   `POST /api/plannedmeals/suggestions/accept`, which imports external candidates and creates
-  meals with per-item results and idempotency keys. `DaysToFill` = days without a concrete dinner main (vague-only
-  days are included — the suggestion resolves the vague text). Suggestions never overwrite
-  concretely planned dishes.
+  meals with per-item results and idempotency keys. The planner sends its explicit day
+  selection as `selectedDates`; those dates become the authoritative `DaysToFill` boundary
+  for prompts, deterministic post-processing, rules fallback, and backfill. Without an
+  explicit selection (older API callers), `DaysToFill` remains days from today onward
+  without a concrete dinner main (vague-only days are included — the suggestion resolves
+  the vague text). Suggestions never overwrite concretely planned dishes.
 - **Ideas are replaced, not duplicated**: a vague-instruction-only dinner main (an "idea")
   is input for the suggestion, but once an accepted dish lands on that date the planner
   deletes the lingering idea meal — the day ends with the concrete dish only, not both.
@@ -360,8 +363,10 @@ parse/retry machinery becomes a safety net; otherwise prompted JSON as before.
 Live-model regressions are stored as data in
 `src/Dishhive.Api.Tests/Fixtures/AiWeekPlanning/scenarios.json`. Each scenario contains
 the prompt, repeat count, advisory performance budget, and hard assertions for distinct
-recipes, source hosts, courses, dates, and attendee behavior. Keep this file as the source
-of truth so CI, developers, and AI-assisted review all evaluate the same cases.
+recipes, source hosts, courses, dates, and attendee behavior. A scenario can provide
+`selectedDayOffsets`; the runner sends those dates through the product API and fails any
+suggestion that escapes the selection. Keep this file as the source of truth so CI,
+developers, and AI-assisted review all evaluate the same cases.
 
 Run one quick pass against the local Compose app:
 
@@ -434,11 +439,16 @@ to 4000 chars). API: `GET/PUT/DELETE /api/settings/ai-prompt`.
 
 - Planner toolbar: `auto_awesome` "Suggest week" button, visible only when the status
   endpoint reports enabled
-- `components/suggestion-review-dialog/`: a live AI check (integrations status) decides
-  the opening phase — AI reachable **and** the model test not failed → instructions are
-  asked **before** generating ("compose" phase with a Generate button); AI down or model
-  unfit → generation starts immediately, since the rules fallback ignores instructions.
-  Then one row per proposal (date, dish, matched-recipe icon, reason, checkbox
+- `components/suggestion-review-dialog/`: after the live AI check, the opening compose
+  phase always shows all seven dates. For the current week, today through week-end are
+  selected; for a viewed future or past week, selection starts at the first day. Days with
+  a concrete dinner main are unselected by default, and every date remains manually
+  selectable before the first generation. The picker is hidden during review, and
+  Regenerate reuses the original selected set. When AI is reachable
+  and its model test has not failed, the optional instructions field shares this same
+  phase, so the defaults add no extra click to the AI workflow. When AI is unavailable,
+  the same day picker is shown but instructions are hidden because the rules fallback
+  ignores them. Then one row per proposal (date, dish, matched-recipe icon, reason, checkbox
   default-on); "Add selected" creates the meals (Dinner/Main, household members
   attending). The instructions field is a 3-row textarea (so `#[Name]` autocomplete and
   longer wishes fit); Enter selects the active autocomplete option or inserts a newline
@@ -483,6 +493,7 @@ to 4000 chars). API: `GET/PUT/DELETE /api/settings/ai-prompt`.
 - [x] Conditional DI in Program.cs (Testing always NoOp)
 - [x] Status + suggestions endpoints + integration tests
 - [x] Planner button + review dialog + accept flow
+- [x] Explicit seven-day generation picker with current-week/planned-meal defaults
 - [x] docker-compose `Ai__*` vars + README provider table
 - [x] Web search seam (`IWebSearchClient` + SearXNG) + `WebSearch__*` config + integrations status
 - [x] Web-search contract health check + actionable settings-page diagnostics for disabled JSON output

@@ -40,7 +40,8 @@ public class MealSuggestionRequestBuilder
     }
 
     public async Task<MealSuggestionRequest> BuildAsync(
-        DateOnly weekStart, IReadOnlyList<Guid> attendeeIds, string? instructions = null,
+        DateOnly weekStart, IReadOnlyList<Guid> attendeeIds,
+        IReadOnlyList<DateOnly>? selectedDates = null, string? instructions = null,
         CancellationToken cancellationToken = default)
     {
         var weekEnd = weekStart.AddDays(6);
@@ -113,17 +114,30 @@ public class MealSuggestionRequestBuilder
             })
             .ToList();
 
-        // Fill days without a dinner main, or with a vague-instruction-only dinner;
-        // never propose over a concretely planned dish or a day that has already passed
-        var daysToFill = Enumerable.Range(0, 7)
-            .Select(weekStart.AddDays)
-            .Where(date => date >= today)
-            .Where(date => !weekMeals.Any(m =>
-                m.Date == date
-                && m.MealType == MealType.Dinner
-                && m.Course == Course.Main
-                && (m.RecipeId != null || m.DishName != null)))
-            .ToList();
+        var weekDates = Enumerable.Range(0, 7).Select(weekStart.AddDays).ToList();
+        IReadOnlyList<DateOnly> daysToFill;
+        if (selectedDates is null)
+        {
+            // Compatibility default for callers that do not provide an explicit
+            // selection: fill today/future days without a concrete dinner main.
+            // Vague-instruction-only dinners remain eligible so AI can resolve them.
+            daysToFill = weekDates
+                .Where(date => date >= today)
+                .Where(date => !weekMeals.Any(m =>
+                    m.Date == date
+                    && m.MealType == MealType.Dinner
+                    && m.Course == Course.Main
+                    && (m.RecipeId != null || m.DishName != null)))
+                .ToList();
+        }
+        else
+        {
+            // The UI deliberately allows normally-unselected past or planned days
+            // to be selected. Keep only distinct dates belonging to the viewed week;
+            // suggestions append dishes and never overwrite an existing meal.
+            var requested = selectedDates.ToHashSet();
+            daysToFill = weekDates.Where(requested.Contains).ToList();
+        }
 
         var frozenItems = await _freezerAvailability.GetAvailableAsync(cancellationToken);
 

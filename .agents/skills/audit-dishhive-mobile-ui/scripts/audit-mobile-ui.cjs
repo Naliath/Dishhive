@@ -88,6 +88,7 @@ async function main() {
   );
   const width = Number(argument('width', '360'));
   const height = Number(argument('height', '800'));
+  const theme = argument('theme', '');
   const discovered = discoverRoutes();
   const additionalRoutes = argument('additional-routes', '')
     .split(',')
@@ -95,10 +96,17 @@ async function main() {
     .filter(Boolean);
   const routes = [...new Set([...discovered.staticRoutes, ...additionalRoutes])];
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
-  const page = await browser.newPage({ viewport: { width, height } });
+  const context = await browser.newContext({ viewport: { width, height } });
+  if (theme) {
+    await context.addInitScript((selectedTheme) => {
+      localStorage.setItem('dishhive-theme', selectedTheme);
+    }, theme);
+  }
+  const page = await context.newPage();
   const report = {
     baseUrl,
     viewport: { width, height },
+    theme: theme || 'default',
     skippedRouteTemplates: discovered.parameterizedRoutes,
     routes: [],
     dialogs: [],
@@ -121,7 +129,23 @@ async function main() {
   }
 
   const probes = [
-    { name: 'suggest-week-loading', route: '', role: 'button', accessibleName: /suggest week/i },
+    {
+      name: 'suggest-week-compose',
+      route: '',
+      role: 'button',
+      accessibleName: /suggest week/i,
+      readySelector: '.day-options',
+    },
+    {
+      name: 'suggest-week-review',
+      route: '',
+      role: 'button',
+      accessibleName: /suggest week/i,
+      readySelector: '.day-options',
+      actionRole: 'button',
+      actionName: /generate/i,
+      actionReadySelector: '.suggestion-list, .suggestion-empty',
+    },
     { name: 'plan-meal', route: '', role: 'button', accessibleName: /plan/i },
   ];
 
@@ -131,6 +155,13 @@ async function main() {
       await page.goto(`${baseUrl}/${probe.route}`, { waitUntil: 'networkidle' });
       await page.getByRole(probe.role, { name: probe.accessibleName }).first().click();
       await page.locator('.mat-mdc-dialog-surface').waitFor({ timeout: 3000 });
+      if (probe.readySelector) {
+        await page.locator(probe.readySelector).waitFor({ timeout: 15000 });
+      }
+      if (probe.actionName) {
+        await page.getByRole(probe.actionRole, { name: probe.actionName }).click();
+        await page.locator(probe.actionReadySelector).waitFor({ timeout: 300000 });
+      }
       await page.waitForTimeout(250);
       entry.geometry = await dialogGeometry(page);
       entry.screenshot = `dialog-${probe.name}.png`;

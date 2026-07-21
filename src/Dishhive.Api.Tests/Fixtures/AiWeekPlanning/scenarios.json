@@ -5,6 +5,7 @@
     "prompt": "Get some new vegetarian dishes from @[Dagelijkse Kost] for 4 days.",
     "iterations": 3,
     "leadWeeks": 8,
+    "selectedDayOffsets": [0, 2, 4, 6],
     "performanceBudgetMs": 60000,
     "expectations": {
       "uniqueDishes": true,

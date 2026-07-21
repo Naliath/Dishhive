@@ -3,6 +3,8 @@ param(
   [string]$OutputDir = (Join-Path $env:TEMP 'dishhive-mobile-audit'),
   [int]$Width = 360,
   [int]$Height = 800,
+  [ValidateSet('', 'auto', 'light', 'dark')]
+  [string]$Theme = '',
   [string]$AdditionalRoutes = ''
 )
 
@@ -30,6 +32,9 @@ $auditArguments = @(
 
 if ($AdditionalRoutes) {
   $auditArguments += @('--additional-routes', $AdditionalRoutes)
+}
+if ($Theme) {
+  $auditArguments += @('--theme', $Theme)
 }
 
 node @auditArguments

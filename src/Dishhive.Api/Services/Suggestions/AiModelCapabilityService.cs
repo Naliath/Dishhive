@@ -196,8 +196,9 @@ public class AiModelCapabilityService : IAiModelCapabilityService
     /// <summary>
     /// The current effective system prompt and the persistence key for its verdict:
     /// the static config fingerprint plus a hash of the full prompt text, so both a
-    /// user prompt edit AND a shipped-prompt change in an app update invalidate the
-    /// stored verdict. Falls back to the default prompt when the store is unreadable.
+    /// user prompt edit, a shipped planning-prompt change, AND a planning-intent
+    /// contract change invalidate the stored verdict. Falls back to the default prompt
+    /// when the store is unreadable.
     /// </summary>
     private async Task<(string Prompt, string Key)> ResolvePromptAndKeyAsync()
     {
@@ -213,7 +214,8 @@ public class AiModelCapabilityService : IAiModelCapabilityService
             prompt = MealSuggestionPromptBuilder.ComposeSystemPrompt(null);
         }
 
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(prompt)))[..16];
+        var testedPrompts = $"{prompt}\0{PlanningIntentContract.SystemPrompt}";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(testedPrompts)))[..16];
         return (prompt, $"{_options.CapabilityFingerprint}|prompt:{hash}");
     }
 

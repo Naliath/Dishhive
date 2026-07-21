@@ -4870,6 +4870,7 @@ export interface ISuggestionStatusDto {
 export class SuggestWeekRequestDto implements ISuggestWeekRequestDto {
     weekStart!: string;
     attendeeIds?: string[];
+    selectedDates?: string[] | undefined;
     instructions?: string | undefined;
 
     [key: string]: any;
@@ -4895,6 +4896,11 @@ export class SuggestWeekRequestDto implements ISuggestWeekRequestDto {
                 for (let item of _data["attendeeIds"])
                     this.attendeeIds!.push(item);
             }
+            if (Array.isArray(_data["selectedDates"])) {
+                this.selectedDates = [] as any;
+                for (let item of _data["selectedDates"])
+                    this.selectedDates!.push(item);
+            }
             this.instructions = _data["instructions"];
         }
     }
@@ -4918,6 +4924,11 @@ export class SuggestWeekRequestDto implements ISuggestWeekRequestDto {
             for (let item of this.attendeeIds)
                 data["attendeeIds"].push(item);
         }
+        if (Array.isArray(this.selectedDates)) {
+            data["selectedDates"] = [];
+            for (let item of this.selectedDates)
+                data["selectedDates"].push(item);
+        }
         data["instructions"] = this.instructions;
         return data;
     }
@@ -4926,6 +4937,7 @@ export class SuggestWeekRequestDto implements ISuggestWeekRequestDto {
 export interface ISuggestWeekRequestDto {
     weekStart: string;
     attendeeIds?: string[];
+    selectedDates?: string[] | undefined;
     instructions?: string | undefined;
 
     [key: string]: any;

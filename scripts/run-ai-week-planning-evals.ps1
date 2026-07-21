@@ -58,6 +58,17 @@ function Test-Iteration($scenario, [datetime]$weekStart, $response, [long]$durat
     $warnings = [System.Collections.Generic.List[string]]::new()
     $suggestions = @($response.suggestions)
 
+    if ($scenario.PSObject.Properties.Name -contains "selectedDayOffsets") {
+        $allowedDates = @($scenario.selectedDayOffsets | ForEach-Object {
+            $weekStart.AddDays([int]$_).ToString("yyyy-MM-dd")
+        })
+        foreach ($suggestion in $suggestions) {
+            if ($suggestion.date -notin $allowedDates) {
+                $failures.Add("Suggestion $($suggestion.dishName) used unselected date $($suggestion.date)")
+            }
+        }
+    }
+
     if ($scenario.expectations.uniqueDishes) {
         $duplicates = @($suggestions |
             Where-Object { $_.dishName } |
@@ -167,7 +178,13 @@ foreach ($scenario in $scenarios) {
             weekStart = $weekStart.ToString("yyyy-MM-dd")
             attendeeIds = @()
             instructions = $scenario.prompt
-        } | ConvertTo-Json
+        }
+        if ($scenario.PSObject.Properties.Name -contains "selectedDayOffsets") {
+            $body["selectedDates"] = @($scenario.selectedDayOffsets | ForEach-Object {
+                $weekStart.AddDays([int]$_).ToString("yyyy-MM-dd")
+            })
+        }
+        $body = $body | ConvertTo-Json
         $watch = [Diagnostics.Stopwatch]::StartNew()
         $response = Invoke-RestMethod -Method Post -Uri "$($BaseUrl.TrimEnd('/'))/api/plannedmeals/suggestions" `
             -ContentType "application/json" -Body $body -TimeoutSec 300

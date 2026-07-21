@@ -5,6 +5,10 @@ import { SupportedLanguage } from '../models/user-setting.model';
 @Injectable({ providedIn: 'root' })
 export class LanguageService {
   private readonly messages = signal<TranslationTree>({});
+  // Public translation files are not bundled into the hashed JavaScript chunks.
+  // Give every application load its own catalog URL so a newly deployed template
+  // can never be paired with an older browser/PWA-cached JSON response.
+  private readonly catalogVersion = Date.now().toString(36);
   readonly language = signal<SupportedLanguage>('en');
   private loadSequence = 0;
 
@@ -18,7 +22,9 @@ export class LanguageService {
     const loadSequence = ++this.loadSequence;
     this.language.set(language);
     document.documentElement.lang = language;
-    this.http.get<TranslationTree>(`/i18n/${language}.json`).subscribe({
+    this.http.get<TranslationTree>(
+      `/i18n/${language}.json?v=${this.catalogVersion}`
+    ).subscribe({
       next: messages => {
         if (loadSequence === this.loadSequence) {
           this.messages.set(messages);

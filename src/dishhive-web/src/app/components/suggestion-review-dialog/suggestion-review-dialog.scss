@@ -49,6 +49,46 @@
   min-width: min(420px, 80vw);
 }
 
+.day-selection {
+  width: min(420px, 80vw);
+  margin-block-end: 16px;
+}
+
+.day-selection-hint {
+  margin-block: 0 8px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.day-options {
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.day-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding-inline: 8px 12px;
+  border-block-end: 1px solid var(--mat-sys-outline-variant);
+  cursor: pointer;
+
+  &:last-child {
+    border-block-end: 0;
+  }
+
+  &:hover {
+    background: var(--mat-sys-surface-container);
+  }
+}
+
+.planned-day-note {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 12px;
+}
+
 .suggestion-day {
   & + & {
     margin-block-start: 12px;
@@ -176,6 +216,10 @@
   color: var(--mat-sys-on-surface-variant);
 }
 
+.compose-instructions {
+  margin-block-start: 12px;
+}
+
 .mention-count {
   font-size: 11px;
   opacity: 0.6;
@@ -199,6 +243,10 @@
     width: 100%;
   }
 
+  .day-selection {
+    width: 100%;
+  }
+
   .compose-hint {
     max-width: 100%;
   }
@@ -214,5 +262,15 @@
 
   .suggestion-dish {
     flex-wrap: wrap;
+  }
+
+  .day-option {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding-block: 4px;
+  }
+
+  .planned-day-note {
+    padding-inline-start: 40px;
   }
 }

@@ -25,7 +25,7 @@ public class AiModelTesterTests
                     "language-neutral JSON intent", StringComparison.Ordinal)))
             {
                 var text = supportsTools
-                    ? """{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"desserts","dates":["2099-01-05","2099-01-11"],"mealType":"dinner","course":"dessert","sourceHost":"recipes.example","count":2,"distinct":true,"searchQuery":"dessert","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}"""
+                    ? """{"version":2,"allowRepeatedDishes":false,"constraints":[{"id":"desserts","dates":["2099-01-05","2099-01-11"],"mealType":"dinner","course":"dessert","sourceHost":"recipes.example","count":2,"distinct":true,"searchQuery":"dessert","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}"""
                     : "{}";
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, text)));
             }

@@ -237,7 +237,16 @@ export class WeekPlannerPage implements OnInit {
 
   /** Opens the AI suggestion review dialog; accepted proposals become planned meals */
   suggestWeek(): void {
-    const data: SuggestionReviewDialogData = { weekStart: toIso(this.weekStart()) };
+    const data: SuggestionReviewDialogData = {
+      weekStart: toIso(this.weekStart()),
+      days: this.days().map(day => ({
+        date: day.iso,
+        hasPlannedDinner: day.meals.some(meal =>
+          meal.mealType === MealType.Dinner
+          && meal.course === Course.Main
+          && (!!meal.recipeId || !!meal.dishName))
+      }))
+    };
     this.dialog.open<SuggestionReviewDialog, SuggestionReviewDialogData, SuggestionReviewResult>(
       SuggestionReviewDialog, {
         data,

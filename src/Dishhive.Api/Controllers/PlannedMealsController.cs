@@ -251,7 +251,7 @@ public class PlannedMealsController : ControllerBase
         }
 
         var request = await _suggestionRequestBuilder.BuildAsync(
-            dto.WeekStart, dto.AttendeeIds, dto.Instructions, cancellationToken);
+            dto.WeekStart, dto.AttendeeIds, dto.SelectedDates, dto.Instructions, cancellationToken);
         var suggestions = await _suggestionService.SuggestAsync(request, cancellationToken);
 
         var recipeTitles = request.KnownRecipes.ToDictionary(r => r.Id, r => r.Title);

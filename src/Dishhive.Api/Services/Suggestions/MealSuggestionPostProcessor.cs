@@ -14,7 +14,10 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
         MealSuggestionRequest request,
         IExternalRecipeSession? externalRecipeSession)
     {
-        var validDates = Enumerable.Range(0, 7).Select(request.WeekStart.AddDays).ToHashSet();
+        // DaysToFill is authoritative. The model sees the whole weekday mapping for
+        // language/date interpretation, but must never reintroduce an unselected,
+        // already-planned, or passed date that the request builder left out.
+        var validDates = request.DaysToFill.ToHashSet();
         var memberIds = request.Members
             .Where(member => member.Id != Guid.Empty)
             .Select(member => member.Id)

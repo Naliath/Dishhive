@@ -229,7 +229,7 @@ public class LlmMealSuggestionServiceTests
 
         var suggestions = await CreateService(chatClient).SuggestAsync(Request(daysToFill: [WeekStart]));
 
-        suggestions.Should().ContainSingle(s => s.DishName == "Keep me");
+        suggestions.Should().ContainSingle().Which.DishName.Should().Be("Keep me");
     }
 
     [Fact]
@@ -329,7 +329,7 @@ public class LlmMealSuggestionServiceTests
         var vegetarianId = Guid.NewGuid();
         var responses = new Queue<ChatResponse>([
             new(new ChatMessage(ChatRole.Assistant,
-                """{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"chicken-monday","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":null,"count":1,"distinct":true,"dishRequest":"chicken","requiredClasses":["Poultry"],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":true}]}""")),
+                """{"version":2,"allowRepeatedDishes":false,"constraints":[{"id":"chicken-monday","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":null,"count":1,"distinct":true,"dishRequest":"chicken","requiredClasses":["Poultry"],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":true}]}""")),
             new(new ChatMessage(ChatRole.Assistant,
                 """{"suggestions":[{"date":"2026-06-15","dishName":"Chicken curry","recipeTitle":"Chicken curry","attendeeIds":[],"constraintIds":["chicken-monday"]}]}"""))
         ]);
@@ -366,7 +366,7 @@ public class LlmMealSuggestionServiceTests
         var friday = WeekStart.AddDays(4);
         var responses = new Queue<ChatResponse>([
             new(new ChatMessage(ChatRole.Assistant,
-                $$"""{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"friday-chicken","dates":["{{friday:yyyy-MM-dd}}"],"mealType":"dinner","course":"main","sourceHost":null,"count":1,"distinct":true,"dishRequest":"chicken","requiredClasses":["Poultry"],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":true}]}""")),
+                $$"""{"version":2,"allowRepeatedDishes":false,"constraints":[{"id":"friday-chicken","dates":["{{friday:yyyy-MM-dd}}"],"mealType":"dinner","course":"main","sourceHost":null,"count":1,"distinct":true,"dishRequest":"chicken","requiredClasses":["Poultry"],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":true}]}""")),
             new(new ChatMessage(ChatRole.Assistant,
                 $$"""{"suggestions":[{"date":"{{friday:yyyy-MM-dd}}","dishName":"Vegetable curry","attendeeIds":[]}]}""")),
             new(new ChatMessage(ChatRole.Assistant,
@@ -542,7 +542,7 @@ public class LlmMealSuggestionServiceTests
     {
         var responses = new Queue<ChatResponse>([
             new(new ChatMessage(ChatRole.Assistant,
-                """{"version":1,"allowRepeatedDishes":true,"constraints":[]}""")),
+                """{"version":2,"allowRepeatedDishes":true,"constraints":[]}""")),
             new(new ChatMessage(ChatRole.Assistant, """
             {"suggestions":[
               {"date":"2026-06-15","dishName":"Same curry"},
@@ -741,7 +741,7 @@ public class LlmMealSuggestionServiceTests
         // a valid suggestion rather than disappearing.
         var responses = new Queue<ChatResponse>([
             new(new ChatMessage(ChatRole.Assistant,
-                """{"version":1,"allowRepeatedDishes":true,"constraints":[]}""")),
+                """{"version":2,"allowRepeatedDishes":true,"constraints":[]}""")),
             new(new ChatMessage(ChatRole.Assistant, """
             {"suggestions":[
               {"date":"2026-06-15","dishName":"lasagna","freezerItemId":"lasagna-1"},
@@ -961,7 +961,7 @@ public class LlmMealSuggestionServiceTests
         var responses = new Queue<ChatResponse>(
         [
             new ChatResponse(new ChatMessage(ChatRole.Assistant,
-                """{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"source-main","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":"dagelijksekost.vrt.be","count":1,"distinct":true,"searchQuery":"vegetarische lasagne","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}""")),
+                """{"version":2,"allowRepeatedDishes":false,"constraints":[{"id":"source-main","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":"dagelijksekost.vrt.be","count":1,"distinct":true,"searchQuery":"vegetarische lasagne","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}""")),
             new ChatResponse(new ChatMessage(ChatRole.Assistant,
                 """{"suggestions":[{"date":"2026-06-15","dishName":"model title","recipeTitle":null,"externalCandidateId":"c1","reason":"verified","constraintIds":["source-main"]}]}"""))
         ]);
@@ -1040,7 +1040,7 @@ public class LlmMealSuggestionServiceTests
         // the web even when the planner never asked it to.
         var responses = new Queue<ChatResponse>([
             new(new ChatMessage(ChatRole.Assistant,
-                """{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"source-main","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":"dagelijksekost.vrt.be","count":1,"distinct":true,"searchQuery":"recipe","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}""")),
+                """{"version":2,"allowRepeatedDishes":false,"constraints":[{"id":"source-main","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":"dagelijksekost.vrt.be","count":1,"distinct":true,"searchQuery":"recipe","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}""")),
             new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}""")),
             new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}""")),
             new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}"""))
@@ -1058,7 +1058,7 @@ public class LlmMealSuggestionServiceTests
     {
         var responses = new Queue<ChatResponse>([
             new(new ChatMessage(ChatRole.Assistant,
-                """{"version":1,"allowRepeatedDishes":false,"constraints":[{"id":"source-main","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":"dagelijksekost.vrt.be","count":1,"distinct":true,"searchQuery":"recipe","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}""")),
+                """{"version":2,"allowRepeatedDishes":false,"constraints":[{"id":"source-main","dates":["2026-06-15"],"mealType":"dinner","course":"main","sourceHost":"dagelijksekost.vrt.be","count":1,"distinct":true,"searchQuery":"recipe","requiredClasses":[],"excludedClasses":[],"allAttendees":true,"overrideDietPreferences":false}]}""")),
             new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}""")),
             new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}""")),
             new(new ChatMessage(ChatRole.Assistant, """{"suggestions":[]}"""))

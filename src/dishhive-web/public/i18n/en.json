@@ -53,8 +53,11 @@
     "suggestions": {
       "title": "Suggested dinners",
       "checkingAi": "Checking the AI assistant…",
+      "chooseDays": "Choose the days to generate suggestions for.",
+      "alreadyPlanned": "Dinner already planned",
       "composeHint": "Any wishes for this week? They are passed to the AI before it plans the menu.",
       "websiteHint": "Reference a website with @ to have it find and import a new recipe.",
+      "rulesComposeHint": "The AI is unavailable, so suggestions will use freezer items and household favorites.",
       "instructions": "Instructions (optional)",
       "instructionsPlaceholder": "e.g. vegetarian under 30 min from @[Dagelijkse Kost]",
       "generating": "Cooking up a delicious week…",

@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { of, Subject } from 'rxjs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { LanguageService } from './language.service';
 
 describe('LanguageService automatic collection names', () => {
@@ -62,7 +62,7 @@ describe('LanguageService automatic collection names', () => {
     const english = new Subject<object>();
     const dutch = new Subject<object>();
     const http = {
-      get: (url: string) => url.endsWith('/nl.json') ? dutch : english
+      get: (url: string) => url.includes('/nl.json?') ? dutch : english
     } as unknown as HttpClient;
     const service = new LanguageService(http);
 
@@ -72,5 +72,18 @@ describe('LanguageService automatic collection names', () => {
 
     expect(service.language()).toBe('nl');
     expect(service.t('common.save')).toBe('Opslaan');
+  });
+
+  it('uses a per-load catalog version so new templates cannot receive stale translations', () => {
+    const get = vi.fn((_url: string) => of({ common: { save: 'Save' } }));
+    const service = new LanguageService({ get } as unknown as HttpClient);
+
+    service.use('nl');
+
+    const englishUrl = get.mock.calls[0][0];
+    const dutchUrl = get.mock.calls[1][0];
+    expect(englishUrl).toMatch(/^\/i18n\/en\.json\?v=.+$/);
+    expect(dutchUrl).toMatch(/^\/i18n\/nl\.json\?v=.+$/);
+    expect(dutchUrl.split('?v=')[1]).toBe(englishUrl.split('?v=')[1]);
   });
 });

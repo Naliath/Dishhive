@@ -279,7 +279,7 @@ public static class MealSuggestionPromptBuilder
             unlimited ? int.MaxValue : Math.Max(0, budgetChars - sb.Length),
             minLines: 10);
 
-        sb.AppendLine($"Ensure every date has a dinner/main proposal unless one is already planned: {string.Join(", ", request.DaysToFill.Select(date => date.ToString("yyyy-MM-dd")))}");
+        sb.AppendLine($"Selected dates are authoritative. Propose meals only for these dates and ensure each has a dinner/main proposal unless the instructions request another slot: {string.Join(", ", request.DaysToFill.Select(date => date.ToString("yyyy-MM-dd")))}");
         return sb.ToString();
     }
 

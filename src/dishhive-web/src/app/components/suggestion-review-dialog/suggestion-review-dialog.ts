@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, Inject, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  Inject,
+  OnInit,
+  computed,
+  inject,
+  signal
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { LocalizedDatePipe, TranslatePipe, TranslatePluralPipe } from '../../services/language.service';
 import { FormsModule } from '@angular/forms';
@@ -19,8 +28,41 @@ import { MealSuggestion, SuggestionReviewResult } from '../../models/meal-sugges
 import { COURSE_LABELS, Course, MEAL_TYPE_LABELS, MealType } from '../../models/planned-meal.model';
 
 export interface SuggestionReviewDialogData {
-  /** ISO date (yyyy-MM-dd) of the week's Monday */
+  /** ISO date (yyyy-MM-dd) of the configured first day of the week */
   weekStart: string;
+  days: SuggestionPlanningDay[];
+}
+
+export interface SuggestionPlanningDay {
+  /** ISO date (yyyy-MM-dd) */
+  date: string;
+  hasPlannedDinner: boolean;
+}
+
+/**
+ * Current weeks start at today; a viewed past/future week starts at its
+ * configured first day. Concrete dinner mains are always opt-in. Keeping this
+ * pure makes the date boundary deterministic and independently regression-testable.
+ */
+export function defaultSuggestionDates(
+  days: SuggestionPlanningDay[],
+  today: string
+): Set<string> {
+  if (days.length === 0) {
+    return new Set();
+  }
+  const weekContainsToday = today >= days[0].date && today <= days[days.length - 1].date;
+  const firstSelectedDate = weekContainsToday ? today : days[0].date;
+  return new Set(days
+    .filter(day => day.date >= firstSelectedDate && !day.hasPlannedDinner)
+    .map(day => day.date));
+}
+
+function localTodayIso(): string {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${today.getFullYear()}-${month}-${day}`;
 }
 
 /** One day's suggestions, grouped for display; indexes point back into suggestions() */
@@ -41,8 +83,9 @@ type DialogPhase = 'checking' | 'compose' | 'generating' | 'review';
  * Fetches AI week-plan suggestions and lets the user review them: each proposed
  * dish is a row with a checkbox (default on); a day can hold several dishes
  * (e.g. two small leftovers). Instructions can be given up front (when the AI
- * is reachable) and adjusted on regenerate. "Add selected" returns the chosen
- * suggestions; the planner page performs the creation.
+ * is reachable) and adjusted on regenerate. Days are chosen once before the
+ * first generation and reused for subsequent regenerations. "Add selected"
+ * returns the chosen suggestions; the planner page performs the creation.
  */
 @Component({
   selector: 'app-suggestion-review-dialog',
@@ -69,17 +112,20 @@ type DialogPhase = 'checking' | 'compose' | 'generating' | 'review';
   styleUrl: './suggestion-review-dialog.scss'
 })
 export class SuggestionReviewDialog implements OnInit {
+  readonly planningDays: SuggestionPlanningDay[];
   readonly phase = signal<DialogPhase>('checking');
   readonly failed = signal(false);
   readonly aiAvailable = signal(false);
   readonly webSearchAvailable = signal(false);
   readonly suggestions = signal<MealSuggestion[]>([]);
   readonly selectedIndexes = signal<Set<number>>(new Set());
+  readonly selectedDates = signal<Set<string>>(new Set());
   /** Recipes kept out of planning for household allergies (visibility for false positives) */
   readonly excludedForAllergies = signal(0);
   readonly batchId = signal<string | null>(null);
 
   readonly selectedCount = computed(() => this.selectedIndexes().size);
+  readonly selectedDayCount = computed(() => this.selectedDates().size);
 
   /** Every proposal came from the rules fallback: the AI never answered, so any typed
    *  instructions were ignored — surfaced as a banner, not just the per-row tags */
@@ -111,7 +157,10 @@ export class SuggestionReviewDialog implements OnInit {
     private dialogRef: MatDialogRef<SuggestionReviewDialog, SuggestionReviewResult>,
     private suggestionsService: MealSuggestionsService,
     private integrationsService: IntegrationsService
-  ) {}
+  ) {
+    this.planningDays = data.days;
+    this.selectedDates.set(defaultSuggestionDates(data.days, localTodayIso()));
+  }
 
   ngOnInit(): void {
     // Live AI check (errors read as "down"): usable → ask for instructions first;
@@ -124,11 +173,9 @@ export class SuggestionReviewDialog implements OnInit {
         const aiUp = (status?.ai.reachable ?? false) && status?.ai.modelTestVerdict !== 'failed';
         this.aiAvailable.set(aiUp);
         this.webSearchAvailable.set(status?.webSearch?.operational ?? false);
-        if (aiUp) {
-          this.phase.set('compose');
-        } else {
-          this.fetch();
-        }
+        // Day selection is always shown before generation. For a working AI this
+        // remains the existing compose step, so the defaults require no extra click.
+        this.phase.set('compose');
       });
   }
 
@@ -138,9 +185,15 @@ export class SuggestionReviewDialog implements OnInit {
    *  closing mid-generation actually stops the model call server-side instead of
    *  leaving it running for up to five minutes on the agentic path. */
   fetch(): void {
+    if (this.selectedDayCount() === 0) {
+      return;
+    }
     this.phase.set('generating');
     this.failed.set(false);
-    this.suggestionsService.suggestWeek(this.data.weekStart, this.instructions)
+    this.suggestionsService.suggestWeek(
+      this.data.weekStart,
+      [...this.selectedDates()].sort(),
+      this.instructions)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
@@ -155,6 +208,22 @@ export class SuggestionReviewDialog implements OnInit {
           this.phase.set('review');
         }
       });
+  }
+
+  isDaySelected(date: string): boolean {
+    return this.selectedDates().has(date);
+  }
+
+  toggleDay(date: string): void {
+    this.selectedDates.update(dates => {
+      const next = new Set(dates);
+      if (next.has(date)) {
+        next.delete(date);
+      } else {
+        next.add(date);
+      }
+      return next;
+    });
   }
 
   isSelected(index: number): boolean {

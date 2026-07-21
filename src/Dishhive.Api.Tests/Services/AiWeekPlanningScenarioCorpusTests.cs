@@ -22,6 +22,12 @@ public class AiWeekPlanningScenarioCorpusTests
             scenario.GetProperty("performanceBudgetMs").GetInt32().Should().BeGreaterThan(0);
             scenario.GetProperty("expectations").GetProperty("uniqueDishes").GetBoolean().Should().BeTrue();
             scenario.GetProperty("expectations").GetProperty("rejectCollectionPages").GetBoolean().Should().BeTrue();
+            if (scenario.TryGetProperty("selectedDayOffsets", out var selectedDayOffsets))
+            {
+                var offsets = selectedDayOffsets.EnumerateArray().Select(item => item.GetInt32()).ToList();
+                offsets.Should().NotBeEmpty().And.OnlyHaveUniqueItems();
+                offsets.Should().OnlyContain(offset => offset >= 0 && offset <= 6);
+            }
             if (scenario.TryGetProperty("status", out var status))
             {
                 status.GetString().Should().Be("known-limitation");

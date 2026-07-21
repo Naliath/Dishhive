@@ -38,9 +38,11 @@ export interface AiModelTestStatus {
 export interface AiPlanningMetricsSummary {
   runCount: number;
   successfulRuns: number;
+  partialFallbackRuns: number;
   fallbackRuns: number;
   averageTotalDurationMs: number;
   averageCompletionDurationMs: number;
+  p95TotalDurationMs: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalReasoningTokens: number;
@@ -49,6 +51,56 @@ export interface AiPlanningMetricsSummary {
   totalRecipeResolutions: number;
   totalResolutionFailures: number;
   totalParseFailures: number;
+}
+
+export interface AiTaskSummary {
+  task: string;
+  runCount: number;
+  successfulRuns: number;
+  failedRuns: number;
+  averageDurationMs: number;
+  p95DurationMs: number;
+  totalTokens: number;
+}
+
+export interface AiTaskMetrics {
+  runCount: number;
+  successfulRuns: number;
+  failedRuns: number;
+  averageDurationMs: number;
+  p95DurationMs: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalReasoningTokens: number;
+  tasks: AiTaskSummary[];
+}
+
+export interface AiTaskRun {
+  id: string;
+  operationId: string;
+  task: string;
+  provider: string;
+  model: string;
+  configFingerprint: string;
+  contractVersion: string;
+  startedAt: string;
+  outcome: string;
+  responseMode: string;
+  finishReason?: string;
+  error?: string;
+  attempt: number;
+  maxOutputTokens: number;
+  temperature: number;
+  reasoningDisabled: boolean;
+  schemaRequested: boolean;
+  schemaApplied: boolean;
+  promptCharacters: number;
+  outputCharacters: number;
+  inputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+  durationMs: number;
 }
 
 export interface AiPlanningRun {
@@ -89,6 +141,8 @@ export interface AiPlanningRun {
 export interface AiPlanningMetricsResponse {
   summary: AiPlanningMetricsSummary;
   runs: AiPlanningRun[];
+  taskMetrics: AiTaskMetrics;
+  calls: AiTaskRun[];
 }
 
 export interface FreezyIntegrationStatus {

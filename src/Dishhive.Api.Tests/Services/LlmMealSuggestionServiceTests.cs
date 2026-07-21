@@ -1,5 +1,6 @@
 using Dishhive.Api.Models;
 using Dishhive.Api.Services.Freezy;
+using Dishhive.Api.Services.Ai;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.WebSearch;
@@ -96,10 +97,13 @@ public class LlmMealSuggestionServiceTests
     {
         var search = webSearch ?? new NoOpWebSearchClient();
         var importer = importService ?? Substitute.For<IRecipeImportService>();
+        var options = new AiOptions { Provider = "ollama", Model = "test" };
+        var executionGate = new AiExecutionGate(
+            chatClient, options, new NoOpAiTaskMetricsStore(), NullLogger<AiExecutionGate>.Instance);
         return new LlmMealSuggestionService(
-            chatClient,
+            executionGate,
             new RulesMealSuggestionService(),
-            new AiOptions { Provider = "ollama", Model = "test" },
+            options,
             new StubCapability(capabilityMode),
             new StubPromptProvider(promptOverride),
             new ExternalRecipeSessionFactory(search, importer, new WebSearchOptions()),

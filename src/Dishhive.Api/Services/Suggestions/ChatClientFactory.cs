@@ -70,14 +70,11 @@ public static class ChatClientFactory
             ? new Uri(options.BaseUrl.TrimEnd('/'))
             : DefaultEndpoint(options.NormalizedProvider);
 
-        // The IChatClient is a singleton shared by both the plain-suggestion path
-        // (TimeoutSeconds) and the agentic external-recipe path (AgentTimeoutSeconds,
-        // several full model round-trips). The SDK's own per-call network timeout must
-        // cover whichever is larger, or a single slow turn on the agentic path gets
-        // killed here well before the caller's own (correct, longer) budget expires —
-        // the actual per-path deadline is already enforced by the linked
-        // CancellationTokenSource in LlmMealSuggestionService.
-        var networkTimeout = TimeSpan.FromSeconds(Math.Max(options.TimeoutSeconds, options.AgentTimeoutSeconds));
+        // The singleton client serves every task profile. Its SDK network timeout must
+        // cover the largest profile; the central execution gate applies the shorter
+        // task-specific deadline through its linked cancellation token.
+        var networkTimeout = TimeSpan.FromSeconds(Math.Max(
+            1, Math.Max(options.TimeoutSeconds, options.AgentTimeoutSeconds)));
         var clientOptions = new OpenAIClientOptions
         {
             NetworkTimeout = networkTimeout,

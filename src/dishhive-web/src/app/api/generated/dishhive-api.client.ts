@@ -555,9 +555,11 @@ export interface IAiModelTestStatusDto {
 export class AiPlanningMetricsDto implements IAiPlanningMetricsDto {
     runCount!: number;
     successfulRuns!: number;
+    partialFallbackRuns!: number;
     fallbackRuns!: number;
     averageTotalDurationMs!: number;
     averageCompletionDurationMs!: number;
+    p95TotalDurationMs!: number;
     totalInputTokens!: number;
     totalOutputTokens!: number;
     totalReasoningTokens!: number;
@@ -586,9 +588,11 @@ export class AiPlanningMetricsDto implements IAiPlanningMetricsDto {
             }
             this.runCount = _data["runCount"];
             this.successfulRuns = _data["successfulRuns"];
+            this.partialFallbackRuns = _data["partialFallbackRuns"];
             this.fallbackRuns = _data["fallbackRuns"];
             this.averageTotalDurationMs = _data["averageTotalDurationMs"];
             this.averageCompletionDurationMs = _data["averageCompletionDurationMs"];
+            this.p95TotalDurationMs = _data["p95TotalDurationMs"];
             this.totalInputTokens = _data["totalInputTokens"];
             this.totalOutputTokens = _data["totalOutputTokens"];
             this.totalReasoningTokens = _data["totalReasoningTokens"];
@@ -615,9 +619,11 @@ export class AiPlanningMetricsDto implements IAiPlanningMetricsDto {
         }
         data["runCount"] = this.runCount;
         data["successfulRuns"] = this.successfulRuns;
+        data["partialFallbackRuns"] = this.partialFallbackRuns;
         data["fallbackRuns"] = this.fallbackRuns;
         data["averageTotalDurationMs"] = this.averageTotalDurationMs;
         data["averageCompletionDurationMs"] = this.averageCompletionDurationMs;
+        data["p95TotalDurationMs"] = this.p95TotalDurationMs;
         data["totalInputTokens"] = this.totalInputTokens;
         data["totalOutputTokens"] = this.totalOutputTokens;
         data["totalReasoningTokens"] = this.totalReasoningTokens;
@@ -633,9 +639,11 @@ export class AiPlanningMetricsDto implements IAiPlanningMetricsDto {
 export interface IAiPlanningMetricsDto {
     runCount: number;
     successfulRuns: number;
+    partialFallbackRuns: number;
     fallbackRuns: number;
     averageTotalDurationMs: number;
     averageCompletionDurationMs: number;
+    p95TotalDurationMs: number;
     totalInputTokens: number;
     totalOutputTokens: number;
     totalReasoningTokens: number;
@@ -651,6 +659,8 @@ export interface IAiPlanningMetricsDto {
 export class AiPlanningMetricsResponseDto implements IAiPlanningMetricsResponseDto {
     summary!: AiPlanningMetricsDto;
     runs!: AiPlanningRunDto[];
+    taskMetrics!: AiTaskMetricsDto;
+    calls!: AiTaskRunDto[];
 
     [key: string]: any;
 
@@ -664,6 +674,8 @@ export class AiPlanningMetricsResponseDto implements IAiPlanningMetricsResponseD
         if (!data) {
             this.summary = new AiPlanningMetricsDto();
             this.runs = [];
+            this.taskMetrics = new AiTaskMetricsDto();
+            this.calls = [];
         }
     }
 
@@ -678,6 +690,12 @@ export class AiPlanningMetricsResponseDto implements IAiPlanningMetricsResponseD
                 this.runs = [] as any;
                 for (let item of _data["runs"])
                     this.runs!.push(AiPlanningRunDto.fromJS(item));
+            }
+            this.taskMetrics = _data["taskMetrics"] ? AiTaskMetricsDto.fromJS(_data["taskMetrics"]) : new AiTaskMetricsDto();
+            if (Array.isArray(_data["calls"])) {
+                this.calls = [] as any;
+                for (let item of _data["calls"])
+                    this.calls!.push(AiTaskRunDto.fromJS(item));
             }
         }
     }
@@ -701,6 +719,12 @@ export class AiPlanningMetricsResponseDto implements IAiPlanningMetricsResponseD
             for (let item of this.runs)
                 data["runs"].push(item ? item.toJSON() : undefined as any);
         }
+        data["taskMetrics"] = this.taskMetrics ? this.taskMetrics.toJSON() : undefined as any;
+        if (Array.isArray(this.calls)) {
+            data["calls"] = [];
+            for (let item of this.calls)
+                data["calls"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -708,6 +732,8 @@ export class AiPlanningMetricsResponseDto implements IAiPlanningMetricsResponseD
 export interface IAiPlanningMetricsResponseDto {
     summary: AiPlanningMetricsDto;
     runs: AiPlanningRunDto[];
+    taskMetrics: AiTaskMetricsDto;
+    calls: AiTaskRunDto[];
 
     [key: string]: any;
 }
@@ -944,6 +970,313 @@ export interface IAiPromptDto {
     protectedPrompt: string;
     isCustomized: boolean;
     defaultChangedSinceCustomized: boolean;
+
+    [key: string]: any;
+}
+
+export class AiTaskMetricsDto implements IAiTaskMetricsDto {
+    runCount!: number;
+    successfulRuns!: number;
+    failedRuns!: number;
+    averageDurationMs!: number;
+    p95DurationMs!: number;
+    totalInputTokens!: number;
+    totalOutputTokens!: number;
+    totalReasoningTokens!: number;
+    tasks!: AiTaskSummaryDto[];
+
+    [key: string]: any;
+
+    constructor(data?: IAiTaskMetricsDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+        if (!data) {
+            this.tasks = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            for (var property in _data) {
+                if (_data.hasOwnProperty(property))
+                    this[property] = _data[property];
+            }
+            this.runCount = _data["runCount"];
+            this.successfulRuns = _data["successfulRuns"];
+            this.failedRuns = _data["failedRuns"];
+            this.averageDurationMs = _data["averageDurationMs"];
+            this.p95DurationMs = _data["p95DurationMs"];
+            this.totalInputTokens = _data["totalInputTokens"];
+            this.totalOutputTokens = _data["totalOutputTokens"];
+            this.totalReasoningTokens = _data["totalReasoningTokens"];
+            if (Array.isArray(_data["tasks"])) {
+                this.tasks = [] as any;
+                for (let item of _data["tasks"])
+                    this.tasks!.push(AiTaskSummaryDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): AiTaskMetricsDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new AiTaskMetricsDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        for (var property in this) {
+            if (this.hasOwnProperty(property))
+                data[property] = this[property];
+        }
+        data["runCount"] = this.runCount;
+        data["successfulRuns"] = this.successfulRuns;
+        data["failedRuns"] = this.failedRuns;
+        data["averageDurationMs"] = this.averageDurationMs;
+        data["p95DurationMs"] = this.p95DurationMs;
+        data["totalInputTokens"] = this.totalInputTokens;
+        data["totalOutputTokens"] = this.totalOutputTokens;
+        data["totalReasoningTokens"] = this.totalReasoningTokens;
+        if (Array.isArray(this.tasks)) {
+            data["tasks"] = [];
+            for (let item of this.tasks)
+                data["tasks"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface IAiTaskMetricsDto {
+    runCount: number;
+    successfulRuns: number;
+    failedRuns: number;
+    averageDurationMs: number;
+    p95DurationMs: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalReasoningTokens: number;
+    tasks: AiTaskSummaryDto[];
+
+    [key: string]: any;
+}
+
+export class AiTaskRunDto implements IAiTaskRunDto {
+    id!: string;
+    operationId!: string;
+    task!: string;
+    provider!: string;
+    model!: string;
+    configFingerprint!: string;
+    contractVersion!: string;
+    startedAt!: string;
+    outcome!: string;
+    responseMode!: string;
+    finishReason!: string | undefined;
+    error!: string | undefined;
+    attempt!: number;
+    maxOutputTokens!: number;
+    temperature!: number;
+    reasoningDisabled!: boolean;
+    schemaRequested!: boolean;
+    schemaApplied!: boolean;
+    promptCharacters!: number;
+    outputCharacters!: number;
+    inputTokens!: number;
+    outputTokens!: number;
+    reasoningTokens!: number;
+    totalTokens!: number;
+    durationMs!: number;
+
+    [key: string]: any;
+
+    constructor(data?: IAiTaskRunDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            for (var property in _data) {
+                if (_data.hasOwnProperty(property))
+                    this[property] = _data[property];
+            }
+            this.id = _data["id"];
+            this.operationId = _data["operationId"];
+            this.task = _data["task"];
+            this.provider = _data["provider"];
+            this.model = _data["model"];
+            this.configFingerprint = _data["configFingerprint"];
+            this.contractVersion = _data["contractVersion"];
+            this.startedAt = _data["startedAt"];
+            this.outcome = _data["outcome"];
+            this.responseMode = _data["responseMode"];
+            this.finishReason = _data["finishReason"];
+            this.error = _data["error"];
+            this.attempt = _data["attempt"];
+            this.maxOutputTokens = _data["maxOutputTokens"];
+            this.temperature = _data["temperature"];
+            this.reasoningDisabled = _data["reasoningDisabled"];
+            this.schemaRequested = _data["schemaRequested"];
+            this.schemaApplied = _data["schemaApplied"];
+            this.promptCharacters = _data["promptCharacters"];
+            this.outputCharacters = _data["outputCharacters"];
+            this.inputTokens = _data["inputTokens"];
+            this.outputTokens = _data["outputTokens"];
+            this.reasoningTokens = _data["reasoningTokens"];
+            this.totalTokens = _data["totalTokens"];
+            this.durationMs = _data["durationMs"];
+        }
+    }
+
+    static fromJS(data: any): AiTaskRunDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new AiTaskRunDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        for (var property in this) {
+            if (this.hasOwnProperty(property))
+                data[property] = this[property];
+        }
+        data["id"] = this.id;
+        data["operationId"] = this.operationId;
+        data["task"] = this.task;
+        data["provider"] = this.provider;
+        data["model"] = this.model;
+        data["configFingerprint"] = this.configFingerprint;
+        data["contractVersion"] = this.contractVersion;
+        data["startedAt"] = this.startedAt;
+        data["outcome"] = this.outcome;
+        data["responseMode"] = this.responseMode;
+        data["finishReason"] = this.finishReason;
+        data["error"] = this.error;
+        data["attempt"] = this.attempt;
+        data["maxOutputTokens"] = this.maxOutputTokens;
+        data["temperature"] = this.temperature;
+        data["reasoningDisabled"] = this.reasoningDisabled;
+        data["schemaRequested"] = this.schemaRequested;
+        data["schemaApplied"] = this.schemaApplied;
+        data["promptCharacters"] = this.promptCharacters;
+        data["outputCharacters"] = this.outputCharacters;
+        data["inputTokens"] = this.inputTokens;
+        data["outputTokens"] = this.outputTokens;
+        data["reasoningTokens"] = this.reasoningTokens;
+        data["totalTokens"] = this.totalTokens;
+        data["durationMs"] = this.durationMs;
+        return data;
+    }
+}
+
+export interface IAiTaskRunDto {
+    id: string;
+    operationId: string;
+    task: string;
+    provider: string;
+    model: string;
+    configFingerprint: string;
+    contractVersion: string;
+    startedAt: string;
+    outcome: string;
+    responseMode: string;
+    finishReason: string | undefined;
+    error: string | undefined;
+    attempt: number;
+    maxOutputTokens: number;
+    temperature: number;
+    reasoningDisabled: boolean;
+    schemaRequested: boolean;
+    schemaApplied: boolean;
+    promptCharacters: number;
+    outputCharacters: number;
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    totalTokens: number;
+    durationMs: number;
+
+    [key: string]: any;
+}
+
+export class AiTaskSummaryDto implements IAiTaskSummaryDto {
+    task!: string;
+    runCount!: number;
+    successfulRuns!: number;
+    failedRuns!: number;
+    averageDurationMs!: number;
+    p95DurationMs!: number;
+    totalTokens!: number;
+
+    [key: string]: any;
+
+    constructor(data?: IAiTaskSummaryDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            for (var property in _data) {
+                if (_data.hasOwnProperty(property))
+                    this[property] = _data[property];
+            }
+            this.task = _data["task"];
+            this.runCount = _data["runCount"];
+            this.successfulRuns = _data["successfulRuns"];
+            this.failedRuns = _data["failedRuns"];
+            this.averageDurationMs = _data["averageDurationMs"];
+            this.p95DurationMs = _data["p95DurationMs"];
+            this.totalTokens = _data["totalTokens"];
+        }
+    }
+
+    static fromJS(data: any): AiTaskSummaryDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new AiTaskSummaryDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        for (var property in this) {
+            if (this.hasOwnProperty(property))
+                data[property] = this[property];
+        }
+        data["task"] = this.task;
+        data["runCount"] = this.runCount;
+        data["successfulRuns"] = this.successfulRuns;
+        data["failedRuns"] = this.failedRuns;
+        data["averageDurationMs"] = this.averageDurationMs;
+        data["p95DurationMs"] = this.p95DurationMs;
+        data["totalTokens"] = this.totalTokens;
+        return data;
+    }
+}
+
+export interface IAiTaskSummaryDto {
+    task: string;
+    runCount: number;
+    successfulRuns: number;
+    failedRuns: number;
+    averageDurationMs: number;
+    p95DurationMs: number;
+    totalTokens: number;
 
     [key: string]: any;
 }

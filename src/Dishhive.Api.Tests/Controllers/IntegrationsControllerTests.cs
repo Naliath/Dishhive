@@ -1,6 +1,7 @@
 using System.Net;
 using Dishhive.Api.Controllers;
 using Dishhive.Api.Data;
+using Dishhive.Api.Models;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.Localization;
@@ -8,7 +9,7 @@ using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.WebSearch;
 using Dishhive.Api.Tests.Mocks;
 using FluentAssertions;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 
@@ -59,6 +60,88 @@ public class IntegrationsControllerTests
         status.WebSearch.Error.Should().Contain("not valid JSON");
     }
 
+    [Fact]
+    public async Task GetAiPlanningRuns_SeparatesTaskCallsFromPlanningOutcomes()
+    {
+        await using var context = new DishhiveDbContext(new DbContextOptionsBuilder<DishhiveDbContext>()
+            .UseInMemoryDatabase($"AiStats_{Guid.NewGuid()}").Options);
+        var now = DateTime.UtcNow;
+        context.AiPlanningRuns.AddRange(
+            PlanningRun("success", now, 100, 80, 1),
+            PlanningRun("partialFallback", now.AddMinutes(-1), 200, 120, 1),
+            PlanningRun("rulesFallback", now.AddMinutes(-2), 300, 0, 0));
+        context.AiTaskRuns.AddRange(
+            TaskRun("recipe.facts", "success", now, 100, 10),
+            TaskRun("recipe.facts", "parseFailure", now.AddSeconds(-1), 200, 20),
+            TaskRun("recipe.translate", "validationFailure", now.AddSeconds(-2), 300, 30));
+        await context.SaveChangesAsync();
+
+        var httpClientFactory = Substitute.For<IHttpClientFactory>();
+        var controller = new IntegrationsController(httpClientFactory, new UserMessageLocalizer(context));
+        var response = await controller.GetAiPlanningRuns(context, cancellationToken: CancellationToken.None);
+
+        var metrics = response.Result.Should().BeOfType<OkObjectResult>().Which.Value
+            .Should().BeAssignableTo<Dishhive.Api.Models.DTOs.AiPlanningMetricsResponseDto>().Subject;
+        metrics.Summary.SuccessfulRuns.Should().Be(1);
+        metrics.Summary.PartialFallbackRuns.Should().Be(1);
+        metrics.Summary.FallbackRuns.Should().Be(1);
+        metrics.Summary.AverageCompletionDurationMs.Should().Be(100);
+        metrics.Summary.P95TotalDurationMs.Should().Be(300);
+        metrics.TaskMetrics.RunCount.Should().Be(3);
+        metrics.TaskMetrics.SuccessfulRuns.Should().Be(1);
+        metrics.TaskMetrics.FailedRuns.Should().Be(2);
+        metrics.TaskMetrics.P95DurationMs.Should().Be(300);
+        metrics.TaskMetrics.Tasks.Single(task => task.Task == "recipe.facts")
+            .Should().BeEquivalentTo(new
+            {
+                RunCount = 2,
+                SuccessfulRuns = 1,
+                FailedRuns = 1,
+                AverageDurationMs = 150d,
+                P95DurationMs = 200d,
+                TotalTokens = 30L
+            });
+
+        var limitedResponse = await controller.GetAiPlanningRuns(
+            context, count: 2, cancellationToken: CancellationToken.None);
+        var limitedMetrics = limitedResponse.Result.Should().BeOfType<OkObjectResult>().Which.Value
+            .Should().BeAssignableTo<Dishhive.Api.Models.DTOs.AiPlanningMetricsResponseDto>().Subject;
+        limitedMetrics.Calls.Should().HaveCount(2);
+        limitedMetrics.TaskMetrics.RunCount.Should().Be(3,
+            "summaries cover the retained window rather than only the displayed calls");
+    }
+
+    private static AiPlanningRun PlanningRun(
+        string outcome, DateTime startedAt, long totalDurationMs,
+        long completionDurationMs, int completionAttempts) => new()
+    {
+        RequestId = Guid.NewGuid().ToString("N")[..12],
+        StartedAt = startedAt,
+        CompletedAt = startedAt.AddMilliseconds(totalDurationMs),
+        Outcome = outcome,
+        Provider = "test",
+        Model = "model",
+        TotalDurationMs = totalDurationMs,
+        CompletionDurationMs = completionDurationMs,
+        CompletionAttempts = completionAttempts
+    };
+
+    private static AiTaskRun TaskRun(
+        string task, string outcome, DateTime startedAt, long durationMs, long totalTokens) => new()
+    {
+        OperationId = Guid.NewGuid().ToString("N")[..12],
+        Task = task,
+        Provider = "test",
+        Model = "model",
+        ConfigFingerprint = "config",
+        ContractVersion = "v1",
+        StartedAt = startedAt,
+        CompletedAt = startedAt.AddMilliseconds(durationMs),
+        Outcome = outcome,
+        DurationMs = durationMs,
+        TotalTokens = totalTokens
+    };
+
     private static async Task<Dishhive.Api.Models.DTOs.IntegrationStatusResponseDto> GetStatusAsync(
         MockHttpMessageHandler handler)
     {
@@ -80,7 +163,6 @@ public class IntegrationsControllerTests
             scrapersClient,
             new WebSearchOptions { Provider = "searxng", BaseUrl = BaseUrl },
             new NoOpAiModelCapabilityService(),
-            NullLogger<LlmMealSuggestionService>.Instance,
             CancellationToken.None);
     }
 }

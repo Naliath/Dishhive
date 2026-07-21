@@ -1,5 +1,6 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Services.Suggestions;
+using Dishhive.Api.Services.Ai;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -23,7 +24,7 @@ public class AiModelCapabilityServiceTests
         public int Runs { get; private set; }
 
         public StubTester(AiOptions options, AiModelTestResult result)
-            : base(Substitute.For<IChatClient>(), options,
+            : base(Gate(options), options,
                 Substitute.For<IHttpClientFactory>(), NullLogger<AiModelTester>.Instance)
             => _result = result;
 
@@ -43,7 +44,7 @@ public class AiModelCapabilityServiceTests
         public int Runs { get; private set; }
 
         public BlockingTester(AiOptions options)
-            : base(Substitute.For<IChatClient>(), options,
+            : base(Gate(options), options,
                 Substitute.For<IHttpClientFactory>(), NullLogger<AiModelTester>.Instance)
         {
         }
@@ -60,6 +61,10 @@ public class AiModelCapabilityServiceTests
 
     private static AiOptions Options(string model = "model-a") =>
         new() { Provider = "lmstudio", Model = model };
+
+    private static IAiExecutionGate Gate(AiOptions options) => new AiExecutionGate(
+        Substitute.For<IChatClient>(), options, new NoOpAiTaskMetricsStore(),
+        NullLogger<AiExecutionGate>.Instance);
 
     private static AiModelTestResult ResultFor(AiOptions options, string checkDetail) => new()
     {
@@ -133,6 +138,38 @@ public class AiModelCapabilityServiceTests
         reloaded.ResponseMode.Should().Be(AiResponseMode.PromptedJson);
         // Check details survive the JSON round-trip through the store
         reloaded.Checks.Should().ContainSingle(c => c.Detail == "original run");
+    }
+
+    [Fact]
+    public async Task EnsureTested_Restart_PreservesPlanningIntentWarning()
+    {
+        var dbName = $"cap-{Guid.NewGuid()}";
+        var options = Options();
+        var warning = new AiModelTestResult
+        {
+            TestedAt = DateTimeOffset.UtcNow,
+            Provider = options.Provider,
+            Model = options.Model,
+            EndpointReachable = true,
+            ModelListed = true,
+            ResponseMode = AiResponseMode.PromptedJson,
+            EvaluationPassed = true,
+            PlanningIntentPassed = false,
+            Checks = [new AiModelTestCheck("Multilingual planning instructions", false, "fixture failed")]
+        };
+        var firstTester = new StubTester(options, warning);
+        var first = new AiModelCapabilityService(
+            firstTester, options, ScopeFactory(dbName), NullLogger<AiModelCapabilityService>.Instance);
+        (await first.EnsureTestedAsync()).Verdict.Should().Be("warnings");
+
+        var secondTester = new StubTester(options, ResultFor(options, "should not run"));
+        var second = new AiModelCapabilityService(
+            secondTester, options, ScopeFactory(dbName), NullLogger<AiModelCapabilityService>.Instance);
+        var reloaded = await second.EnsureTestedAsync();
+
+        secondTester.Runs.Should().Be(0);
+        reloaded.PlanningIntentPassed.Should().BeFalse();
+        reloaded.Verdict.Should().Be("warnings");
     }
 
     [Fact]

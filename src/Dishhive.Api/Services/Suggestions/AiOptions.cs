@@ -1,9 +1,9 @@
 namespace Dishhive.Api.Services.Suggestions;
 
 /// <summary>
-/// Configuration for the optional AI week-plan suggestions ("Ai" section,
-/// Ai__* env vars in Docker). Disabled when no provider is configured —
-/// the NoOp suggestion service stays registered (Freezy pattern).
+/// Shared configuration for every AI capability ("Ai" section, Ai__* env vars
+/// in Docker). Disabled when no provider is configured — NoOp feature services
+/// remain registered (Freezy pattern).
 /// See docs/features/ai-week-planning.md.
 /// </summary>
 public class AiOptions
@@ -42,16 +42,11 @@ public class AiOptions
     public int TimeoutSeconds { get; set; } = 60;
 
     /// <summary>
-    /// Timeout for a suggestion call that uses the external-recipe tools (web search +
-    /// scraping). Much longer than <see cref="TimeoutSeconds"/>: a tool loop makes
-    /// several round-trips — each one a full model completion — and both local models
-    /// and cloud APIs under load can take tens of seconds per turn. Applies only on the
-    /// external-research path.
+    /// End-to-end timeout for week planning. It is longer than
+    /// <see cref="TimeoutSeconds"/> because external-recipe search and verification can
+    /// precede the model completion.
     /// </summary>
     public int AgentTimeoutSeconds { get; set; } = 300;
-
-    /// <summary>Legacy compatibility cap retained for existing configuration.</summary>
-    public int MaxToolIterations { get; set; } = 8;
 
     /// <summary>
     /// Sends provider-level reasoning effort "none" for planning completions. Local
@@ -82,6 +77,27 @@ public class AiOptions
     /// </summary>
     public int MaxPromptTokens { get; set; } = 6000;
 
+    /// <summary>Small deterministic classification response budget.</summary>
+    public int FactsMaxOutputTokens { get; set; } = 512;
+
+    /// <summary>Translation output budget; large recipes need more room than classifiers.</summary>
+    public int TranslationMaxOutputTokens { get; set; } = 8000;
+
+    /// <summary>
+    /// Rough input budget per translation call. Lossless translation chunks recipes at
+    /// item boundaries instead of discarding text when this budget is exceeded.
+    /// </summary>
+    public int TranslationMaxPromptTokens { get; set; } = 12000;
+
+    /// <summary>Structured recipe-extraction output budget.</summary>
+    public int ImportExtractionMaxOutputTokens { get; set; } = 6000;
+
+    /// <summary>
+    /// Rough input budget for LLM recipe extraction. Page text is trimmed to this budget
+    /// before it reaches the shared execution gate.
+    /// </summary>
+    public int ImportExtractionMaxPromptTokens { get; set; } = 24000;
+
     /// <summary>
     /// Fingerprint of every setting that affects the model capability test's outcome —
     /// the persisted test result is keyed by this, so changing any of these settings
@@ -96,6 +112,21 @@ public class AiOptions
         Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture),
         MaxPromptTokens,
         DisableThinking);
+
+    /// <summary>
+    /// Snapshot of every execution setting recorded with task telemetry. Unlike the
+    /// planning-capability fingerprint this includes the task-specific limits.
+    /// </summary>
+    public string ExecutionFingerprint => string.Join("|",
+        CapabilityFingerprint,
+        TimeoutSeconds,
+        AgentTimeoutSeconds,
+        MaxRetries,
+        FactsMaxOutputTokens,
+        TranslationMaxOutputTokens,
+        TranslationMaxPromptTokens,
+        ImportExtractionMaxOutputTokens,
+        ImportExtractionMaxPromptTokens);
 
     /// <summary>Providers that run locally and need no API key</summary>
     private static readonly string[] LocalProviders = ["ollama", "lmstudio", "openai-compatible"];

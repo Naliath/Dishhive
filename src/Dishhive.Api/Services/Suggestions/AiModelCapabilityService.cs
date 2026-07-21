@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Dishhive.Api.Services.Ai;
 
 namespace Dishhive.Api.Services.Suggestions;
 
@@ -57,17 +58,20 @@ public class AiModelCapabilityService : IAiModelCapabilityService
     private readonly AiOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AiModelCapabilityService> _logger;
+    private readonly IAiExecutionGate? _executionGate;
     private readonly object _gate = new();
     private Task<AiModelTestResult>? _run;
 
     public AiModelCapabilityService(
         AiModelTester tester, AiOptions options,
-        IServiceScopeFactory scopeFactory, ILogger<AiModelCapabilityService> logger)
+        IServiceScopeFactory scopeFactory, ILogger<AiModelCapabilityService> logger,
+        IAiExecutionGate? executionGate = null)
     {
         _tester = tester;
         _options = options;
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _executionGate = executionGate;
     }
 
     public AiModelTestState State
@@ -123,6 +127,7 @@ public class AiModelCapabilityService : IAiModelCapabilityService
                 .FirstOrDefaultAsync(r => r.ConfigKey == key);
             if (record is not null && ToResult(record) is { } stored)
             {
+                _executionGate?.UpdateCapability(stored);
                 _logger.LogInformation(
                     "Reusing persisted AI model test for {Provider}/{Model}: verdict={Verdict} (tested {TestedAt:u}). Re-test from the settings page if the served model changed.",
                     stored.Provider, stored.Model, stored.Verdict, stored.TestedAt);
@@ -158,6 +163,7 @@ public class AiModelCapabilityService : IAiModelCapabilityService
             // RunAsync never throws (it converts failures into a failed result), so the
             // shared task always completes successfully and Result above stays simple
             var result = await _tester.RunAsync(prompt, CancellationToken.None);
+            _executionGate?.UpdateCapability(result);
             try
             {
                 using var scope = _scopeFactory.CreateScope();
@@ -254,7 +260,7 @@ public class AiModelCapabilityService : IAiModelCapabilityService
             ModelListed = record.ModelListed,
             ResponseMode = mode,
             EvaluationPassed = record.EvaluationPassed,
-            ToolCallingPassed = checks?.FirstOrDefault(c => c.Name == "External recipe tools")?.Passed,
+            PlanningIntentPassed = checks?.FirstOrDefault(c => c.Name == "Multilingual planning instructions")?.Passed,
             Checks = checks ?? [],
             TokensPerSecond = record.TokensPerSecond,
             ElapsedMs = record.ElapsedMs

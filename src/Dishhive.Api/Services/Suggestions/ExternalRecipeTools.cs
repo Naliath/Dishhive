@@ -2,9 +2,7 @@ using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.WebSearch;
 using Dishhive.Api.Services.Facts;
 using Dishhive.Api.Models;
-using Microsoft.Extensions.AI;
 using System.Collections.Concurrent;
-using System.ComponentModel;
 using System.Diagnostics;
 
 namespace Dishhive.Api.Services.Suggestions;
@@ -65,22 +63,12 @@ public class ExternalRecipeTools : IExternalRecipeSession
         _factsExtractor = factsExtractor;
     }
 
-    public IList<AITool> Build() =>
-    [
-        AIFunctionFactory.Create(ResearchRecipesAsync, name: "research_recipes")
-    ];
-
-    IList<AITool> IExternalRecipeSession.BuildTools() => Build();
-
     Task<IReadOnlyList<GetRecipeResult>> IExternalRecipeSession.ResearchAsync(
         List<RecipeResearchRequest> requests,
         CancellationToken cancellationToken) => ResearchRecipesAsync(requests, cancellationToken);
 
-    [Description("Research several recipe requirements in one bounded operation. Send all independent "
-        + "source/query requirements together. Dishhive searches each source once, verifies a small number "
-        + "of pages, and returns candidateIds. Call this at most once, then select verified candidateIds in the final response.")]
     internal async Task<IReadOnlyList<GetRecipeResult>> ResearchRecipesAsync(
-        [Description("All source-specific recipe searches needed for the plan (maximum 4). Set candidateCount to at least the number of distinct recipes requested, up to 6.")] List<RecipeResearchRequest> requests,
+        List<RecipeResearchRequest> requests,
         CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _researchCalls);
@@ -122,16 +110,14 @@ public class ExternalRecipeTools : IExternalRecipeSession
             }
         }));
         _logger.LogInformation(
-            "[{RequestId}] Tool research_recipes processed {RequestCount} request(s) and resolved {ResolvedCount}/{CandidateCount} candidate(s)",
+            "[{RequestId}] External recipe research processed {RequestCount} request(s) and resolved {ResolvedCount}/{CandidateCount} candidate(s)",
             _requestId, Math.Min(requests.Count, maxRequests), results.Count(result => result.Error == null), results.Length);
         return results;
     }
 
-    [Description("Search referenced recipe websites. Returns candidateId + title. "
-        + "Use get_recipe(candidateId) before selecting a candidate.")]
     internal Task<IReadOnlyList<SearchHit>> SearchRecipesAsync(
-        [Description("Search keywords, e.g. 'vegetarian pasta under 30 minutes'")] string query,
-        [Description("Optional referenced website host, e.g. 'dagelijksekost.vrt.be'")] string? site = null,
+        string query,
+        string? site = null,
         CancellationToken cancellationToken = default)
     {
         var effectiveSite = string.IsNullOrWhiteSpace(site) ? _defaultSite : site.Trim();
@@ -184,10 +170,8 @@ public class ExternalRecipeTools : IExternalRecipeSession
         return hits;
     }
 
-    [Description("Fetch and inspect a candidate returned by search_recipes. Pass its candidateId, "
-        + "then copy that same candidateId into externalCandidateId in the final suggestion.")]
     internal Task<GetRecipeResult> GetRecipeAsync(
-        [Description("The candidateId returned by search_recipes, e.g. 'c1'")] string candidateId,
+        string candidateId,
         CancellationToken cancellationToken = default)
     {
         var key = candidateId.Trim();
@@ -241,7 +225,7 @@ public class ExternalRecipeTools : IExternalRecipeSession
         if (recipe != null && _factsExtractor?.IsAvailable == true)
         {
             var assessed = await _factsExtractor.ExtractAsync(
-                recipe.Title, recipe.IngredientLines, cancellationToken);
+                recipe.Title, recipe.IngredientLines, cancellationToken, _requestId);
             if (assessed != null)
             {
                 facts = assessed;

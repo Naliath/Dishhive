@@ -2,6 +2,7 @@ using Dishhive.Api.Data;
 using Dishhive.Api.Extensions;
 using Dishhive.Api.Mcp;
 using Dishhive.Api.Services.Demo;
+using Dishhive.Api.Services.Ai;
 using Dishhive.Api.Services.Facts;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
@@ -115,21 +116,22 @@ else
     builder.Services.AddSingleton<IWebSearchClient, NoOpWebSearchClient>();
 }
 
-// AI week-plan suggestions (see docs/features/ai-week-planning.md): LLM-backed with
-// a deterministic rules fallback when Ai:Provider is configured, no-op otherwise.
-// Testing always gets the no-op so integration tests stay deterministic.
+// Shared AI boundary (see docs/features/ai-week-planning.md): every model-backed
+// capability executes through IAiExecutionGate; no-op feature services are used when
+// AI is unconfigured. Testing keeps those no-ops so integration tests stay deterministic.
 var aiOptions = builder.Configuration.GetSection(AiOptions.SectionName).Get<AiOptions>() ?? new AiOptions();
 // Always register so IntegrationsController can report config state regardless of environment
 builder.Services.AddSingleton(aiOptions);
 if (!builder.Environment.IsEnvironment("Testing") && aiOptions.IsConfigured)
 {
     builder.Services.AddSingleton(_ => ChatClientFactory.Create(aiOptions));
-    // Suggestion services are scoped: the LLM tools (external-recipe discovery) close
-    // over scoped/typed-HttpClient dependencies. The IChatClient stays singleton.
+    builder.Services.AddSingleton<IAiTaskMetricsStore, AiTaskMetricsStore>();
+    builder.Services.AddSingleton<IAiExecutionGate, AiExecutionGate>();
+    // Suggestion services are scoped: deterministic external-recipe discovery closes
+    // over scoped/typed-HttpClient dependencies. The client and gate stay singleton.
     builder.Services.AddScoped<RulesMealSuggestionService>();
     builder.Services.AddScoped<IMealSuggestionService, LlmMealSuggestionService>();
-    // LLM recipe extraction fallback for import (used when the structured scrapers fail);
-    // singleton — it only depends on the singleton IChatClient/AiOptions
+    // LLM recipe extraction fallback for import (used when structured scrapers fail).
     builder.Services.AddSingleton<ILlmRecipeExtractor, LlmRecipeExtractor>();
     // Dietary-facts classification of recipes (contains milk/gluten/…), same posture
     builder.Services.AddSingleton<IRecipeFactsExtractor, LlmRecipeFactsExtractor>();
@@ -142,6 +144,7 @@ if (!builder.Environment.IsEnvironment("Testing") && aiOptions.IsConfigured)
 }
 else
 {
+    builder.Services.AddSingleton<IAiTaskMetricsStore, NoOpAiTaskMetricsStore>();
     builder.Services.AddSingleton<IMealSuggestionService, NoOpMealSuggestionService>();
     builder.Services.AddSingleton<ILlmRecipeExtractor, NoOpLlmRecipeExtractor>();
     builder.Services.AddSingleton<IRecipeFactsExtractor, NoOpRecipeFactsExtractor>();

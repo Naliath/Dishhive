@@ -62,7 +62,26 @@ factory covers every provider (no per-provider SDK/parsing quirks to maintain):
 | `Ai__Temperature` | Default 0.3 — low, for steadier structured output and less random regeneration |
 | `Ai__MaxRetries` | Default 1 — extra corrective reprompts when a reply can't be parsed before falling back |
 | `Ai__MaxPromptTokens` | Default 6000 — rough budget (~4 chars/token) sizing the recipe + history blocks to the model's context window |
-| `Ai__AgentTimeoutSeconds` / `Ai__MaxToolIterations` | External-research timeout and retained compatibility cap. Research is server-orchestrated rather than an open-ended model tool loop |
+| `Ai__AgentTimeoutSeconds` | External-research timeout. Research is server-orchestrated rather than an open-ended model tool loop |
+
+Task-specific caps (`FactsMaxOutputTokens`, `TranslationMaxOutputTokens`,
+`TranslationMaxPromptTokens`, `ImportExtractionMaxOutputTokens`, and
+`ImportExtractionMaxPromptTokens`) keep small classifiers deterministic while allowing
+lossless chunking for long translations and bounded source text for recipe extraction.
+
+### Shared AI execution boundary
+
+Week planning, planning-intent extraction, recipe facts, translation, import extraction,
+and model capability probes all call `IAiExecutionGate`. The gate resolves the task profile,
+applies provider-level reasoning controls, selects JSON Schema only after support is verified,
+enforces the task timeout, logs token/finish data, and stores a durable `AiTaskRun`. Feature
+services parse and validate their domain result, then mark the completion as successful,
+empty, invalid JSON, or domain-invalid. They never construct `ChatOptions` directly.
+
+The Settings → AI task performance page summarizes the retained call window by task and
+shows recent call outcomes, latency, P95, token usage, response mode, schema use, task
+settings, and contract version. Week planning retains its separate operation-level rows so
+search, page resolution, fallback, and model time can still be distinguished.
 
 ### Web search (optional, for external-recipe discovery)
 
@@ -91,9 +110,9 @@ IMealSuggestionService
  ├── NoOpMealSuggestionService        (AI unconfigured / Testing)
  └── LlmMealSuggestionService         (AI configured)
       ├── MealSuggestionPromptBuilder + MealSuggestionResponseContract
-      ├── ExternalRecipeSessionFactory — candidate registry + AI tools
+      ├── ExternalRecipeSessionFactory — deterministic search + verified candidates
       ├── MealSuggestionPostProcessor — ids, source scope, freezer and dietary checks
-      │   IChatClient (ChatClientFactory) — structured JSON output
+      │   IAiExecutionGate — task profile, schema policy, timeout + call metrics
       └─ on ANY failure → RulesMealSuggestionService (freezer-first + favorite rotation)
 ```
 

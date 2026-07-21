@@ -240,15 +240,15 @@ as such in the review dialog.
 ### Web search (external recipe discovery)
 
 Planner instructions can reference a website with `@` — e.g. *"vegetarian under 30 min
-from @[Dagelijkse Kost]"* — and a **tool-capable** model will search the site, verify
-candidates with the internal scraper, and import the chosen recipe when you accept it.
+from @[Dagelijkse Kost]"*. Dishhive searches and verifies a bounded candidate set before
+asking the model to plan; the chosen recipe is imported only when you accept it.
 In `docker-compose`, this is **enabled by default** against the bundled `searxng`
 service (its web UI is at `http://localhost:5102` for local debugging); override
 `WEBSEARCH_PROVIDER`/`WEBSEARCH_BASE_URL` in `.env` to point elsewhere (see
 [.env.example](.env.example)). Running the API directly (`dotnet run`, no docker-compose)
 has web search off by default — set `WebSearch:Provider`/`WebSearch:BaseUrl` in
 `appsettings.Development.json` to point at your own SearXNG instance. Either way, when
-unconfigured the tools are simply not offered and suggestions behave as before.
+unconfigured, external research is skipped and suggestions behave as before.
 
 ## Environment Variables
 

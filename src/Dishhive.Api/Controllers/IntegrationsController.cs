@@ -24,7 +24,6 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
         [FromServices] IRecipeScrapersClient scrapersClient,
         [FromServices] WebSearchOptions webSearchOptions,
         [FromServices] IAiModelCapabilityService aiCapability,
-        [FromServices] ILogger<LlmMealSuggestionService> llmSuggestionLogger,
         CancellationToken cancellationToken)
     {
         var aiReachable = aiOptions.IsConfigured
@@ -46,7 +45,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
                 Model: aiOptions.IsConfigured ? aiOptions.Model : null,
                 BaseUrl: aiOptions.IsConfigured && !string.IsNullOrEmpty(aiOptions.BaseUrl)
                     ? aiOptions.BaseUrl : null,
-                StatsEnabled: llmSuggestionLogger.IsEnabled(LogLevel.Debug),
+                StatsEnabled: aiOptions.IsConfigured,
                 ModelTestState: StateString(aiCapability.State),
                 ModelTestVerdict: aiCapability.Result?.Verdict
             ),
@@ -256,12 +255,23 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
             .OrderByDescending(run => run.StartedAt)
             .Take(count)
             .ToListAsync(cancellationToken);
+        // Task summaries use the full retained metrics window so a high-volume task
+        // cannot hide lower-volume capabilities. The detailed list still honors count.
+        var metricCalls = await context.AiTaskRuns
+            .AsNoTracking()
+            .OrderByDescending(run => run.StartedAt)
+            .ToListAsync(cancellationToken);
+        var calls = metricCalls.Take(count).ToList();
+        var modelRuns = runs.Where(run => run.CompletionAttempts > 0).ToList();
         var summary = new AiPlanningMetricsDto(
             RunCount: runs.Count,
-            SuccessfulRuns: runs.Count(run => run.Outcome is "success" or "partialFallback"),
-            FallbackRuns: runs.Count(run => run.Outcome.EndsWith("Fallback", StringComparison.Ordinal)),
+            SuccessfulRuns: runs.Count(run => run.Outcome == "success"),
+            PartialFallbackRuns: runs.Count(run => run.Outcome == "partialFallback"),
+            FallbackRuns: runs.Count(run => run.Outcome.EndsWith("Fallback", StringComparison.Ordinal)
+                && run.Outcome != "partialFallback"),
             AverageTotalDurationMs: runs.Count == 0 ? 0 : runs.Average(run => run.TotalDurationMs),
-            AverageCompletionDurationMs: runs.Count == 0 ? 0 : runs.Average(run => run.CompletionDurationMs),
+            AverageCompletionDurationMs: modelRuns.Count == 0 ? 0 : modelRuns.Average(run => run.CompletionDurationMs),
+            P95TotalDurationMs: Percentile95(runs.Select(run => run.TotalDurationMs)),
             TotalInputTokens: runs.Sum(run => run.InputTokens),
             TotalOutputTokens: runs.Sum(run => run.OutputTokens),
             TotalReasoningTokens: runs.Sum(run => run.ReasoningTokens),
@@ -270,6 +280,31 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
             TotalRecipeResolutions: runs.Sum(run => run.RecipeResolutionCount),
             TotalResolutionFailures: runs.Sum(run => run.RecipeResolutionFailureCount),
             TotalParseFailures: runs.Sum(run => run.ParseFailures));
+
+        var successfulOutcomes = new HashSet<string>(StringComparer.Ordinal)
+            { "success", "noResult" };
+        var taskSummaries = metricCalls
+            .GroupBy(call => call.Task)
+            .OrderBy(group => group.Key)
+            .Select(group => new AiTaskSummaryDto(
+                group.Key,
+                group.Count(),
+                group.Count(call => successfulOutcomes.Contains(call.Outcome)),
+                group.Count(call => !successfulOutcomes.Contains(call.Outcome)),
+                group.Average(call => call.DurationMs),
+                Percentile95(group.Select(call => call.DurationMs)),
+                group.Sum(call => call.TotalTokens)))
+            .ToList();
+        var taskMetrics = new AiTaskMetricsDto(
+            metricCalls.Count,
+            metricCalls.Count(call => successfulOutcomes.Contains(call.Outcome)),
+            metricCalls.Count(call => !successfulOutcomes.Contains(call.Outcome)),
+            metricCalls.Count == 0 ? 0 : metricCalls.Average(call => call.DurationMs),
+            Percentile95(metricCalls.Select(call => call.DurationMs)),
+            metricCalls.Sum(call => call.InputTokens),
+            metricCalls.Sum(call => call.OutputTokens),
+            metricCalls.Sum(call => call.ReasoningTokens),
+            taskSummaries);
 
         return Ok(new AiPlanningMetricsResponseDto(summary, runs.Select(run => new AiPlanningRunDto(
             run.Id, run.RequestId, run.StartedAt, run.Outcome, run.Provider, run.Model,
@@ -280,7 +315,24 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
             run.SearchCount, run.EmptySearchCount, run.SearchResultCount,
             run.RecipeResolutionCount, run.RecipeResolutionFailureCount,
             run.CapabilityWaitMs, run.CompletionDurationMs, run.SearchDurationMs,
-            run.RecipeResolutionDurationMs, run.TotalDurationMs)).ToList()));
+            run.RecipeResolutionDurationMs, run.TotalDurationMs)).ToList(),
+            taskMetrics,
+            calls.Select(call => new AiTaskRunDto(
+                call.Id, call.OperationId, call.Task, call.Provider, call.Model,
+                call.ConfigFingerprint, call.ContractVersion, call.StartedAt, call.Outcome,
+                call.ResponseMode, call.FinishReason, call.Error, call.Attempt,
+                call.MaxOutputTokens, call.Temperature, call.ReasoningDisabled,
+                call.SchemaRequested, call.SchemaApplied, call.PromptCharacters,
+                call.OutputCharacters, call.InputTokens, call.OutputTokens,
+                call.ReasoningTokens, call.TotalTokens, call.DurationMs)).ToList()));
+    }
+
+    private static double Percentile95(IEnumerable<long> values)
+    {
+        var sorted = values.Order().ToList();
+        if (sorted.Count == 0) return 0;
+        var index = Math.Max(0, (int)Math.Ceiling(sorted.Count * 0.95) - 1);
+        return sorted[index];
     }
 
     private static AiModelTestStatusDto ToDto(IAiModelCapabilityService capability)

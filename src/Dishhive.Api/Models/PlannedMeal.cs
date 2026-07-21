@@ -1,12 +1,17 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace Dishhive.Api.Models;
 
 public enum MealType
 {
+    [JsonStringEnumMemberName("breakfast")]
     Breakfast = 0,
+    [JsonStringEnumMemberName("lunch")]
     Lunch = 1,
+    [JsonStringEnumMemberName("dinner")]
     Dinner = 2,
+    [JsonStringEnumMemberName("snack")]
     Snack = 3
 }
 
@@ -16,9 +21,13 @@ public enum MealType
 /// </summary>
 public enum Course
 {
+    [JsonStringEnumMemberName("main")]
     Main = 0,
+    [JsonStringEnumMemberName("appetizer")]
     Appetizer = 1,
+    [JsonStringEnumMemberName("side")]
     Side = 2,
+    [JsonStringEnumMemberName("dessert")]
     Dessert = 3
 }
 

@@ -1,13 +1,11 @@
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.WebSearch;
 using Dishhive.Api.Services.Facts;
-using Microsoft.Extensions.AI;
 
 namespace Dishhive.Api.Services.Suggestions;
 
 public interface IExternalRecipeSession
 {
-    IList<AITool> BuildTools();
     Task<IReadOnlyList<ExternalRecipeTools.GetRecipeResult>> ResearchAsync(
         List<ExternalRecipeTools.RecipeResearchRequest> requests,
         CancellationToken cancellationToken = default);

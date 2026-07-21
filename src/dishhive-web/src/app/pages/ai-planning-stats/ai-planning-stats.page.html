@@ -1,63 +1,126 @@
 <div class="page-header">
   <div>
-    <h1 class="mat-headline-medium">AI planning diagnostics</h1>
-    <p>Technical timing, token, search and recipe-resolution data for recent week suggestions.</p>
+    <h1 class="mat-headline-medium">{{ 'aiStats.title' | translate }}</h1>
+    <p>{{ 'aiStats.description' | translate }}</p>
   </div>
   <div class="page-actions">
-    <button mat-stroked-button (click)="refresh()"><mat-icon>refresh</mat-icon>Refresh</button>
-    <a mat-button routerLink="/settings"><mat-icon>arrow_back</mat-icon>Settings</a>
+    <button mat-stroked-button (click)="refresh()"><mat-icon>refresh</mat-icon>{{ 'aiStats.refresh' | translate }}</button>
+    <a mat-button routerLink="/settings"><mat-icon>arrow_back</mat-icon>{{ 'aiStats.settings' | translate }}</a>
   </div>
 </div>
 
 @if (metrics(); as data) {
-  <div class="summary-grid">
-    <mat-card appearance="outlined"><span>Recent runs</span><strong>{{ data.summary.runCount }}</strong></mat-card>
-    <mat-card appearance="outlined"><span>Successful</span><strong>{{ data.summary.successfulRuns }}</strong></mat-card>
-    <mat-card appearance="outlined"><span>Average total</span><strong>{{ seconds(data.summary.averageTotalDurationMs) }}</strong></mat-card>
-    <mat-card appearance="outlined"><span>Average completion</span><strong>{{ seconds(data.summary.averageCompletionDurationMs) }}</strong></mat-card>
-    <mat-card appearance="outlined"><span>Searches / empty</span><strong>{{ data.summary.totalSearches }} / {{ data.summary.totalEmptySearches }}</strong></mat-card>
-    <mat-card appearance="outlined"><span>Resolutions / failed</span><strong>{{ data.summary.totalRecipeResolutions }} / {{ data.summary.totalResolutionFailures }}</strong></mat-card>
-    <mat-card appearance="outlined"><span>Parse failures</span><strong>{{ data.summary.totalParseFailures }}</strong></mat-card>
-    <mat-card appearance="outlined"><span>Reasoning tokens</span><strong>{{ data.summary.totalReasoningTokens | number }}</strong></mat-card>
-  </div>
+  <section aria-labelledby="task-summary-title">
+    <div class="section-heading">
+      <div>
+        <h2 id="task-summary-title" class="mat-title-large">{{ 'aiStats.modelCalls' | translate }}</h2>
+        <p>{{ 'aiStats.latestCalls' | translate:{ metricCount: data.taskMetrics.runCount, callCount: data.calls.length } }}</p>
+      </div>
+    </div>
+    <div class="summary-grid">
+      <mat-card appearance="outlined"><span>{{ 'aiStats.successRate' | translate }}</span><strong>{{ percent(data.taskMetrics.successfulRuns, data.taskMetrics.runCount) }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.failedCalls' | translate }}</span><strong>{{ data.taskMetrics.failedRuns }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.averageCall' | translate }}</span><strong>{{ seconds(data.taskMetrics.averageDurationMs) }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.p95Call' | translate }}</span><strong>{{ seconds(data.taskMetrics.p95DurationMs) }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.inputTokens' | translate }}</span><strong>{{ data.taskMetrics.totalInputTokens | number }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.outputTokens' | translate }}</span><strong>{{ data.taskMetrics.totalOutputTokens | number }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.reasoningTokens' | translate }}</span><strong>{{ data.taskMetrics.totalReasoningTokens | number }}</strong></mat-card>
+    </div>
 
-  <div class="run-list">
-    @for (run of data.runs; track run.id) {
-      <mat-card appearance="outlined" class="run-card">
-        <mat-card-header>
-          <mat-card-title><code>{{ run.requestId }}</code> · {{ run.outcome }}</mat-card-title>
-          <mat-card-subtitle>{{ run.startedAt | date:'medium' }} · {{ run.provider }}/{{ run.model }}</mat-card-subtitle>
-        </mat-card-header>
-        <mat-card-content>
-          @if (run.instructions) { <p class="instructions">{{ run.instructions }}</p> }
-          @if (run.normalizedIntentJson) {
-            <details>
-              <summary>Normalized planning intent</summary>
-              <pre>{{ run.normalizedIntentJson }}</pre>
-            </details>
-          }
-          @if (run.error) { <p class="error">{{ run.error }}</p> }
-          <div class="metric-grid">
-            <span>Total <strong>{{ seconds(run.totalDurationMs) }}</strong></span>
-            <span>Completion <strong>{{ seconds(run.completionDurationMs) }}</strong></span>
-            <span>Capability wait <strong>{{ seconds(run.capabilityWaitMs) }}</strong></span>
-            <span>Turns / attempts <strong>{{ run.modelTurns }} / {{ run.completionAttempts }}</strong></span>
-            <span>Tokens in / out / reasoning <strong>{{ run.inputTokens | number }} / {{ run.outputTokens | number }} / {{ run.reasoningTokens | number }}</strong></span>
-            <span>Research / searches <strong>{{ run.researchCalls }} / {{ run.searchCount }}</strong></span>
-            <span>Search results / empty <strong>{{ run.searchResultCount }} / {{ run.emptySearchCount }}</strong></span>
-            <span>Recipe resolutions / failed <strong>{{ run.recipeResolutionCount }} / {{ run.recipeResolutionFailureCount }}</strong></span>
-            <span>Search / resolution time <strong>{{ seconds(run.searchDurationMs) }} / {{ seconds(run.recipeResolutionDurationMs) }}</strong></span>
-            <span>Suggestions external / fallback <strong>{{ run.suggestedItems }} · {{ run.externalSuggestions }} / {{ run.fallbackSuggestions }}</strong></span>
-            <span>Parse failures <strong>{{ run.parseFailures }}</strong></span>
-          </div>
-        </mat-card-content>
-      </mat-card>
-    } @empty {
-      <p>No planning runs have been recorded yet.</p>
-    }
-  </div>
+    <div class="task-grid">
+      @for (task of data.taskMetrics.tasks; track task.task) {
+        <button mat-stroked-button type="button" class="task-card" [class.task-card--selected]="selectedTask() === task.task" [attr.aria-pressed]="selectedTask() === task.task" (click)="selectTask(selectedTask() === task.task ? null : task.task)">
+          <span class="task-name">{{ taskLabel(task.task) | translate }}</span>
+          <strong>{{ percent(task.successfulRuns, task.runCount) }}</strong>
+          <span>{{ task.runCount }} {{ 'aiStats.calls' | translate }} · p95 {{ seconds(task.p95DurationMs) }}</span>
+          <span>{{ task.totalTokens | number }} {{ 'aiStats.tokens' | translate }}</span>
+        </button>
+      }
+    </div>
+  </section>
+
+  <section aria-labelledby="call-list-title">
+    <div class="section-heading">
+      <h2 id="call-list-title" class="mat-title-large">{{ 'aiStats.recentCalls' | translate }}</h2>
+      @if (selectedTask()) {
+        <button mat-button (click)="selectTask(null)">{{ 'aiStats.showAllTasks' | translate }}</button>
+      }
+    </div>
+    <div class="run-list">
+      @for (call of visibleCalls(); track call.id) {
+        <mat-card appearance="outlined" class="run-card" [class.run-card--failed]="isFailure(call.outcome)">
+          <mat-card-header>
+            <mat-card-title>{{ taskLabel(call.task) | translate }} · {{ outcomeLabel(call.outcome) | translate }}</mat-card-title>
+            <mat-card-subtitle>{{ call.startedAt | date:'medium' }} · <code>{{ call.operationId }}</code> · {{ call.provider }}/{{ call.model }}</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            @if (call.error) { <p class="error">{{ call.error }}</p> }
+            <div class="metric-grid">
+              <span>{{ 'aiStats.duration' | translate }} <strong>{{ seconds(call.durationMs) }}</strong></span>
+              <span>{{ 'aiStats.attempt' | translate }} <strong>{{ call.attempt }}</strong></span>
+              <span>{{ 'aiStats.mode' | translate }} <strong>{{ call.responseMode }}</strong></span>
+              <span>{{ 'aiStats.finish' | translate }} <strong>{{ call.finishReason || '—' }}</strong></span>
+              <span>{{ 'aiStats.tokensInOutReasoning' | translate }} <strong>{{ call.inputTokens | number }} / {{ call.outputTokens | number }} / {{ call.reasoningTokens | number }}</strong></span>
+              <span>{{ 'aiStats.schemaRequestedApplied' | translate }} <strong>{{ (call.schemaRequested ? 'aiStats.yes' : 'aiStats.no') | translate }} / {{ (call.schemaApplied ? 'aiStats.yes' : 'aiStats.no') | translate }}</strong></span>
+              <span>{{ 'aiStats.temperatureOutputLimit' | translate }} <strong>{{ call.temperature | number:'1.0-2' }} / {{ call.maxOutputTokens | number }}</strong></span>
+              <span>{{ 'aiStats.contract' | translate }} <strong>{{ call.contractVersion }}</strong></span>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      } @empty {
+        <p>{{ 'aiStats.noCalls' | translate }}</p>
+      }
+    </div>
+  </section>
+
+  <section aria-labelledby="planning-summary-title">
+    <h2 id="planning-summary-title" class="mat-title-large">{{ 'aiStats.planningOperations' | translate }}</h2>
+    <div class="summary-grid">
+      <mat-card appearance="outlined"><span>{{ 'aiStats.recentRuns' | translate }}</span><strong>{{ data.summary.runCount }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.successful' | translate }}</span><strong>{{ data.summary.successfulRuns }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.partialFallbacks' | translate }}</span><strong>{{ data.summary.partialFallbackRuns }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.fullFallbacks' | translate }}</span><strong>{{ data.summary.fallbackRuns }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.averageTotal' | translate }}</span><strong>{{ seconds(data.summary.averageTotalDurationMs) }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.p95Total' | translate }}</span><strong>{{ seconds(data.summary.p95TotalDurationMs) }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.parseFailures' | translate }}</span><strong>{{ data.summary.totalParseFailures }}</strong></mat-card>
+      <mat-card appearance="outlined"><span>{{ 'aiStats.searchesEmpty' | translate }}</span><strong>{{ data.summary.totalSearches }} / {{ data.summary.totalEmptySearches }}</strong></mat-card>
+    </div>
+
+    <details class="planning-details">
+      <summary>{{ 'aiStats.showPlanningRuns' | translate }}</summary>
+      <div class="run-list">
+        @for (run of data.runs; track run.id) {
+          <mat-card appearance="outlined" class="run-card">
+            <mat-card-header>
+              <mat-card-title><code>{{ run.requestId }}</code> · {{ run.outcome }}</mat-card-title>
+              <mat-card-subtitle>{{ run.startedAt | date:'medium' }} · {{ run.provider }}/{{ run.model }}</mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              @if (run.instructions) { <p class="instructions">{{ run.instructions }}</p> }
+              @if (run.normalizedIntentJson) {
+                <details>
+                  <summary>{{ 'aiStats.normalizedIntent' | translate }}</summary>
+                  <pre>{{ run.normalizedIntentJson }}</pre>
+                </details>
+              }
+              @if (run.error) { <p class="error">{{ run.error }}</p> }
+              <div class="metric-grid">
+                <span>{{ 'aiStats.totalCompletion' | translate }} <strong>{{ seconds(run.totalDurationMs) }} / {{ seconds(run.completionDurationMs) }}</strong></span>
+                <span>{{ 'aiStats.turnsAttempts' | translate }} <strong>{{ run.modelTurns }} / {{ run.completionAttempts }}</strong></span>
+                <span>{{ 'aiStats.researchSearches' | translate }} <strong>{{ run.researchCalls }} / {{ run.searchCount }}</strong></span>
+                <span>{{ 'aiStats.resolutionsFailed' | translate }} <strong>{{ run.recipeResolutionCount }} / {{ run.recipeResolutionFailureCount }}</strong></span>
+                <span>{{ 'aiStats.suggestionsFallback' | translate }} <strong>{{ run.suggestedItems }} / {{ run.fallbackSuggestions }}</strong></span>
+              </div>
+            </mat-card-content>
+          </mat-card>
+        } @empty {
+          <p>{{ 'aiStats.noPlanningRuns' | translate }}</p>
+        }
+      </div>
+    </details>
+  </section>
 } @else if (failed()) {
-  <p class="error">Could not load AI planning diagnostics.</p>
+  <p class="error">{{ 'aiStats.loadError' | translate }}</p>
 } @else {
-  <p>Loading diagnostics…</p>
+  <p>{{ 'aiStats.loading' | translate }}</p>
 }

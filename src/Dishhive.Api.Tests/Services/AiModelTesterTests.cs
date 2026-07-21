@@ -1,4 +1,5 @@
 using Dishhive.Api.Services.Suggestions;
+using Dishhive.Api.Services.Ai;
 using FluentAssertions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -62,15 +63,21 @@ public class AiModelTesterTests
         Func<ChatOptions?, ChatResponse> respond,
         string? modelsJson = null,
         bool supportsTools = true)
-        => new(
-            new FakeChatClient(respond, supportsTools),
-            new AiOptions
-            {
-                Provider = "lmstudio", Model = ModelName,
-                TimeoutSeconds = 10, MaxPromptTokens = 800
-            },
+    {
+        var options = new AiOptions
+        {
+            Provider = "lmstudio", Model = ModelName,
+            TimeoutSeconds = 10, MaxPromptTokens = 800
+        };
+        var gate = new AiExecutionGate(
+            new FakeChatClient(respond, supportsTools), options,
+            new NoOpAiTaskMetricsStore(), NullLogger<AiExecutionGate>.Instance);
+        return new AiModelTester(
+            gate,
+            options,
             HttpFactory(modelsJson ?? $$"""{"data":[{"id":"{{ModelName}}"}]}"""),
             NullLogger<AiModelTester>.Instance);
+    }
 
     /// <summary>Runs the tester under the default composed production prompt</summary>
     private static Task<AiModelTestResult> RunAsync(AiModelTester tester)
@@ -175,7 +182,7 @@ public class AiModelTesterTests
         var result = await RunAsync(tester);
 
         result.Viable.Should().BeTrue();
-        result.ToolCallingPassed.Should().BeFalse();
+        result.PlanningIntentPassed.Should().BeFalse();
         result.Verdict.Should().Be("warnings");
         result.Checks.Should().Contain(c => c.Name == "Multilingual planning instructions" && !c.Passed);
     }

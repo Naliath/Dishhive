@@ -1,4 +1,7 @@
+using Dishhive.Api.Models;
+using Dishhive.Api.Services.Ai;
 using Microsoft.Extensions.AI;
+using System.ComponentModel;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -8,56 +11,20 @@ namespace Dishhive.Api.Services.Suggestions;
 /// and corrective-reprompt quoting.</summary>
 public static partial class MealSuggestionResponseContract
 {
-    public const string ExampleJson =
-        "{\"suggestions\":[{\"date\":\"yyyy-MM-dd\",\"mealType\":\"dinner\",\"course\":\"main\",\"attendeeIds\":[],\"constraintIds\":[],\"dishName\":\"...\",\"recipeTitle\":null,\"freezerItemId\":null,\"externalCandidateId\":null,\"reason\":\"...\"}]}";
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
+    public static string ExampleJson { get; } = AiJsonContract.Serialize(
+        new WeekSuggestionsPayload(
+        [
+            new DaySuggestionPayload(
+                "yyyy-MM-dd", "...", null, "...", null, null,
+                MealType.Dinner, Course.Main, [], [])
+        ]));
 
     private const int MaxRepromptQuoteChars = 2000;
 
-    public static ChatResponseFormat JsonSchemaFormat { get; } = ChatResponseFormat.ForJsonSchema(
-        JsonDocument.Parse(
-            """
-            {
-              "type": "object",
-              "properties": {
-                "suggestions": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "date": { "type": "string", "description": "yyyy-MM-dd" },
-                      "mealType": { "type": "string", "enum": ["breakfast", "lunch", "dinner", "snack"] },
-                      "course": { "type": "string", "enum": ["main", "appetizer", "side", "dessert"] },
-                      "attendeeIds": {
-                        "type": "array",
-                        "items": { "type": "string" },
-                        "description": "empty means every household member; otherwise exact ids from the household list"
-                      },
-                      "constraintIds": {
-                        "type": "array",
-                        "items": { "type": "string" },
-                        "description": "exact ids from the normalized planning intent satisfied by this suggestion"
-                      },
-                      "dishName": { "type": "string" },
-                      "recipeTitle": { "type": ["string", "null"] },
-                      "freezerItemId": { "type": ["string", "null"], "description": "exact id from the freezer items list, or null" },
-                      "externalCandidateId": { "type": ["string", "null"], "description": "candidateId from a successful get_recipe call, or null" },
-                      "reason": { "type": "string" }
-                    },
-                    "required": ["date", "mealType", "course", "attendeeIds", "constraintIds", "dishName", "recipeTitle", "freezerItemId", "externalCandidateId", "reason"],
-                    "additionalProperties": false
-                  }
-                }
-              },
-              "required": ["suggestions"],
-              "additionalProperties": false
-            }
-            """).RootElement,
-        schemaName: "week_suggestions",
-        schemaDescription: "A dinner suggestion per requested date");
+    public static ChatResponseFormat JsonSchemaFormat { get; } =
+        AiJsonContract.CreateResponseFormat<WeekSuggestionsPayload>(
+            "week_suggestions",
+            "A meal suggestion per requested date");
 
     [GeneratedRegex(@"<(?:think|reasoning)>.*?(?:</(?:think|reasoning)>|$)",
         RegexOptions.Singleline | RegexOptions.IgnoreCase)]
@@ -90,8 +57,8 @@ public static partial class MealSuggestionResponseContract
         {
             try
             {
-                var payload = JsonSerializer.Deserialize<WeekSuggestionsPayload>(
-                    text[start..(end + 1)], JsonOptions);
+                var payload = AiJsonContract.Deserialize<WeekSuggestionsPayload>(
+                    text[start..(end + 1)]);
                 if (payload?.Suggestions is not null)
                 {
                     return payload;
@@ -109,8 +76,8 @@ public static partial class MealSuggestionResponseContract
         {
             try
             {
-                var items = JsonSerializer.Deserialize<List<DaySuggestionPayload>>(
-                    text[arrayStart..(arrayEnd + 1)], JsonOptions);
+                var items = AiJsonContract.Deserialize<List<DaySuggestionPayload>>(
+                    text[arrayStart..(arrayEnd + 1)]);
                 return items == null ? null : new WeekSuggestionsPayload(items);
             }
             catch (JsonException)
@@ -126,13 +93,17 @@ public static partial class MealSuggestionResponseContract
 public sealed record WeekSuggestionsPayload(List<DaySuggestionPayload>? Suggestions);
 
 public sealed record DaySuggestionPayload(
-    string? Date,
+    [property: Description("yyyy-MM-dd")] string? Date,
     string? DishName,
     string? RecipeTitle,
     string? Reason,
+    [property: Description("Candidate id from the verified candidates supplied by Dishhive, or null")]
     string? ExternalCandidateId,
+    [property: Description("Exact id from the freezer items list, or null")]
     string? FreezerItemId = null,
-    string? MealType = null,
-    string? Course = null,
+    MealType MealType = Dishhive.Api.Models.MealType.Dinner,
+    Course Course = Dishhive.Api.Models.Course.Main,
+    [property: Description("Empty means every household member; otherwise exact ids from the household list")]
     IReadOnlyList<string>? AttendeeIds = null,
+    [property: Description("Exact ids from the normalized planning intent satisfied by this suggestion")]
     IReadOnlyList<string>? ConstraintIds = null);

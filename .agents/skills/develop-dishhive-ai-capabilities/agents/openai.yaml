@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop Dishhive AI Capabilities"
+  short_description: "Add AI tasks through the central execution gate"
+  default_prompt: "Use $develop-dishhive-ai-capabilities to add or update a Dishhive AI capability safely."

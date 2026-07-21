@@ -31,8 +31,7 @@ internal static class PlanningIntentValidator
             }
             foreach (var item in claimed)
             {
-                if (!string.Equals(item.MealType ?? "dinner", constraint.MealType.ToString(), StringComparison.OrdinalIgnoreCase)
-                    || !string.Equals(item.Course ?? "main", constraint.Course.ToString(), StringComparison.OrdinalIgnoreCase))
+                if (item.MealType != constraint.MealType || item.Course != constraint.Course)
                 {
                     issues.Add($"constraint {constraint.Id}: wrong meal type or course on {item.Date}");
                 }
@@ -76,6 +75,17 @@ internal static class PlanningIntentValidator
             }
         }
 
+        foreach (var item in suggestions.Where(item => !string.IsNullOrWhiteSpace(item.ExternalCandidateId)))
+        {
+            var claimsSourceConstraint = intent.Constraints.Any(constraint =>
+                constraint.SourceHost != null
+                && (item.ConstraintIds ?? []).Contains(constraint.Id, StringComparer.OrdinalIgnoreCase));
+            if (!claimsSourceConstraint)
+            {
+                issues.Add($"plan: external candidate on {item.Date} does not claim a source constraint");
+            }
+        }
+
         if (!intent.AllowRepeatedDishes)
         {
             var repeated = suggestions
@@ -98,6 +108,11 @@ internal static class PlanningIntentValidator
         IReadOnlyList<ExternalRecipeTools.GetRecipeResult> externalCandidates)
     {
         var items = (payload.Suggestions ?? []).ToList();
+        items.RemoveAll(item =>
+            !string.IsNullOrWhiteSpace(item.ExternalCandidateId)
+            && !intent.Constraints.Any(constraint =>
+                constraint.SourceHost != null
+                && (item.ConstraintIds ?? []).Contains(constraint.Id, StringComparer.OrdinalIgnoreCase)));
         foreach (var constraint in intent.Constraints)
         {
             var targetDates = constraint.Dates.Count > 0
@@ -129,8 +144,8 @@ internal static class PlanningIntentValidator
                     replacement = new DaySuggestionPayload(
                         targetDates[index].ToString("yyyy-MM-dd"), candidate.Title, null,
                         $"Verified selection for {constraint.Id}", candidate.CandidateId,
-                        MealType: constraint.MealType.ToString().ToLowerInvariant(),
-                        Course: constraint.Course.ToString().ToLowerInvariant(), AttendeeIds: [],
+                        MealType: constraint.MealType,
+                        Course: constraint.Course, AttendeeIds: [],
                         ConstraintIds: [constraint.Id]);
                 }
                 else
@@ -139,13 +154,13 @@ internal static class PlanningIntentValidator
                     replacement = new DaySuggestionPayload(
                         targetDates[index].ToString("yyyy-MM-dd"), recipe.Title, recipe.Title,
                         $"Verified selection for {constraint.Id}", null,
-                        MealType: constraint.MealType.ToString().ToLowerInvariant(),
-                        Course: constraint.Course.ToString().ToLowerInvariant(), AttendeeIds: [],
+                        MealType: constraint.MealType,
+                        Course: constraint.Course, AttendeeIds: [],
                         ConstraintIds: [constraint.Id]);
                 }
                 items.RemoveAll(item => string.Equals(item.Date, replacement.Date, StringComparison.Ordinal)
-                    && string.Equals(item.MealType ?? "dinner", replacement.MealType, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(item.Course ?? "main", replacement.Course, StringComparison.OrdinalIgnoreCase));
+                    && item.MealType == replacement.MealType
+                    && item.Course == replacement.Course);
                 items.Add(replacement);
             }
         }

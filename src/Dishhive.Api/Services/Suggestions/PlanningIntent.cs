@@ -1,4 +1,7 @@
 using Dishhive.Api.Models;
+using Dishhive.Api.Services.Ai;
+using Microsoft.Extensions.AI;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 
 namespace Dishhive.Api.Services.Suggestions;
@@ -35,67 +38,108 @@ public sealed record PlanningConstraint
 
 internal static class PlanningIntentContract
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
+    internal static string SystemPrompt { get; } = BuildSystemPrompt();
 
-    internal const string SystemPrompt =
-        """
+    private static string BuildSystemPrompt()
+    {
+        var example = AiJsonContract.Serialize(new IntentPayload
+        {
+            Version = PlanningIntent.CurrentVersion,
+            AllowRepeatedDishes = false,
+            Constraints =
+            [
+                new ConstraintPayload
+                {
+                    Id = "constraint-1",
+                    Dates = ["yyyy-MM-dd"],
+                    MealType = MealType.Dinner,
+                    Course = Course.Main,
+                    SourceHost = null,
+                    Count = 1,
+                    Distinct = true,
+                    SearchQuery = null,
+                    DishRequest = null,
+                    RequiredClasses = [],
+                    ExcludedClasses = [],
+                    AllAttendees = true,
+                    OverrideDietPreferences = false
+                }
+            ]
+        });
+        var allowRepeatedDishesField = AiJsonContract.PropertyName<IntentPayload>(
+            nameof(IntentPayload.AllowRepeatedDishes));
+        var mealTypeField = AiJsonContract.PropertyName<ConstraintPayload>(
+            nameof(ConstraintPayload.MealType));
+        var courseField = AiJsonContract.PropertyName<ConstraintPayload>(
+            nameof(ConstraintPayload.Course));
+        var sourceHostField = AiJsonContract.PropertyName<ConstraintPayload>(
+            nameof(ConstraintPayload.SourceHost));
+        var searchQueryField = AiJsonContract.PropertyName<ConstraintPayload>(
+            nameof(ConstraintPayload.SearchQuery));
+        var dishRequestField = AiJsonContract.PropertyName<ConstraintPayload>(
+            nameof(ConstraintPayload.DishRequest));
+        var requiredClassesField = AiJsonContract.PropertyName<ConstraintPayload>(
+            nameof(ConstraintPayload.RequiredClasses));
+        var excludedClassesField = AiJsonContract.PropertyName<ConstraintPayload>(
+            nameof(ConstraintPayload.ExcludedClasses));
+        var allAttendeesField = AiJsonContract.PropertyName<ConstraintPayload>(
+            nameof(ConstraintPayload.AllAttendees));
+        var overrideDietPreferencesField = AiJsonContract.PropertyName<ConstraintPayload>(
+            nameof(ConstraintPayload.OverrideDietPreferences));
+        var mealTypes = AiJsonContract.EnumValuesJson<MealType>();
+        var courses = AiJsonContract.EnumValuesJson<Course>();
+        var classes = AiJsonContract.EnumValuesJson<IngredientClass>();
+        var chickenClasses = AiJsonContract.Serialize(new[] { IngredientClass.Poultry });
+        var vegetarianClasses = AiJsonContract.Serialize(new[]
+        {
+            IngredientClass.RedMeat,
+            IngredientClass.Poultry,
+            IngredientClass.Pork,
+            IngredientClass.Fish,
+            IngredientClass.Crustaceans,
+            IngredientClass.Molluscs,
+            IngredientClass.Gelatin
+        });
+
+        return $$"""
         Interpret meal-planning instructions written in any language. Do not plan meals.
         Convert the instructions into a language-neutral JSON intent. Use only exact dates
         from the supplied week mapping and only source hosts from the supplied source list.
 
         Reply with ONLY this JSON shape:
-        {
-          "version": 1,
-          "allowRepeatedDishes": false,
-          "constraints": [{
-            "id": "constraint-1",
-            "dates": ["yyyy-MM-dd"],
-            "mealType": "dinner",
-            "course": "main",
-            "sourceHost": null,
-            "count": 1,
-            "distinct": true,
-            "searchQuery": null,
-            "dishRequest": null,
-            "requiredClasses": [],
-            "excludedClasses": [],
-            "allAttendees": true,
-            "overrideDietPreferences": false
-          }]
-        }
+        {{example}}
 
         Rules:
         - Create constraints only for explicit requirements, not general preferences.
-        - Default to no repeated dishes. Set allowRepeatedDishes=true only when repetition
+        - Default to no repeated dishes. Set {{allowRepeatedDishesField}}=true only when repetition
           is explicitly requested.
         - Resolve weekday names in any language through the supplied date mapping.
         - A duration/count such as four days means four distinct dated selections.
-        - Valid mealType values are breakfast, lunch, dinner, snack. A dessert is a
+        - Valid {{mealTypeField}} values are {{mealTypes}}. A dessert is a
           course, not a meal type; unless explicitly requested otherwise use dinner.
-        - Valid course values are main, appetizer, side, dessert.
+        - Valid {{courseField}} values are {{courses}}.
         - Keep one logical counted requirement as one constraint: two dated desserts
           means count=2 with both dates, not two unrelated count=1 constraints.
         - Keep a referenced source only on the clause that actually references it.
-        - searchQuery and dishRequest preserve the user's food meaning, translated into
+        - {{searchQueryField}} and {{dishRequestField}} preserve the user's food meaning, translated into
           useful search terms when necessary; deterministic code treats them as opaque text.
-        - Every constraint with sourceHost MUST have a concise, non-generic searchQuery.
+        - Every constraint with {{sourceHostField}} MUST have a concise, non-generic {{searchQueryField}}.
           Include the requested dish, dietary style or course using terms likely to occur
           on that source, in the source website's likely language rather than automatically
           copying the instruction language. Use only discriminating food terms: omit generic
           words meaning "recipe" in any language, because they match nearly every source page.
         - Map explicit food semantics to canonical classes when possible. Examples:
-          chicken -> requiredClasses ["Poultry"]; vegetarian -> excludedClasses
-          ["RedMeat","Poultry","Pork","Fish","Crustaceans","Molluscs","Gelatin"].
+          chicken -> {{requiredClassesField}} {{chickenClasses}}; vegetarian ->
+          {{excludedClassesField}} {{vegetarianClasses}}.
         - When the user explicitly requests a dish that conflicts with a diet preference,
-          keep it for all attendees and set overrideDietPreferences=true. Allergies are never
+          keep it for {{allAttendeesField}} and set {{overrideDietPreferencesField}}=true. Allergies are never
           overridden.
-        - Valid classes: Gluten, Crustaceans, Eggs, Fish, Peanuts, Soybeans, Milk,
-          TreeNuts, Celery, Mustard, Sesame, Sulphites, Lupin, Molluscs, RedMeat,
-          Poultry, Pork, Gelatin, Alcohol, Honey.
+        - Valid classes: {{classes}}.
         """;
+    }
+
+    internal static ChatResponseFormat JsonSchemaFormat { get; } =
+        AiJsonContract.CreateResponseFormat<IntentPayload>("planning_intent");
 
     public static PlanningIntent? Parse(string? text, MealSuggestionRequest request)
     {
@@ -113,7 +157,7 @@ internal static class PlanningIntentContract
         IntentPayload? payload;
         try
         {
-            payload = JsonSerializer.Deserialize<IntentPayload>(text[start..(end + 1)], JsonOptions);
+            payload = AiJsonContract.Deserialize<IntentPayload>(text[start..(end + 1)]);
         }
         catch (JsonException)
         {
@@ -133,11 +177,7 @@ internal static class PlanningIntentContract
         {
             var id = item.Id?.Trim();
             if (string.IsNullOrWhiteSpace(id) || !ids.Add(id)
-                || item.Count is < 1 or > 6
-                || !Enum.TryParse<MealType>(item.MealType ?? "dinner", true, out var mealType)
-                || !Enum.IsDefined(mealType)
-                || !Enum.TryParse<Course>(item.Course ?? "main", true, out var course)
-                || !Enum.IsDefined(course))
+                || item.Count is < 1 or > 6)
             {
                 return null;
             }
@@ -164,8 +204,8 @@ internal static class PlanningIntentContract
             {
                 Id = id,
                 Dates = dates,
-                MealType = mealType,
-                Course = course,
+                MealType = item.MealType,
+                Course = item.Course,
                 SourceHost = host,
                 Count = item.Count,
                 Distinct = item.Distinct,
@@ -201,34 +241,17 @@ internal static class PlanningIntentContract
         };
     }
 
-    public static string FormatForModel(PlanningIntent intent) => JsonSerializer.Serialize(new
-    {
-        version = intent.Version,
-        allowRepeatedDishes = intent.AllowRepeatedDishes,
-        constraints = intent.Constraints.Select(item => new
-        {
-            id = item.Id,
-            dates = item.Dates.Select(date => date.ToString("yyyy-MM-dd")),
-            mealType = item.MealType.ToString().ToLowerInvariant(),
-            course = item.Course.ToString().ToLowerInvariant(),
-            sourceHost = item.SourceHost,
-            count = item.Count,
-            distinct = item.Distinct,
-            searchQuery = item.SearchQuery,
-            dishRequest = item.DishRequest,
-            requiredClasses = IngredientClasses.ToNames(item.RequiredClasses),
-            excludedClasses = IngredientClasses.ToNames(item.ExcludedClasses),
-            allAttendees = item.AllAttendees,
-            overrideDietPreferences = item.OverrideDietPreferences
-        })
-    });
+    public static string FormatForModel(PlanningIntent intent) =>
+        AiJsonContract.Serialize(intent);
 
-    private static bool TryParseClasses(IEnumerable<string>? names, out List<IngredientClass> classes)
+    private static bool TryParseClasses(
+        IEnumerable<IngredientClass>? values,
+        out List<IngredientClass> classes)
     {
         classes = [];
-        foreach (var name in names ?? [])
+        foreach (var value in values ?? [])
         {
-            if (!IngredientClasses.TryParse(name, out var value)) return false;
+            if (!Enum.IsDefined(value)) return false;
             if (!classes.Contains(value)) classes.Add(value);
         }
         return true;
@@ -243,23 +266,28 @@ internal static class PlanningIntentContract
     private static string? NullIfBlank(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private sealed record IntentPayload(
-        int Version,
-        bool AllowRepeatedDishes,
-        List<ConstraintPayload>? Constraints);
+    private sealed record IntentPayload
+    {
+        public int Version { get; init; }
+        public bool AllowRepeatedDishes { get; init; }
+        public List<ConstraintPayload> Constraints { get; init; } = [];
+    }
 
-    private sealed record ConstraintPayload(
-        string? Id,
-        List<string>? Dates,
-        string? MealType,
-        string? Course,
-        string? SourceHost,
-        int Count,
-        bool Distinct,
-        string? SearchQuery,
-        string? DishRequest,
-        List<string>? RequiredClasses,
-        List<string>? ExcludedClasses,
-        bool AllAttendees = true,
-        bool OverrideDietPreferences = false);
+    private sealed record ConstraintPayload
+    {
+        public string Id { get; init; } = "";
+        public List<string> Dates { get; init; } = [];
+        public MealType MealType { get; init; } = MealType.Dinner;
+        public Course Course { get; init; } = Course.Main;
+        public string? SourceHost { get; init; }
+        [Range(1, 6)]
+        public int Count { get; init; } = 1;
+        public bool Distinct { get; init; } = true;
+        public string? SearchQuery { get; init; }
+        public string? DishRequest { get; init; }
+        public List<IngredientClass> RequiredClasses { get; init; } = [];
+        public List<IngredientClass> ExcludedClasses { get; init; } = [];
+        public bool AllAttendees { get; init; } = true;
+        public bool OverrideDietPreferences { get; init; }
+    }
 }

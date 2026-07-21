@@ -1,4 +1,5 @@
 using Dishhive.Api.Models;
+using Dishhive.Api.Services.Ai;
 using Microsoft.Extensions.AI;
 using System.Diagnostics;
 using System.Text.Json;
@@ -8,7 +9,7 @@ namespace Dishhive.Api.Services.Suggestions;
 /// <summary>Coordinates capability gating, completion attempts, external-tool sessions,
 /// deterministic post-processing, and rules fallback.</summary>
 public sealed class LlmMealSuggestionService(
-    IChatClient chatClient,
+    IAiExecutionGate executionGate,
     RulesMealSuggestionService fallback,
     AiOptions options,
     IAiModelCapabilityService capability,
@@ -56,50 +57,48 @@ public sealed class LlmMealSuggestionService(
 
         try
         {
-            var capabilityStopwatch = Stopwatch.StartNew();
-            var modelCapability = await capability.EnsureTestedAsync(cancellationToken);
-            run.CapabilityWaitMs = capabilityStopwatch.ElapsedMilliseconds;
-            if (!modelCapability.Viable)
+            var gateDecision = await executionGate.EnsureAvailableAsync(
+                AiTaskKind.WeekPlanning, capability, cancellationToken);
+            run.CapabilityWaitMs = gateDecision.WaitMs;
+            if (!gateDecision.Allowed)
             {
                 logger.LogWarning(
                     "[{RequestId}] Model {Provider}/{Model} failed its capability test (verdict={Verdict}); using rules fallback without calling it",
-                    requestId, options.Provider, options.Model, modelCapability.Verdict);
+                    requestId, options.Provider, options.Model, gateDecision.Reason);
                 return Complete(Finalize(await fallback.SuggestAsync(request, cancellationToken), request), "capabilityFallback");
             }
 
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(
-                request.SourceConstraints.Count > 0 ? options.AgentTimeoutSeconds : options.TimeoutSeconds));
+            timeout.CancelAfter(TimeSpan.FromSeconds(executionGate.Profile(
+                AiTaskKind.WeekPlanning, request.SourceConstraints.Count > 0).TimeoutSeconds));
 
             var intent = new PlanningIntent();
             if (!string.IsNullOrWhiteSpace(request.Instructions) || request.SourceConstraints.Count > 0)
             {
                 var intentStopwatch = Stopwatch.StartNew();
-                var intentResponse = await chatClient.GetResponseAsync(
+                var intentExecution = await executionGate.ExecuteAsync(new AiExecutionRequest(
+                    AiTaskKind.PlanningIntent,
                     [
                         new ChatMessage(ChatRole.System, PlanningIntentContract.SystemPrompt),
                         new ChatMessage(ChatRole.User, BuildPlanningIntentPrompt(request))
                     ],
-                    new ChatOptions
-                    {
-                        MaxOutputTokens = Math.Min(options.MaxOutputTokens, 1400),
-                        Temperature = 0,
-                        Reasoning = options.DisableThinking
-                            ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None }
-                            : null
-                    },
-                    timeout.Token);
+                    "planning-intent-v1",
+                    requestId,
+                    ResponseFormat: PlanningIntentContract.JsonSchemaFormat), timeout.Token);
+                var intentResponse = intentExecution.Response;
                 intentStopwatch.Stop();
                 RecordCompletion(run, intentResponse, intentStopwatch.ElapsedMilliseconds);
                 intent = PlanningIntentContract.Parse(intentResponse.Text, request)!;
                 if (intent == null)
                 {
+                    await intentExecution.ReportOutcomeAsync("parseFailure", "Invalid planning intent");
                     run.ParseFailures++;
                     logger.LogWarning(
                         "[{RequestId}] AI planning intent was invalid; visible={Visible}. Using rules fallback instead of guessing at language-specific meaning",
                         requestId, FormatForLog(intentResponse.Text, 2000));
                     return Complete(Finalize(await fallback.SuggestAsync(request, cancellationToken), request), "intentFallback");
                 }
+                await intentExecution.ReportOutcomeAsync("success");
                 logger.LogInformation(
                     "[{RequestId}] AI planning intent completed in {ElapsedMs}ms with {ConstraintCount} constraint(s)",
                     requestId, intentStopwatch.ElapsedMilliseconds, intent.Constraints.Count);
@@ -110,26 +109,28 @@ public sealed class LlmMealSuggestionService(
             request = request with { Intent = intent };
             run.NormalizedIntentJson = PlanningIntentContract.FormatForModel(intent);
 
-            var useTools = externalRecipeSessions.IsConfigured
+            var useExternalResearch = externalRecipeSessions.IsConfigured
                 && intent.Constraints.Any(item => item.SourceHost != null);
-            run.UsedExternalResearch = useTools;
+            run.UsedExternalResearch = useExternalResearch;
 
             logger.LogInformation(
-                "[{RequestId}] AI suggestion request starting: {DayCount} day(s) to fill, tools={UseTools}, {Provider}/{Model}",
-                requestId, request.DaysToFill.Count, useTools, options.Provider, options.Model);
+                "[{RequestId}] AI suggestion request starting: {DayCount} day(s) to fill, externalResearch={UseExternalResearch}, {Provider}/{Model}",
+                requestId, request.DaysToFill.Count, useExternalResearch, options.Provider, options.Model);
 
             var effectivePrompt = await promptProvider.GetEffectiveSystemPromptAsync(cancellationToken);
             var userPrompt = MealSuggestionPromptBuilder.BuildUserPrompt(request, options.MaxPromptTokens);
+            var constraintIdsField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+                nameof(DaySuggestionPayload.ConstraintIds));
             var messages = new List<ChatMessage>
             {
                 new(ChatRole.System, effectivePrompt),
                 new(ChatRole.User, userPrompt),
                 new(ChatRole.User,
-                    "Authoritative normalized planning intent follows. Satisfy every constraint and copy each satisfied constraint id into constraintIds on the corresponding suggestion.\n"
+                    $"Authoritative normalized planning intent follows. Satisfy every constraint and copy each satisfied constraint id into {constraintIdsField} on the corresponding suggestion.\n"
                     + PlanningIntentContract.FormatForModel(intent))
             };
 
-            if (useTools)
+            if (useExternalResearch)
             {
                 externalRecipeSession = externalRecipeSessions.Create(request.SourceConstraints, requestId, logger);
                 var researchRequests = intent.Constraints
@@ -140,7 +141,7 @@ public sealed class LlmMealSuggestionService(
                         item.SourceHost!,
                         item.Count,
                         item.Dates.Select(date => date.ToString("yyyy-MM-dd")).ToList(),
-                        item.Course.ToString().ToLowerInvariant(),
+                        AiJsonContract.EnumName(item.Course),
                         item.RequiredClasses,
                         item.ExcludedClasses))
                     .ToList();
@@ -148,38 +149,41 @@ public sealed class LlmMealSuggestionService(
                 var verifiedCandidates = await externalRecipeSession.ResearchAsync(researchRequests, timeout.Token);
                 verifiedResearchCandidates = verifiedCandidates;
                 researchRequirements = researchRequests;
+                var sourceSiteField = AiJsonContract.PropertyName<CandidatePromptPayload>(
+                    nameof(CandidatePromptPayload.SourceSite));
+                var candidateIdField = AiJsonContract.PropertyName<CandidatePromptPayload>(
+                    nameof(CandidatePromptPayload.CandidateId));
+                var externalCandidateIdField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+                    nameof(DaySuggestionPayload.ExternalCandidateId));
                 messages.Add(new ChatMessage(
                     ChatRole.User,
                     "Dishhive deterministically completed the required source research. "
-                    + "Use these verified candidates for every source-backed dish, matching sourceSite, and copy candidateId into externalCandidateId. "
+                    + $"Use these verified candidates for every source-backed dish, matching {sourceSiteField}, and copy {candidateIdField} into {externalCandidateIdField}. "
                     + "Do not invent candidate ids or replace requested source dishes with local recipes.\n"
                     + FormatCandidates(verifiedCandidates)));
             }
-
-            var chatOptions = new ChatOptions
-            {
-                MaxOutputTokens = options.MaxOutputTokens,
-                Temperature = (float)options.Temperature,
-                Reasoning = options.DisableThinking
-                    ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None }
-                    : null,
-                ResponseFormat = modelCapability.ResponseMode == AiResponseMode.JsonSchema
-                    ? MealSuggestionResponseContract.JsonSchemaFormat
-                    : null
-            };
 
             WeekSuggestionsPayload? payload = null;
             // Source-backed plans get one additional quality-repair opportunity. A first
             // correction may fix attendee allocation while accidentally dropping a source
             // candidate; correctness is worth one short no-reasoning pass here.
-            var maxCompletionRetries = Math.Max(0, options.MaxRetries) + (useTools ? 1 : 0);
+            var maxCompletionRetries = executionGate.Profile(
+                AiTaskKind.WeekPlanning, useExternalResearch).MaxRetries + (useExternalResearch ? 1 : 0);
+            var useStructuredOutput = true;
             for (var attempt = 0; attempt <= maxCompletionRetries; attempt++)
             {
                 var attemptStopwatch = Stopwatch.StartNew();
-                var response = await chatClient.GetResponseAsync(
+                var completion = await executionGate.ExecuteAsync(new AiExecutionRequest(
+                    AiTaskKind.WeekPlanning,
                     messages,
-                    chatOptions,
-                    cancellationToken: timeout.Token);
+                    "week-suggestions-v2",
+                    requestId,
+                    attempt + 1,
+                    MealSuggestionResponseContract.JsonSchemaFormat,
+                    useStructuredOutput ? AiResponseFormatPolicy.WhenSupported : AiResponseFormatPolicy.None,
+                    UseExtendedTimeout: useExternalResearch),
+                    timeout.Token);
+                var response = completion.Response;
                 attemptStopwatch.Stop();
                 RecordCompletion(run, response, attemptStopwatch.ElapsedMilliseconds);
                 LogUsage(requestId, response, attempt, attemptStopwatch.Elapsed);
@@ -214,7 +218,8 @@ public sealed class LlmMealSuggestionService(
                             // while becoming oddly rigid about the previous field values.
                             // The focused repair already has valid JSON to imitate, so let
                             // prompted JSON prioritize semantic corrections.
-                            chatOptions.ResponseFormat = null;
+                            await completion.ReportOutcomeAsync("validationFailure", qualityIssue);
+                            useStructuredOutput = false;
                             messages.Add(new ChatMessage(ChatRole.Assistant, response.Text));
                             messages.Add(new ChatMessage(
                                 ChatRole.User,
@@ -222,16 +227,19 @@ public sealed class LlmMealSuggestionService(
                             payload = null;
                             continue;
                         }
+                        await completion.ReportOutcomeAsync("validationFailure", qualityIssue);
                     }
                     else
                     {
                         unresolvedQualityIssue = null;
+                        await completion.ReportOutcomeAsync("success");
                     }
                     break;
                 }
 
                 var text = response.Text ?? "";
                 run.ParseFailures++;
+                await completion.ReportOutcomeAsync("parseFailure", "Unparseable week-suggestions payload");
                 var truncated = response.FinishReason == ChatFinishReason.Length;
                 var diagnosis = truncated && string.IsNullOrWhiteSpace(text)
                     ? "The model reached its output limit before producing visible JSON; reasoning likely consumed the output budget."
@@ -325,7 +333,7 @@ public sealed class LlmMealSuggestionService(
                 run.SearchDurationMs = research.SearchDurationMs;
                 run.RecipeResolutionDurationMs = research.ResolutionDurationMs;
             }
-            if (metricsStore != null && logger.IsEnabled(LogLevel.Debug))
+            if (metricsStore != null)
             {
                 await metricsStore.SaveAsync(run);
             }
@@ -339,28 +347,45 @@ public sealed class LlmMealSuggestionService(
 
     private static string BuildPlanningIntentPrompt(MealSuggestionRequest request)
     {
-        var sources = string.Join("\n", request.SourceConstraints.Select(constraint =>
-            $"- {constraint.Name}: {constraint.Host}"));
-        var dates = string.Join("\n", Enumerable.Range(0, 7)
-            .Select(request.WeekStart.AddDays)
-            .Select(date => $"- {date.DayOfWeek}: {date:yyyy-MM-dd}"));
-        return $"Referenced sources:\n{sources}\nWeekday mapping:\n{dates}\nPlanner instructions:\n{request.Instructions}";
+        return AiJsonContract.Serialize(new PlanningIntentPromptInput(
+            request.SourceConstraints
+                .Select(constraint => new PlanningIntentSource(constraint.Name, constraint.Host))
+                .ToList(),
+            Enumerable.Range(0, 7)
+                .Select(request.WeekStart.AddDays)
+                .Select(date => new PlanningIntentDate(date.DayOfWeek.ToString(), date))
+                .ToList(),
+            request.Instructions));
     }
 
     private static string FormatCandidates(
         IReadOnlyList<ExternalRecipeTools.GetRecipeResult> candidates)
-        => JsonSerializer.Serialize(candidates
+        => AiJsonContract.Serialize(candidates
             .Where(candidate => candidate.Error == null)
-            .Select(candidate => new
-            {
-                candidateId = candidate.CandidateId,
-                sourceSite = candidate.SourceSite,
-                title = candidate.Title,
+            .Select(candidate => new CandidatePromptPayload(
+                candidate.CandidateId,
+                candidate.SourceSite,
+                candidate.Title,
                 candidate.TotalTimeMinutes,
                 candidate.Servings,
-                ingredients = candidate.Ingredients?.Take(30),
-                instructions = candidate.Instructions?.Take(10)
-            }));
+                candidate.Ingredients?.Take(30).ToList(),
+                candidate.Instructions?.Take(10).ToList())));
+
+    private sealed record PlanningIntentPromptInput(
+        IReadOnlyList<PlanningIntentSource> ReferencedSources,
+        IReadOnlyList<PlanningIntentDate> WeekdayMapping,
+        string? PlannerInstructions);
+
+    private sealed record PlanningIntentSource(string Name, string Host);
+    private sealed record PlanningIntentDate(string Weekday, DateOnly Date);
+    private sealed record CandidatePromptPayload(
+        string CandidateId,
+        string? SourceSite,
+        string? Title,
+        int? TotalTimeMinutes,
+        int? Servings,
+        IReadOnlyList<string>? Ingredients,
+        IReadOnlyList<string>? Instructions);
 
     private static void RecordCompletion(AiPlanningRun run, ChatResponse response, long elapsedMs)
     {

@@ -47,9 +47,11 @@ public record AiModelTestCheckDto(string Name, bool Passed, string Detail);
 public record AiPlanningMetricsDto(
     int RunCount,
     int SuccessfulRuns,
+    int PartialFallbackRuns,
     int FallbackRuns,
     double AverageTotalDurationMs,
     double AverageCompletionDurationMs,
+    double P95TotalDurationMs,
     long TotalInputTokens,
     long TotalOutputTokens,
     long TotalReasoningTokens,
@@ -58,6 +60,53 @@ public record AiPlanningMetricsDto(
     int TotalRecipeResolutions,
     int TotalResolutionFailures,
     int TotalParseFailures);
+
+public record AiTaskMetricsDto(
+    int RunCount,
+    int SuccessfulRuns,
+    int FailedRuns,
+    double AverageDurationMs,
+    double P95DurationMs,
+    long TotalInputTokens,
+    long TotalOutputTokens,
+    long TotalReasoningTokens,
+    IReadOnlyList<AiTaskSummaryDto> Tasks);
+
+public record AiTaskSummaryDto(
+    string Task,
+    int RunCount,
+    int SuccessfulRuns,
+    int FailedRuns,
+    double AverageDurationMs,
+    double P95DurationMs,
+    long TotalTokens);
+
+public record AiTaskRunDto(
+    Guid Id,
+    string OperationId,
+    string Task,
+    string Provider,
+    string Model,
+    string ConfigFingerprint,
+    string ContractVersion,
+    DateTime StartedAt,
+    string Outcome,
+    string ResponseMode,
+    string? FinishReason,
+    string? Error,
+    int Attempt,
+    int MaxOutputTokens,
+    double Temperature,
+    bool ReasoningDisabled,
+    bool SchemaRequested,
+    bool SchemaApplied,
+    long PromptCharacters,
+    long OutputCharacters,
+    long InputTokens,
+    long OutputTokens,
+    long ReasoningTokens,
+    long TotalTokens,
+    long DurationMs);
 
 public record AiPlanningRunDto(
     Guid Id,
@@ -95,7 +144,9 @@ public record AiPlanningRunDto(
 
 public record AiPlanningMetricsResponseDto(
     AiPlanningMetricsDto Summary,
-    IReadOnlyList<AiPlanningRunDto> Runs);
+    IReadOnlyList<AiPlanningRunDto> Runs,
+    AiTaskMetricsDto TaskMetrics,
+    IReadOnlyList<AiTaskRunDto> Calls);
 
 public record FreezyIntegrationStatusDto(
     bool Configured,

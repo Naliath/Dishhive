@@ -28,6 +28,7 @@ public class DishhiveDbContext : DbContext
     public DbSet<UserSetting> UserSettings => Set<UserSetting>();
     public DbSet<AiModelTestRecord> AiModelTestRecords => Set<AiModelTestRecord>();
     public DbSet<AiPlanningRun> AiPlanningRuns => Set<AiPlanningRun>();
+    public DbSet<AiTaskRun> AiTaskRuns => Set<AiTaskRun>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -354,6 +355,25 @@ public class DishhiveDbContext : DbContext
             entity.Property(run => run.Model).HasMaxLength(200);
             entity.Property(run => run.Instructions).HasMaxLength(500);
             entity.Property(run => run.NormalizedIntentJson).HasColumnType("jsonb");
+            entity.Property(run => run.Error).HasMaxLength(1000);
+        });
+
+        modelBuilder.Entity<AiTaskRun>(entity =>
+        {
+            entity.HasKey(run => run.Id);
+            entity.Property(run => run.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.HasIndex(run => run.StartedAt);
+            entity.HasIndex(run => run.Task);
+            entity.HasIndex(run => run.Outcome);
+            entity.Property(run => run.OperationId).HasMaxLength(64);
+            entity.Property(run => run.Task).HasMaxLength(50);
+            entity.Property(run => run.Provider).HasMaxLength(50);
+            entity.Property(run => run.Model).HasMaxLength(200);
+            entity.Property(run => run.ConfigFingerprint).HasMaxLength(500);
+            entity.Property(run => run.ContractVersion).HasMaxLength(80);
+            entity.Property(run => run.Outcome).HasMaxLength(30);
+            entity.Property(run => run.ResponseMode).HasMaxLength(30);
+            entity.Property(run => run.FinishReason).HasMaxLength(40);
             entity.Property(run => run.Error).HasMaxLength(1000);
         });
     }

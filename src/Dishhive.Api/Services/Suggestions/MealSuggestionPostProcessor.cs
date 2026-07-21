@@ -36,8 +36,8 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
                 continue;
             }
 
-            var mealType = ParseEnum(item.MealType, MealType.Dinner);
-            var course = ParseEnum(item.Course, Course.Main);
+            var mealType = item.MealType;
+            var course = item.Course;
             if (request.WeekPlan.Any(meal => meal.Date == date
                     && meal.MealType == mealType
                     && meal.Course == course
@@ -198,11 +198,6 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
         LinkFreezerItems(result, request);
         return result;
     }
-
-    private static T ParseEnum<T>(string? value, T fallback) where T : struct, Enum =>
-        Enum.TryParse<T>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
-            ? parsed
-            : fallback;
 
     public IReadOnlyList<MealSuggestion> Finalize(
         IReadOnlyList<MealSuggestion> suggestions,

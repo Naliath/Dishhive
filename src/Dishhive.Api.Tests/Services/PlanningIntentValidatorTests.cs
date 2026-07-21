@@ -89,4 +89,30 @@ public class PlanningIntentValidatorTests
 
         PlanningIntentValidator.Validate(payload, intent, request, null).Should().BeEmpty();
     }
+
+    [Fact]
+    public void ValidateAndRepair_RemoveExternalCandidatesThatDoNotClaimASourceConstraint()
+    {
+        var request = new MealSuggestionRequest { WeekStart = Monday };
+        var intent = new PlanningIntent
+        {
+            Constraints = [new PlanningConstraint
+            {
+                Id = "source-main",
+                SourceHost = "recipes.example",
+                Dates = [Monday],
+                Count = 1
+            }]
+        };
+        var unclaimed = new DaySuggestionPayload(
+            Monday.AddDays(1).ToString("yyyy-MM-dd"), "Extra recipe", null,
+            null, "candidate-extra", ConstraintIds: []);
+        var payload = new WeekSuggestionsPayload([unclaimed]);
+
+        PlanningIntentValidator.Validate(payload, intent, request, null)
+            .Should().Contain(issue => issue.Contains("does not claim a source constraint"));
+
+        var repaired = PlanningIntentValidator.Repair(payload, intent, request, []);
+        repaired.Suggestions.Should().NotContain(item => item.ExternalCandidateId == "candidate-extra");
+    }
 }

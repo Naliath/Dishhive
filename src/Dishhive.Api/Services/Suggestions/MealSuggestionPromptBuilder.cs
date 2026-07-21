@@ -1,3 +1,5 @@
+using Dishhive.Api.Models;
+using Dishhive.Api.Services.Ai;
 using System.Globalization;
 using System.Text;
 
@@ -15,14 +17,35 @@ public static class MealSuggestionPromptBuilder
         - Keep each reason to one short sentence.
         """;
 
-    public const string ProtectedSystemPrompt =
-        """
+    public static string ProtectedSystemPrompt { get; } = BuildProtectedSystemPrompt();
+
+    private static string BuildProtectedSystemPrompt()
+    {
+        var mealTypeField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+            nameof(DaySuggestionPayload.MealType));
+        var courseField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+            nameof(DaySuggestionPayload.Course));
+        var attendeeIdsField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+            nameof(DaySuggestionPayload.AttendeeIds));
+        var dishNameField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+            nameof(DaySuggestionPayload.DishName));
+        var recipeTitleField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+            nameof(DaySuggestionPayload.RecipeTitle));
+        var freezerItemIdField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+            nameof(DaySuggestionPayload.FreezerItemId));
+        var externalCandidateIdField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+            nameof(DaySuggestionPayload.ExternalCandidateId));
+        var candidateIdField = AiJsonContract.PropertyName<ExternalRecipeTools.GetRecipeResult>(
+            nameof(ExternalRecipeTools.GetRecipeResult.CandidateId));
+        var dinner = AiJsonContract.EnumName(MealType.Dinner);
+        var main = AiJsonContract.EnumName(Course.Main);
+        return $$"""
         Rules that ALWAYS apply, regardless of the guidance above:
-        - Default every proposal to mealType="dinner" and course="main". Only add a
+        - Default every proposal to {{mealTypeField}}="{{dinner}}" and {{courseField}}="{{main}}". Only add a
           different meal type or course when the planner explicitly asks for it (for
           example soup/appetizer, lunch, or dessert). Multiple courses and alternative
           mains on the same date must be separate suggestion entries.
-        - attendeeIds=[] means the dish is for everyone. Treat a dish the planner explicitly
+        - {{attendeeIdsField}}=[] means the dish is for everyone. Treat a dish the planner explicitly
           requests for a date as one shared dish for all attendees, even when it appears to
           conflict with a diet (for example chicken while a vegetarian attends). Do not split
           attendees or invent an alternative; the review UI warns the planner so they can
@@ -55,9 +78,9 @@ public static class MealSuggestionPromptBuilder
           merged into one (e.g. a frozen pizza noted "for 2" and a frozen lasagna noted
           "for 2" together cover a household of 4: two separate entries, dated the same).
           Each freezer item in the list below has an id. When a dish uses one, copy that
-          id EXACTLY into "freezerItemId" — this is how the app links it back to that
-          stock; dishName does not need to match the item's name, a short label is fine
-          (the app fills in the item's real name for tracking). Leave "freezerItemId"
+          id EXACTLY into "{{freezerItemIdField}}" — this is how the app links it back to that
+          stock; {{dishNameField}} does not need to match the item's name, a short label is fine
+          (the app fills in the item's real name for tracking). Leave "{{freezerItemIdField}}"
           null for every dish that is not a freezer item. Never use an item more times
           across the week than the quantity listed for it (the stock is already reserved
           for what you plan).
@@ -66,23 +89,18 @@ public static class MealSuggestionPromptBuilder
         - Instructions may reference a recipe collection as #[Collection Name]. When a
           day's instruction references a collection, the dish for that day MUST be one of
           the recipes listed under "Referenced collections" for it (copy the exact title
-          into recipeTitle). When the planner's general instructions reference one, prefer
+          into {{recipeTitleField}}). When the planner's general instructions reference one, prefer
           its recipes for the matching wish. If a referenced collection has no recipe list
           below, treat the reference as a plain-text hint.
         - Instructions may reference an EXTERNAL website as @[Source] (listed under
-          "Referenced sources" with its host). ONLY for the day(s)/wish tied to such a
-          reference, call research_recipes ONCE with every source/query requirement in
-          its requests array. Use broad queries in the source site's language and pass
-          the referenced host as site. Dishhive searches and verifies a bounded set of
-          candidates; CHECK their ingredients, time and type against every constraint
-          before choosing them. Set candidateCount to at least the number of distinct
-          recipes the instruction requests (maximum 6). Do not retry searches.
-          When you propose such an external recipe, copy the candidateId returned by the
-          successful research result into "externalCandidateId", use the recipe's real title
-          as dishName, and leave recipeTitle null (it is not in the store yet — it will be
-          imported when accepted). Do NOT use these tools for any other day or wish — every
-          day without a @[Source] reference must be filled from the known-recipes list below
-          or a plain dish name, never a web search.
+          "Referenced sources" with its host). Dishhive performs that research before
+          this planning call and supplies a bounded set of verified candidates. For every
+          requested source-backed dish, choose only from those candidates, check its
+          ingredients, time and type against every constraint, and copy its {{candidateIdField}}
+          into "{{externalCandidateIdField}}". Use the recipe's real title as {{dishNameField}} and leave
+          {{recipeTitleField}} null (it is not in the store yet — it will be imported when accepted).
+          Every day without a @[Source] reference must be filled from the known-recipes list
+          below or a plain dish name, never from a supplied external candidate.
         - When the planner gives additional instructions, they override the other
           preferences (never the allergies/constraints).
         - Treat the explicit weekday/date table in the request as authoritative. Never
@@ -91,10 +109,12 @@ public static class MealSuggestionPromptBuilder
           requested source-backed dish must use one of those candidates. Never silently
           substitute a known/local recipe while describing it as coming from that source.
         - Prefer recipes from the known-recipes list; when you use one, copy its exact title
-          into recipeTitle.
+          into {{recipeTitleField}}.
 
         Reply with ONLY a JSON object in exactly the documented response shape, no other text:
-        """ + "\n" + MealSuggestionResponseContract.ExampleJson;
+        {{MealSuggestionResponseContract.ExampleJson}}
+        """;
+    }
 
     public static string ComposeSystemPrompt(string? editableOverride)
     {
@@ -110,6 +130,8 @@ public static class MealSuggestionPromptBuilder
     {
         var sb = new StringBuilder();
         var culture = CultureInfo.InvariantCulture;
+        var freezerItemIdField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+            nameof(DaySuggestionPayload.FreezerItemId));
         sb.AppendLine($"Week starting: {request.WeekStart:yyyy-MM-dd}");
         sb.AppendLine("Authoritative weekday/date mapping (weekday words in instructions map exactly to these dates):");
         foreach (var date in Enumerable.Range(0, 7).Select(request.WeekStart.AddDays))
@@ -147,7 +169,7 @@ public static class MealSuggestionPromptBuilder
 
         if (request.AvailableFrozenItems.Count > 0)
         {
-            sb.AppendLine("Freezer items (soonest expiring first; copy the id exactly into freezerItemId):");
+            sb.AppendLine($"Freezer items (soonest expiring first; copy the id exactly into {freezerItemIdField}):");
             foreach (var item in request.AvailableFrozenItems.Take(10))
             {
                 sb.Append($"- id={item.Id}: {item.Name} ({item.Quantity} {item.Unit ?? "x"})");
@@ -180,7 +202,7 @@ public static class MealSuggestionPromptBuilder
 
         if (request.SourceConstraints.Count > 0)
         {
-            sb.AppendLine("Referenced sources (external websites — include all needed searches in one research_recipes call):");
+            sb.AppendLine("Referenced sources (Dishhive researches these before final planning):");
             foreach (var constraint in request.SourceConstraints)
             {
                 var scope = constraint.Dates.Count > 0

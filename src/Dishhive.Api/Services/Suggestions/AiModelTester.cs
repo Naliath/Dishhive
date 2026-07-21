@@ -1,4 +1,5 @@
 using Dishhive.Api.Models;
+using Dishhive.Api.Services.Ai;
 using Microsoft.Extensions.AI;
 using System.Diagnostics;
 using System.Text.Json;
@@ -38,7 +39,7 @@ public record AiModelTestResult
     public bool? EvaluationPassed { get; init; }
 
     /// <summary>Whether the model can turn a fuzzy source request into a bounded research plan.</summary>
-    public bool? ToolCallingPassed { get; init; }
+    public bool? PlanningIntentPassed { get; init; }
 
     public IReadOnlyList<AiModelTestCheck> Checks { get; init; } = [];
 
@@ -53,7 +54,7 @@ public record AiModelTestResult
     /// <summary>failed | warnings | passed — the settings page headline</summary>
     public string Verdict => !Viable
         ? "failed"
-        : EvaluationPassed == true && ModelListed != false && ToolCallingPassed != false ? "passed" : "warnings";
+        : EvaluationPassed == true && ModelListed != false && PlanningIntentPassed != false ? "passed" : "warnings";
 }
 
 /// <summary>
@@ -82,16 +83,16 @@ internal sealed record AiModelTestFixture(
 /// </summary>
 public class AiModelTester
 {
-    private readonly IChatClient _chatClient;
+    private readonly IAiExecutionGate _executionGate;
     private readonly AiOptions _options;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AiModelTester> _logger;
 
     public AiModelTester(
-        IChatClient chatClient, AiOptions options,
+        IAiExecutionGate executionGate, AiOptions options,
         IHttpClientFactory httpClientFactory, ILogger<AiModelTester> logger)
     {
-        _chatClient = chatClient;
+        _executionGate = executionGate;
         _options = options;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
@@ -111,6 +112,7 @@ public class AiModelTester
     {
         var stopwatch = Stopwatch.StartNew();
         var checks = new List<AiModelTestCheck>();
+        var operationId = $"capability-{Guid.NewGuid():N}"[..23];
 
         try
         {
@@ -133,7 +135,8 @@ public class AiModelTester
             // the production response mode.
             var mode = AiResponseMode.None;
             var (payload, tokensPerSecond) = await TryCompleteAsync(
-                systemPrompt, userPrompt, MealSuggestionResponseContract.JsonSchemaFormat, "json_schema", cancellationToken);
+                systemPrompt, userPrompt, MealSuggestionResponseContract.JsonSchemaFormat,
+                "json_schema", operationId, 1, cancellationToken);
             if (payload?.Suggestions is not null)
             {
                 mode = AiResponseMode.JsonSchema;
@@ -141,7 +144,8 @@ public class AiModelTester
             else
             {
                 (payload, tokensPerSecond) = await TryCompleteAsync(
-                    systemPrompt, userPrompt, responseFormat: null, "prompted", cancellationToken);
+                    systemPrompt, userPrompt, responseFormat: null,
+                    "prompted", operationId, 2, cancellationToken);
                 if (payload?.Suggestions is not null)
                 {
                     mode = AiResponseMode.PromptedJson;
@@ -156,18 +160,18 @@ public class AiModelTester
             }));
 
             bool? evaluationPassed = null;
-            bool? toolCallingPassed = null;
+            bool? planningIntentPassed = null;
             if (payload?.Suggestions is not null)
             {
                 var evaluation = Evaluate(payload, fixture);
                 checks.AddRange(evaluation);
                 evaluationPassed = evaluation.All(c => c.Passed);
 
-                toolCallingPassed = await TestPlanningIntentAsync(cancellationToken);
+                planningIntentPassed = await TestPlanningIntentAsync(operationId, cancellationToken);
                 checks.Add(new AiModelTestCheck(
                     "Multilingual planning instructions",
-                    toolCallingPassed.Value,
-                    toolCallingPassed.Value
+                    planningIntentPassed.Value,
+                    planningIntentPassed.Value
                         ? "The model understood counts, dates, courses and sources in English and Dutch"
                         : "The model could not reliably normalize multilingual planning requirements"));
             }
@@ -182,7 +186,7 @@ public class AiModelTester
                 ModelListed = modelListed,
                 ResponseMode = mode,
                 EvaluationPassed = evaluationPassed,
-                ToolCallingPassed = toolCallingPassed,
+                PlanningIntentPassed = planningIntentPassed,
                 Checks = checks,
                 TokensPerSecond = tokensPerSecond,
                 ElapsedMs = stopwatch.ElapsedMilliseconds
@@ -213,10 +217,12 @@ public class AiModelTester
         }
     }
 
-    private async Task<bool> TestPlanningIntentAsync(CancellationToken cancellationToken)
+    private async Task<bool> TestPlanningIntentAsync(
+        string operationId, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+        timeout.CancelAfter(TimeSpan.FromSeconds(
+            _executionGate.Profile(AiTaskKind.PlanningIntent).TimeoutSeconds));
         try
         {
             var request = new MealSuggestionRequest
@@ -229,22 +235,21 @@ public class AiModelTester
                 "Get 2 desserts from @recipes.example, one Monday and one Sunday.",
                 "Plan 2 desserts van @recipes.example, een op maandag en een op zondag."
             };
-            foreach (var prompt in prompts)
+            for (var promptIndex = 0; promptIndex < prompts.Length; promptIndex++)
             {
-                var response = await _chatClient.GetResponseAsync(
+                var prompt = prompts[promptIndex];
+                var execution = await _executionGate.ExecuteAsync(new AiExecutionRequest(
+                    AiTaskKind.PlanningIntent,
                     [
                         new ChatMessage(ChatRole.System, PlanningIntentContract.SystemPrompt),
                         new ChatMessage(ChatRole.User,
                             "Referenced source: recipes.example. Monday is 2099-01-05 and Sunday is 2099-01-11. Instructions: " + prompt)
                     ],
-                    new ChatOptions
-                    {
-                        MaxOutputTokens = Math.Min(_options.MaxOutputTokens, 1000),
-                        Temperature = 0,
-                        Reasoning = _options.DisableThinking
-                            ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None }
-                            : null
-                    }, timeout.Token);
+                    "capability-planning-intent-v1",
+                    operationId,
+                    promptIndex + 1,
+                    ResponseFormatPolicy: AiResponseFormatPolicy.None), timeout.Token);
+                var response = execution.Response;
                 var intent = PlanningIntentContract.Parse(response.Text, request);
                 var constraints = intent?.Constraints.Where(constraint =>
                         constraint.SourceHost == "recipes.example"
@@ -257,11 +262,13 @@ public class AiModelTester
                     || !dates.Contains(new DateOnly(2099, 1, 5))
                     || !dates.Contains(new DateOnly(2099, 1, 11)))
                 {
+                    await execution.ReportOutcomeAsync("validationFailure", "Multilingual planning intent did not satisfy the fixture");
                     _logger.LogWarning(
                         "Multilingual planning capability probe failed for prompt {Prompt}; raw response={Response}",
                         prompt, response.Text);
                     return false;
                 }
+                await execution.ReportOutcomeAsync("success");
             }
             return true;
         }
@@ -279,26 +286,26 @@ public class AiModelTester
     /// <summary>One completion attempt under the plain-path timeout; null payload on any failure.</summary>
     private async Task<(WeekSuggestionsPayload? Payload, double? TokensPerSecond)> TryCompleteAsync(
         string systemPrompt, string userPrompt, ChatResponseFormat? responseFormat,
-        string attemptName, CancellationToken cancellationToken)
+        string attemptName, string operationId, int attempt, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+        timeout.CancelAfter(TimeSpan.FromSeconds(
+            _executionGate.Profile(AiTaskKind.CapabilityPlanning).TimeoutSeconds));
 
         var attemptStopwatch = Stopwatch.StartNew();
         try
         {
-            var response = await _chatClient.GetResponseAsync(
+            var execution = await _executionGate.ExecuteAsync(new AiExecutionRequest(
+                AiTaskKind.CapabilityPlanning,
                 [new ChatMessage(ChatRole.System, systemPrompt), new ChatMessage(ChatRole.User, userPrompt)],
-                new ChatOptions
-                {
-                    MaxOutputTokens = _options.MaxOutputTokens,
-                    Temperature = (float)_options.Temperature,
-                    Reasoning = _options.DisableThinking
-                        ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None }
-                        : null,
-                    ResponseFormat = responseFormat
-                },
-                cancellationToken: timeout.Token);
+                "capability-week-planning-v1",
+                operationId,
+                attempt,
+                ResponseFormat: responseFormat,
+                ResponseFormatPolicy: responseFormat is null
+                    ? AiResponseFormatPolicy.None
+                    : AiResponseFormatPolicy.Force), timeout.Token);
+            var response = execution.Response;
             attemptStopwatch.Stop();
 
             double? tokensPerSecond = response.Usage?.OutputTokenCount is { } output && attemptStopwatch.Elapsed.TotalSeconds > 0
@@ -306,6 +313,8 @@ public class AiModelTester
                 : null;
 
             var payload = MealSuggestionResponseContract.Parse(response.Text);
+            await execution.ReportOutcomeAsync(payload?.Suggestions is not null ? "success" : "parseFailure",
+                payload?.Suggestions is null ? "Capability response was not parseable" : null);
             _logger.LogInformation(
                 "AI model test {Attempt} attempt: parseable={Parseable} in {ElapsedMs}ms (finish={Finish})",
                 attemptName, payload?.Suggestions is not null, attemptStopwatch.ElapsedMilliseconds, response.FinishReason);

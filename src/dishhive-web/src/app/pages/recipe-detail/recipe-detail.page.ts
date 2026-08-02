@@ -260,7 +260,7 @@ export class RecipeDetailPage implements OnInit {
     const existing = this.favoriteEntry(member.id);
     const request: Observable<unknown> = existing
       ? this.familyMembersService.deleteFavorite(member.id, existing.id)
-      : this.familyMembersService.addFavorite(member.id, { recipeId: recipe.id, dishName: recipe.title });
+      : this.familyMembersService.addFavorite(member.id, { recipeId: recipe.id });
 
     request.subscribe({
       next: () => this.loadFavorites(),

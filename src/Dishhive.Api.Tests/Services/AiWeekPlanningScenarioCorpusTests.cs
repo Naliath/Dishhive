@@ -22,6 +22,10 @@ public class AiWeekPlanningScenarioCorpusTests
             scenario.GetProperty("performanceBudgetMs").GetInt32().Should().BeGreaterThan(0);
             scenario.GetProperty("expectations").GetProperty("uniqueDishes").GetBoolean().Should().BeTrue();
             scenario.GetProperty("expectations").GetProperty("rejectCollectionPages").GetBoolean().Should().BeTrue();
+            if (scenario.GetProperty("expectations").TryGetProperty("minimumLocalRecipeLinks", out var minimumLinks))
+            {
+                minimumLinks.GetInt32().Should().BeGreaterThan(0);
+            }
             if (scenario.TryGetProperty("selectedDayOffsets", out var selectedDayOffsets))
             {
                 var offsets = selectedDayOffsets.EnumerateArray().Select(item => item.GetInt32()).ToList();

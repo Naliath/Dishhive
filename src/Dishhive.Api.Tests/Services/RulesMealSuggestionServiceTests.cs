@@ -169,7 +169,7 @@ public class RulesMealSuggestionServiceTests
     }
 
     [Fact]
-    public async Task Suggest_MatchesRecipeByTitle()
+    public async Task Suggest_FreeTextFavoriteMatchingRecipeTitle_RemainsUnlinked()
     {
         var recipeId = Guid.NewGuid();
         var request = Request(
@@ -179,7 +179,38 @@ public class RulesMealSuggestionServiceTests
 
         var suggestions = await _service.SuggestAsync(request);
 
-        suggestions[0].RecipeId.Should().Be(recipeId);
+        suggestions[0].RecipeId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Suggest_OriginalTitleFavorite_LinksAndUsesCurrentLocalizedTitle()
+    {
+        var recipeId = Guid.NewGuid();
+        var request = Request(
+            daysToFill: [WeekStart],
+            favorites:
+            [
+                new FavoriteDish
+                {
+                    MemberName = "Anna",
+                    RecipeId = recipeId,
+                    DishName = "Groene lasagne"
+                }
+            ],
+            recipes:
+            [
+                new RecipeOption
+                {
+                    Id = recipeId,
+                    Title = "Green lasagna",
+                    OriginalTitle = "Groene lasagne"
+                }
+            ]);
+
+        var suggestion = (await _service.SuggestAsync(request)).Should().ContainSingle().Subject;
+
+        suggestion.RecipeId.Should().Be(recipeId);
+        suggestion.DishName.Should().Be("Green lasagna");
     }
 
     [Fact]

@@ -106,4 +106,6 @@ public sealed record DaySuggestionPayload(
     [property: Description("Empty means every household member; otherwise exact ids from the household list")]
     IReadOnlyList<string>? AttendeeIds = null,
     [property: Description("Exact ids from the normalized planning intent satisfied by this suggestion")]
-    IReadOnlyList<string>? ConstraintIds = null);
+    IReadOnlyList<string>? ConstraintIds = null,
+    [property: Description("Exact id from the known recipes list, or null for freezer, external, or free-text dishes")]
+    string? LocalRecipeId = null);

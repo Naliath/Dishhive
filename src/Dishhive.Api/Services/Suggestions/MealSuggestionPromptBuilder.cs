@@ -31,6 +31,8 @@ public static class MealSuggestionPromptBuilder
             nameof(DaySuggestionPayload.DishName));
         var recipeTitleField = AiJsonContract.PropertyName<DaySuggestionPayload>(
             nameof(DaySuggestionPayload.RecipeTitle));
+        var localRecipeIdField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+            nameof(DaySuggestionPayload.LocalRecipeId));
         var freezerItemIdField = AiJsonContract.PropertyName<DaySuggestionPayload>(
             nameof(DaySuggestionPayload.FreezerItemId));
         var externalCandidateIdField = AiJsonContract.PropertyName<DaySuggestionPayload>(
@@ -88,8 +90,9 @@ public static class MealSuggestionPromptBuilder
           every dish you suggest for that day must satisfy it.
         - Instructions may reference a recipe collection as #[Collection Name]. When a
           day's instruction references a collection, the dish for that day MUST be one of
-          the recipes listed under "Referenced collections" for it (copy the exact title
-          into {{recipeTitleField}}). When the planner's general instructions reference one, prefer
+          the recipes listed under "Referenced collections" for it. Find that title in the
+          known-recipes list and copy its exact current title into {{recipeTitleField}} and its
+          exact id into {{localRecipeIdField}}. When the planner's general instructions reference one, prefer
           its recipes for the matching wish. If a referenced collection has no recipe list
           below, treat the reference as a plain-text hint.
         - Instructions may reference an EXTERNAL website as @[Source] (listed under
@@ -98,7 +101,8 @@ public static class MealSuggestionPromptBuilder
           requested source-backed dish, choose only from those candidates, check its
           ingredients, time and type against every constraint, and copy its {{candidateIdField}}
           into "{{externalCandidateIdField}}". Use the recipe's real title as {{dishNameField}} and leave
-          {{recipeTitleField}} null (it is not in the store yet — it will be imported when accepted).
+          {{recipeTitleField}} and {{localRecipeIdField}} null (it is not in the store yet — it will be
+          imported when accepted).
           Every day without a @[Source] reference must be filled from the known-recipes list
           below or a plain dish name, never from a supplied external candidate.
         - When the planner gives additional instructions, they override the other
@@ -108,8 +112,12 @@ public static class MealSuggestionPromptBuilder
         - When recipe research returns verified candidates for a requested source, every
           requested source-backed dish must use one of those candidates. Never silently
           substitute a known/local recipe while describing it as coming from that source.
-        - Prefer recipes from the known-recipes list; when you use one, copy its exact title
-          into {{recipeTitleField}}.
+        - Prefer recipes from the known-recipes list. Every entry has a stable id and a
+          currentTitle in the application's active language; some also have an
+          originalTitleAlias for recognition only. When you use a known recipe, copy its
+          exact id into {{localRecipeIdField}} and its exact currentTitle into BOTH
+          {{recipeTitleField}} and {{dishNameField}}. Never output originalTitleAlias as the dish title.
+          Leave {{localRecipeIdField}} null for freezer, external, and plain free-text dishes.
 
         Reply with ONLY a JSON object in exactly the documented response shape, no other text:
         {{MealSuggestionResponseContract.ExampleJson}}
@@ -132,6 +140,8 @@ public static class MealSuggestionPromptBuilder
         var culture = CultureInfo.InvariantCulture;
         var freezerItemIdField = AiJsonContract.PropertyName<DaySuggestionPayload>(
             nameof(DaySuggestionPayload.FreezerItemId));
+        var localRecipeIdField = AiJsonContract.PropertyName<DaySuggestionPayload>(
+            nameof(DaySuggestionPayload.LocalRecipeId));
         sb.AppendLine($"Week starting: {request.WeekStart:yyyy-MM-dd}");
         sb.AppendLine("Authoritative weekday/date mapping (weekday words in instructions map exactly to these dates):");
         foreach (var date in Enumerable.Range(0, 7).Select(request.WeekStart.AddDays))
@@ -163,7 +173,10 @@ public static class MealSuggestionPromptBuilder
             sb.AppendLine("Favorites:");
             foreach (var group in request.Favorites.GroupBy(favorite => favorite.MemberName))
             {
-                sb.AppendLine($"- {group.Key}: {string.Join(", ", group.Select(favorite => favorite.DishName))}");
+                sb.AppendLine($"- {group.Key}: {string.Join(", ", group.Select(favorite =>
+                    favorite.RecipeId is { } recipeId
+                        ? $"\"{favorite.DishName}\" [linked localRecipeId={recipeId}]"
+                        : $"\"{favorite.DishName}\" [free text; localRecipeId must stay null]"))}");
             }
         }
 
@@ -246,9 +259,16 @@ public static class MealSuggestionPromptBuilder
             .Where(recipe => !request.AllergyExcludedRecipeIds.Contains(recipe.Id))
             .Select(recipe =>
             {
-                var line = recipe.Category != null
-                    ? $"\"{recipe.Title}\" ({recipe.Category})"
-                    : $"\"{recipe.Title}\"";
+                var line = $"id={recipe.Id}; currentTitle=\"{recipe.Title}\"";
+                if (!string.IsNullOrWhiteSpace(recipe.OriginalTitle)
+                    && !string.Equals(recipe.OriginalTitle, recipe.Title, StringComparison.OrdinalIgnoreCase))
+                {
+                    line += $"; originalTitleAlias=\"{recipe.OriginalTitle}\"";
+                }
+                if (recipe.Category != null)
+                {
+                    line += $"; category=\"{recipe.Category}\"";
+                }
                 if (recipe.FactsAssessed)
                 {
                     line += recipe.ContainsClasses.Count > 0
@@ -274,7 +294,7 @@ public static class MealSuggestionPromptBuilder
             minLines: 5);
         AppendBudgeted(
             sb,
-            "Known recipes (prefer these; copy the exact title):",
+            $"Known recipes (copy id to {localRecipeIdField}; always display currentTitle):",
             recipeLines,
             unlimited ? int.MaxValue : Math.Max(0, budgetChars - sb.Length),
             minLines: 10);

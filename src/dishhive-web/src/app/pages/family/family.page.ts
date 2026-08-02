@@ -167,7 +167,7 @@ export class FamilyPage implements OnInit {
 
   /** Add a favorite linked to a recipe from the search results */
   addFavoriteRecipe(recipe: RecipeListItem): void {
-    this.saveFavorite({ recipeId: recipe.id, dishName: recipe.title });
+    this.saveFavorite({ recipeId: recipe.id });
   }
 
   /** Add the typed text as a free-text favorite */
@@ -178,7 +178,7 @@ export class FamilyPage implements OnInit {
     }
   }
 
-  private saveFavorite(favorite: { recipeId?: string; dishName: string }): void {
+  private saveFavorite(favorite: { recipeId?: string; dishName?: string }): void {
     const memberId = this.editingId();
     if (!memberId) {
       return;

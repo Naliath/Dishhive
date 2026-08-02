@@ -203,13 +203,13 @@ public class FamilyMembersController : ControllerBase
         var favorites = await _context.FamilyMemberFavorites
             .AsNoTracking()
             .Where(f => f.FamilyMemberId == id)
-            .OrderBy(f => f.DishName)
+            .OrderBy(f => f.Recipe != null ? f.Recipe.Title : f.DishName)
             .Select(f => new FamilyMemberFavoriteDto
             {
                 Id = f.Id,
                 FamilyMemberId = f.FamilyMemberId,
                 RecipeId = f.RecipeId,
-                DishName = f.DishName
+                DishName = f.Recipe != null ? f.Recipe.Title : f.DishName
             })
             .ToListAsync();
 
@@ -217,7 +217,8 @@ public class FamilyMembersController : ControllerBase
     }
 
     /// <summary>
-    /// Add a favorite dish (recipe link, free-text dish name, or both)
+    /// Add a favorite dish. RecipeId creates a linked favorite whose title is
+    /// canonicalized from the recipe; without it, DishName is intentionally free text.
     /// </summary>
     [HttpPost("{id:guid}/favorites")]
     [ProducesResponseType(typeof(FamilyMemberFavoriteDto), StatusCodes.Status201Created)]
@@ -257,8 +258,9 @@ public class FamilyMembersController : ControllerBase
                 });
             }
 
-            // Denormalize so the favorite survives recipe deletion
-            dishName ??= recipeTitle;
+            // A recipe selection is a recipe link, never an arbitrary text/title pair.
+            // Keep the current title denormalized solely so the favorite survives deletion.
+            dishName = recipeTitle;
         }
 
         var favorite = new FamilyMemberFavorite

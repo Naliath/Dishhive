@@ -22,9 +22,6 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
             .Where(member => member.Id != Guid.Empty)
             .Select(member => member.Id)
             .ToHashSet();
-        var recipesByTitle = request.KnownRecipes
-            .GroupBy(recipe => recipe.Title, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First().Id, StringComparer.OrdinalIgnoreCase);
         var frozenById = request.AvailableFrozenItems
             .GroupBy(item => item.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
@@ -79,17 +76,18 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
                 }
             }
 
-            var dishName = freezerItem?.Name ?? item.DishName.Trim();
-            Guid? recipeId = null;
-            if (!string.IsNullOrWhiteSpace(item.RecipeTitle)
-                && recipesByTitle.TryGetValue(item.RecipeTitle.Trim(), out var byTitle))
+            var modelDishName = item.DishName.Trim();
+            var localRecipe = LocalRecipeResolver.ById(request.KnownRecipes, item.LocalRecipeId);
+            if (!string.IsNullOrWhiteSpace(item.LocalRecipeId) && localRecipe == null)
             {
-                recipeId = byTitle;
+                logger.LogWarning(
+                    "AI proposed unknown localRecipeId {RecipeId} for {Date}; trying exact title aliases instead",
+                    item.LocalRecipeId, date);
             }
-            else if (recipesByTitle.TryGetValue(dishName, out var byName))
-            {
-                recipeId = byName;
-            }
+            localRecipe ??= LocalRecipeResolver.ByTitle(
+                request.KnownRecipes, item.RecipeTitle, modelDishName);
+            var recipeId = localRecipe?.Id;
+            var dishName = freezerItem?.Name ?? localRecipe?.Title ?? modelDishName;
 
             ExternalRecipeCandidate? externalCandidate = null;
             if (recipeId is null && !string.IsNullOrWhiteSpace(item.ExternalCandidateId))
@@ -168,7 +166,7 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
 
         var result = suggestions
             .GroupBy(suggestion => (suggestion.Date, suggestion.MealType, suggestion.Course,
-                Dish: suggestion.DishName!.ToLowerInvariant()))
+                Identity: SuggestionIdentity(suggestion)))
             .Select(group => group.First())
             .GroupBy(suggestion => suggestion.Date)
             .SelectMany(group => group.Take(6))
@@ -182,9 +180,7 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
             var seenAcrossDates = new Dictionary<string, DateOnly>(StringComparer.OrdinalIgnoreCase);
             foreach (var suggestion in result)
             {
-                var key = !string.IsNullOrWhiteSpace(suggestion.SourceUrl)
-                    ? $"url:{suggestion.SourceUrl}"
-                    : $"dish:{suggestion.DishName?.Trim()}";
+                var key = SuggestionIdentity(suggestion);
                 if (seenAcrossDates.TryGetValue(key, out var firstDate)
                     && firstDate != suggestion.Date)
                 {
@@ -201,6 +197,13 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
         LinkFreezerItems(result, request);
         return result;
     }
+
+    private static string SuggestionIdentity(MealSuggestion suggestion) =>
+        suggestion.RecipeId is { } recipeId
+            ? $"recipe:{recipeId}"
+            : !string.IsNullOrWhiteSpace(suggestion.SourceUrl)
+                ? $"url:{suggestion.SourceUrl.Trim()}"
+                : $"dish:{suggestion.DishName?.Trim().ToLowerInvariant()}";
 
     public IReadOnlyList<MealSuggestion> Finalize(
         IReadOnlyList<MealSuggestion> suggestions,

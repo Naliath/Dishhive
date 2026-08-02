@@ -50,6 +50,36 @@ public class FamilyMemberFavoritesIntegrationTests : TestBase
     }
 
     [Fact]
+    public async Task AddFavorite_WithRecipeAndStaleText_PreservesLinkAndUsesCurrentRecipeTitle()
+    {
+        var member = await AddMemberAsync();
+        var recipe = new Recipe
+        {
+            Title = "Green lasagna",
+            OriginalTitle = "Groene lasagne",
+            ContentLanguage = "en"
+        };
+        DbContext.Recipes.Add(recipe);
+        await DbContext.SaveChangesAsync();
+
+        var response = await Client.PostAsJsonAsync(
+            $"/api/familymembers/{member.Id}/favorites",
+            new CreateFamilyMemberFavoriteDto
+            {
+                RecipeId = recipe.Id,
+                DishName = "Groene lasagne"
+            });
+        var created = await response.Content.ReadFromJsonAsync<FamilyMemberFavoriteDto>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        created!.RecipeId.Should().Be(recipe.Id);
+        created.DishName.Should().Be("Green lasagna");
+        using var freshContext = CreateFreshContext();
+        freshContext.FamilyMemberFavorites.Should().ContainSingle(favorite =>
+            favorite.RecipeId == recipe.Id && favorite.DishName == "Green lasagna");
+    }
+
+    [Fact]
     public async Task AddFavorite_WithoutContent_ReturnsBadRequest()
     {
         var member = await AddMemberAsync();
@@ -85,6 +115,40 @@ public class FamilyMemberFavoritesIntegrationTests : TestBase
             $"/api/familymembers/{anna.Id}/favorites");
 
         favorites.Should().ContainSingle(f => f.DishName == "Pasta");
+    }
+
+    [Fact]
+    public async Task GetFavorites_LinkedRecipeUsesItsCurrentTitleWhileFreeTextStaysUnchanged()
+    {
+        var member = await AddMemberAsync();
+        var recipe = new Recipe
+        {
+            Title = "Green lasagna",
+            OriginalTitle = "Groene lasagne",
+            ContentLanguage = "en"
+        };
+        DbContext.Recipes.Add(recipe);
+        DbContext.FamilyMemberFavorites.AddRange(
+            new FamilyMemberFavorite
+            {
+                FamilyMemberId = member.Id,
+                Recipe = recipe,
+                DishName = "Groene lasagne"
+            },
+            new FamilyMemberFavorite
+            {
+                FamilyMemberId = member.Id,
+                DishName = "Groene lasagne"
+            });
+        await DbContext.SaveChangesAsync();
+
+        var favorites = await Client.GetFromJsonAsync<List<FamilyMemberFavoriteDto>>(
+            $"/api/familymembers/{member.Id}/favorites");
+
+        favorites.Should().ContainSingle(favorite =>
+            favorite.RecipeId == recipe.Id && favorite.DishName == "Green lasagna");
+        favorites.Should().ContainSingle(favorite =>
+            favorite.RecipeId == null && favorite.DishName == "Groene lasagne");
     }
 
     [Fact]

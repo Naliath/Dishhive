@@ -75,6 +75,25 @@ internal static class PlanningIntentValidator
             }
         }
 
+        foreach (var item in suggestions.Where(item => !string.IsNullOrWhiteSpace(item.LocalRecipeId)))
+        {
+            if (!Guid.TryParse(item.LocalRecipeId?.Trim(), out var localRecipeId)
+                || request.KnownRecipes.All(recipe => recipe.Id != localRecipeId))
+            {
+                issues.Add($"plan: unknown local recipe id {item.LocalRecipeId} on {item.Date}");
+            }
+            else if (request.AllergyExcludedRecipeIds.Contains(localRecipeId))
+            {
+                issues.Add($"plan: local recipe {localRecipeId} on {item.Date} conflicts with a household allergy");
+            }
+
+            if (!string.IsNullOrWhiteSpace(item.ExternalCandidateId)
+                || !string.IsNullOrWhiteSpace(item.FreezerItemId))
+            {
+                issues.Add($"plan: local recipe id on {item.Date} cannot also identify an external or freezer item");
+            }
+        }
+
         foreach (var item in suggestions.Where(item => !string.IsNullOrWhiteSpace(item.ExternalCandidateId)))
         {
             var claimsSourceConstraint = intent.Constraints.Any(constraint =>
@@ -156,7 +175,8 @@ internal static class PlanningIntentValidator
                         $"Verified selection for {constraint.Id}", null,
                         MealType: constraint.MealType,
                         Course: constraint.Course, AttendeeIds: [],
-                        ConstraintIds: [constraint.Id]);
+                        ConstraintIds: [constraint.Id],
+                        LocalRecipeId: recipe.Id.ToString());
                 }
                 items.RemoveAll(item => string.Equals(item.Date, replacement.Date, StringComparison.Ordinal)
                     && item.MealType == replacement.MealType
@@ -183,9 +203,11 @@ internal static class PlanningIntentValidator
             assessed = candidate.FactsAssessed;
             return true;
         }
-        var title = suggestion.RecipeTitle ?? suggestion.DishName;
-        var recipe = request.KnownRecipes.FirstOrDefault(item =>
-            string.Equals(item.Title, title, StringComparison.OrdinalIgnoreCase));
+        var recipe = LocalRecipeResolver.Resolve(
+            request.KnownRecipes,
+            suggestion.LocalRecipeId,
+            suggestion.RecipeTitle,
+            suggestion.DishName);
         sourceHost = null;
         facts = recipe?.ContainsClasses ?? [];
         assessed = recipe?.FactsAssessed == true;
@@ -203,7 +225,9 @@ internal static class PlanningIntentValidator
     private static string Identity(DaySuggestionPayload item) =>
         !string.IsNullOrWhiteSpace(item.ExternalCandidateId)
             ? $"candidate:{item.ExternalCandidateId.Trim()}"
-            : $"dish:{item.DishName?.Trim()}";
+            : !string.IsNullOrWhiteSpace(item.LocalRecipeId)
+                ? $"recipe:{item.LocalRecipeId.Trim()}"
+                : $"dish:{item.DishName?.Trim()}";
 
     private static string? NormalizeHost(string? host)
     {

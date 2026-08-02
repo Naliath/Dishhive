@@ -90,6 +90,13 @@ function Test-Iteration($scenario, [datetime]$weekStart, $response, [long]$durat
         }
     }
 
+    if ($scenario.expectations.PSObject.Properties.Name -contains "minimumLocalRecipeLinks") {
+        $linked = @($suggestions | Where-Object { $_.recipeId })
+        if ($linked.Count -lt [int]$scenario.expectations.minimumLocalRecipeLinks) {
+            $failures.Add("Expected at least $($scenario.expectations.minimumLocalRecipeLinks) local recipe link(s), got $($linked.Count)")
+        }
+    }
+
     foreach ($source in @($scenario.expectations.sources)) {
         $course = Get-CourseNumber $source.course
         $matches = @($suggestions | Where-Object {

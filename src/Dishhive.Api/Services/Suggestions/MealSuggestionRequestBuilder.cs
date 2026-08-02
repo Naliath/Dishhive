@@ -59,18 +59,24 @@ public class MealSuggestionRequestBuilder
 
         var favorites = await _context.FamilyMemberFavorites
             .AsNoTracking()
-            .Where(f => memberIds.Contains(f.FamilyMemberId) && f.DishName != null)
-            .Join(_context.FamilyMembers, f => f.FamilyMemberId, m => m.Id,
-                (f, m) => new FavoriteDish { MemberName = m.Name, DishName = f.DishName! })
+            .Where(f => memberIds.Contains(f.FamilyMemberId)
+                && (f.RecipeId != null || f.DishName != null))
+            .Select(f => new FavoriteDish
+            {
+                MemberName = f.FamilyMember!.Name,
+                RecipeId = f.RecipeId,
+                DishName = f.Recipe != null ? f.Recipe.Title : f.DishName!
+            })
             .ToListAsync(cancellationToken);
 
         var historyStart = today.AddDays(-HistoryDays);
         var historyMeals = _context.PlannedMeals
             .AsNoTracking()
-            .Where(m => m.Date >= historyStart && m.Date < today && m.DishName != null);
+            .Where(m => m.Date >= historyStart && m.Date < today
+                && (m.RecipeId != null || m.DishName != null));
 
         var recentDishes = await historyMeals
-            .GroupBy(m => m.DishName!)
+            .GroupBy(m => m.Recipe != null ? m.Recipe.Title : m.DishName!)
             .Select(g => new DishHistoryEntry
             {
                 DishName = g.Key,
@@ -81,7 +87,11 @@ public class MealSuggestionRequestBuilder
             .ToListAsync(cancellationToken);
 
         var ratingsByDish = await historyMeals
-            .SelectMany(m => m.Ratings.Select(r => new { DishName = m.DishName!, r.Rating }))
+            .SelectMany(m => m.Ratings.Select(r => new
+            {
+                DishName = m.Recipe != null ? m.Recipe.Title : m.DishName!,
+                r.Rating
+            }))
             .GroupBy(x => x.DishName)
             .Select(g => new { DishName = g.Key, Average = g.Average(x => (double)x.Rating) })
             .ToDictionaryAsync(x => x.DishName, cancellationToken);
@@ -95,7 +105,13 @@ public class MealSuggestionRequestBuilder
 
         var allRecipes = await _context.Recipes
             .AsNoTracking()
-            .Select(r => new RecipeOption { Id = r.Id, Title = r.Title, Category = r.Category })
+            .Select(r => new RecipeOption
+            {
+                Id = r.Id,
+                Title = r.Title,
+                OriginalTitle = r.OriginalTitle,
+                Category = r.Category
+            })
             .ToListAsync(cancellationToken);
 
         var weekMeals = await _context.PlannedMeals
@@ -103,13 +119,16 @@ public class MealSuggestionRequestBuilder
             .Where(m => m.Date >= weekStart && m.Date <= weekEnd)
             .ToListAsync(cancellationToken);
 
+        var recipesById = allRecipes.ToDictionary(recipe => recipe.Id);
         var weekPlan = weekMeals
             .Select(m => new ExistingMeal
             {
                 Date = m.Date,
                 MealType = m.MealType,
                 Course = m.Course,
-                DishName = m.DishName,
+                DishName = m.RecipeId is { } recipeId && recipesById.TryGetValue(recipeId, out var recipe)
+                    ? recipe.Title
+                    : m.DishName,
                 VagueInstruction = m.VagueInstruction
             })
             .ToList();
@@ -161,7 +180,10 @@ public class MealSuggestionRequestBuilder
         // alphabetical slice: favorites, well-rated and collection-referenced
         // recipes rank highest; recently-eaten ones are pushed down for variety.
         // The prompt then trims this ranked list to the token budget.
-        var favoriteTitles = favorites.Select(f => f.DishName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var favoriteRecipeIds = favorites
+            .Where(favorite => favorite.RecipeId.HasValue)
+            .Select(favorite => favorite.RecipeId!.Value)
+            .ToHashSet();
         var constraintTitles = collectionConstraints
             .SelectMany(c => c.RecipeTitles)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -170,13 +192,13 @@ public class MealSuggestionRequestBuilder
             .GroupBy(d => d.DishName, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Max(d => d.AverageRating!.Value), StringComparer.OrdinalIgnoreCase);
 
-        double Score(string title)
+        double Score(RecipeOption recipe)
         {
             double score = 0;
-            if (constraintTitles.Contains(title)) score += 1000; // keep referenced titles linkable
-            if (favoriteTitles.Contains(title)) score += 100;
-            if (ratingByTitle.TryGetValue(title, out var rating)) score += rating * 20;
-            if (lastPlannedByTitle.TryGetValue(title, out var last))
+            if (constraintTitles.Contains(recipe.Title)) score += 1000; // keep referenced titles linkable
+            if (favoriteRecipeIds.Contains(recipe.Id)) score += 100;
+            if (ratingByTitle.TryGetValue(recipe.Title, out var rating)) score += rating * 20;
+            if (lastPlannedByTitle.TryGetValue(recipe.Title, out var last))
             {
                 var ageDays = today.DayNumber - last.DayNumber;
                 score += ageDays < 14 ? -20 : ageDays < 30 ? 5 : 20;
@@ -189,7 +211,7 @@ public class MealSuggestionRequestBuilder
         }
 
         var knownRecipes = allRecipes
-            .OrderByDescending(r => Score(r.Title))
+            .OrderByDescending(Score)
             .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
             .Take(RecipeCandidateCap)
             .ToList();

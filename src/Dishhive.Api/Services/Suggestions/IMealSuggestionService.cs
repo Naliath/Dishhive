@@ -33,10 +33,15 @@ public record MemberProfile
     public string? PreferenceNotes { get; init; }
 }
 
-/// <summary>A member's favorite dish (denormalized name)</summary>
+/// <summary>
+/// A member's favorite. RecipeId distinguishes a selected local recipe from an
+/// intentionally free-text dish; DishName remains populated for display and deletion
+/// fallback.
+/// </summary>
 public record FavoriteDish
 {
     public required string MemberName { get; init; }
+    public Guid? RecipeId { get; init; }
     public required string DishName { get; init; }
 }
 
@@ -54,7 +59,17 @@ public record DishHistoryEntry
 public record RecipeOption
 {
     public required Guid Id { get; init; }
+
+    /// <summary>The title currently shown in the application's active language.</summary>
     public required string Title { get; init; }
+
+    /// <summary>
+    /// Preserved source-language title, when the recipe has been localized. This is
+    /// an input alias only: linked suggestions are always displayed with
+    /// <see cref="Title"/>.
+    /// </summary>
+    public string? OriginalTitle { get; init; }
+
     public string? Category { get; init; }
 
     /// <summary>

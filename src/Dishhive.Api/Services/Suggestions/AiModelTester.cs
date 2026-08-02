@@ -485,9 +485,20 @@ public class AiModelTester
         var suggestions = (payload.Suggestions ?? [])
             .Where(s => !string.IsNullOrWhiteSpace(s.DishName)
                 && DateOnly.TryParse(s.Date, System.Globalization.CultureInfo.InvariantCulture, out _))
-            .Select(s => (
-                Date: DateOnly.Parse(s.Date!, System.Globalization.CultureInfo.InvariantCulture),
-                Titles: new[] { s.DishName!.Trim(), s.RecipeTitle?.Trim() ?? "" }))
+            .Select(s =>
+            {
+                var recipe = LocalRecipeResolver.Resolve(
+                    fixture.Request.KnownRecipes, s.LocalRecipeId, s.RecipeTitle, s.DishName);
+                return (
+                    Date: DateOnly.Parse(s.Date!, System.Globalization.CultureInfo.InvariantCulture),
+                    Titles: new[]
+                    {
+                        s.DishName!.Trim(),
+                        s.RecipeTitle?.Trim() ?? "",
+                        recipe?.Title ?? "",
+                        recipe?.OriginalTitle ?? ""
+                    });
+            })
             .ToList();
 
         bool Mentions(IEnumerable<string> titles, string candidate) =>

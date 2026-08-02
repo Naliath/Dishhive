@@ -216,6 +216,74 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
+    public async Task Suggest_LocalRecipeId_LinksRecipeAndRestoresCurrentLocalizedTitle()
+    {
+        var recipeId = Guid.NewGuid();
+        var chatClient = new FakeChatClient(
+            $$"""
+            {"suggestions":[
+              {"date":"2026-06-15","dishName":"Groene lasagne","recipeTitle":"Groene lasagne","localRecipeId":"{{recipeId}}"}
+            ]}
+            """);
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(
+            Request(recipes:
+            [
+                new RecipeOption
+                {
+                    Id = recipeId,
+                    Title = "Green lasagna",
+                    OriginalTitle = "Groene lasagne"
+                }
+            ]));
+
+        var suggestion = suggestions.Should().ContainSingle().Subject;
+        suggestion.RecipeId.Should().Be(recipeId);
+        suggestion.DishName.Should().Be("Green lasagna");
+    }
+
+    [Fact]
+    public async Task Suggest_OriginalTitleAliasWithoutId_LinksUniquelyAndRestoresCurrentTitle()
+    {
+        var recipeId = Guid.NewGuid();
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Groene lasagne","recipeTitle":"Groene lasagne"}]}""");
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(
+            Request(recipes:
+            [
+                new RecipeOption
+                {
+                    Id = recipeId,
+                    Title = "Green lasagna",
+                    OriginalTitle = "Groene lasagne"
+                }
+            ]));
+
+        var suggestion = suggestions.Should().ContainSingle().Subject;
+        suggestion.RecipeId.Should().Be(recipeId);
+        suggestion.DishName.Should().Be("Green lasagna");
+    }
+
+    [Fact]
+    public async Task Suggest_AmbiguousTitleAliasWithoutId_IsNotLinkedToAnArbitraryRecipe()
+    {
+        var chatClient = new FakeChatClient(
+            """{"suggestions":[{"date":"2026-06-15","dishName":"Stoofpot","recipeTitle":"Stoofpot"}]}""");
+
+        var suggestions = await CreateService(chatClient).SuggestAsync(
+            Request(recipes:
+            [
+                new RecipeOption { Id = Guid.NewGuid(), Title = "Beef stew", OriginalTitle = "Stoofpot" },
+                new RecipeOption { Id = Guid.NewGuid(), Title = "Vegetable stew", OriginalTitle = "Stoofpot" }
+            ]));
+
+        var suggestion = suggestions.Should().ContainSingle().Subject;
+        suggestion.RecipeId.Should().BeNull();
+        suggestion.DishName.Should().Be("Stoofpot");
+    }
+
+    [Fact]
     public async Task Suggest_DatesOutsideDaysToFill_AreDropped()
     {
         var chatClient = new FakeChatClient(
@@ -437,6 +505,46 @@ public class LlmMealSuggestionServiceTests
 
         suggestions.Should().HaveCount(2);
         suggestions.Select(s => s.Date).Should().AllBeEquivalentTo(WeekStart);
+    }
+
+    [Fact]
+    public void BuildUserPrompt_LocalizedRecipe_CarriesStableIdAndSeparatesCurrentTitleFromAlias()
+    {
+        var recipeId = Guid.NewGuid();
+        var request = Request(recipes:
+            [
+                new RecipeOption
+                {
+                    Id = recipeId,
+                    Title = "Green lasagna",
+                    OriginalTitle = "Groene lasagne",
+                    Category = "Pasta"
+                }
+            ]) with
+        {
+            Favorites =
+            [
+                new FavoriteDish
+                {
+                    MemberName = "Anna",
+                    RecipeId = recipeId,
+                    DishName = "Green lasagna"
+                },
+                new FavoriteDish { MemberName = "Anna", DishName = "Grandma's stew" }
+            ]
+        };
+
+        var prompt = MealSuggestionPromptBuilder.BuildUserPrompt(request);
+
+        prompt.Should().Contain($"id={recipeId}");
+        prompt.Should().Contain("currentTitle=\"Green lasagna\"");
+        prompt.Should().Contain("originalTitleAlias=\"Groene lasagne\"");
+        prompt.Should().Contain($"\"Green lasagna\" [linked localRecipeId={recipeId}]");
+        prompt.Should().Contain("\"Grandma's stew\" [free text; localRecipeId must stay null]");
+        MealSuggestionPromptBuilder.ProtectedSystemPrompt.Should().Contain(
+            "exact id into localRecipeId");
+        MealSuggestionPromptBuilder.ProtectedSystemPrompt.Should().Contain(
+            "Never output originalTitleAlias as the dish title");
     }
 
     [Fact]

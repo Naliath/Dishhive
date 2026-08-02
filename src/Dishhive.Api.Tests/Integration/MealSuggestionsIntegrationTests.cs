@@ -172,6 +172,79 @@ public class MealSuggestionsIntegrationTests : TestBase
     }
 
     [Fact]
+    public async Task SuggestWeek_LinkedPlanningContext_UsesCurrentLocalizedRecipeTitle()
+    {
+        var stub = new StubSuggestionService();
+        using var factory = new StubbedFactory(stub);
+        using var client = factory.CreateClient();
+        var recipeId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var historicalDate = DateOnly.FromDateTime(DateTime.Today).AddDays(-10);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<Data.DishhiveDbContext>();
+            context.Recipes.Add(new Models.Recipe
+            {
+                Id = recipeId,
+                Title = "Green lasagna",
+                OriginalTitle = "Groene lasagne",
+                ContentLanguage = "en"
+            });
+            context.FamilyMembers.Add(new Models.FamilyMember
+            {
+                Id = memberId,
+                Name = "Localized-title regression member"
+            });
+            context.FamilyMemberFavorites.Add(new Models.FamilyMemberFavorite
+            {
+                Id = Guid.NewGuid(),
+                FamilyMemberId = memberId,
+                RecipeId = recipeId,
+                DishName = "Groene lasagne"
+            });
+            context.PlannedMeals.AddRange(
+                new Models.PlannedMeal
+                {
+                    Id = Guid.NewGuid(),
+                    Date = historicalDate,
+                    RecipeId = recipeId,
+                    DishName = "Groene lasagne"
+                },
+                new Models.PlannedMeal
+                {
+                    Id = Guid.NewGuid(),
+                    Date = Monday,
+                    RecipeId = recipeId,
+                    DishName = "Groene lasagne"
+                });
+            await context.SaveChangesAsync();
+        }
+
+        var response = await client.PostAsJsonAsync("/api/plannedmeals/suggestions",
+            new SuggestWeekRequestDto
+            {
+                WeekStart = Monday,
+                AttendeeIds = [memberId],
+                SelectedDates = [Monday.AddDays(6)]
+            });
+
+        response.IsSuccessStatusCode.Should().BeTrue();
+        var request = stub.LastRequest!;
+        var recipe = request.KnownRecipes.Single(item => item.Id == recipeId);
+        recipe.Title.Should().Be("Green lasagna");
+        recipe.OriginalTitle.Should().Be("Groene lasagne");
+        request.Favorites.Should().ContainSingle(item =>
+            item.MemberName == "Localized-title regression member"
+            && item.RecipeId == recipeId
+            && item.DishName == "Green lasagna");
+        request.RecentDishes.Should().ContainSingle(item =>
+            item.DishName == "Green lasagna" && item.LastPlanned == historicalDate);
+        request.WeekPlan.Should().ContainSingle(item =>
+            item.Date == Monday && item.DishName == "Green lasagna");
+    }
+
+    [Fact]
     public async Task SuggestWeek_CollectionMentions_AreResolvedIntoConstraints()
     {
         var stub = new StubSuggestionService();

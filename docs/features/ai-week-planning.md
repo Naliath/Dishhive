@@ -412,8 +412,16 @@ The system prompt is split in two (`MealSuggestionPromptBuilder`):
   tuning, which the per-request Instructions field (transient, 500 chars) can't serve.
 - **`ProtectedSystemPrompt`** — always appended, never editable: the allergy rule, the
   freezer/collection/source mechanics and the JSON contract. These aren't style — post-
-  processing depends on them (exact recipeTitle and freezer-name matching, the sourceUrl
-  contract). Shown read-only in the settings UI so the user sees the full picture.
+  processing depends on them (stable local recipe ids, freezer item ids and verified
+  external candidate ids). Shown read-only in the settings UI so the user sees the full
+  picture.
+- **Local recipe linking is id-based, not title-based** (July 2026). The known-recipes
+  block carries `id`, the current application-language title, and an optional original-
+  title alias. Model output copies the id into `localRecipeId`; post-processing resolves
+  that id and always restores the current title. Exact current/original title matching is
+  retained only as an unambiguous compatibility fallback for older or imperfect model
+  output. Linked favorites/history/week-plan rows are canonicalized to the recipe's current
+  title before prompting; free-text favorites remain explicitly unlinked.
 
 Design notes (deliberate trade-offs, discussed before building):
 - **Textual protection is not behavioral protection.** A conflicting editable section can
@@ -511,3 +519,4 @@ to 4000 chars). API: `GET/PUT/DELETE /api/settings/ai-prompt`.
 - [x] Persisted test verdict (`AiModelTestRecord` keyed by config fingerprint) — no re-test per reboot, only on config change or manual re-test
 - [x] Editable system prompt (`AiPromptService`, settings card, drift notice, auto re-test on save; protected machinery never editable)
 - [x] Id-based freezer linking (`freezerItemId`, id-confirmed dishName override, name-match fallback) replacing exact-dish-name-only matching
+- [x] Id-based local recipe linking (`localRecipeId`, current-title canonicalization, unique original-title fallback) replacing exact-title-only matching

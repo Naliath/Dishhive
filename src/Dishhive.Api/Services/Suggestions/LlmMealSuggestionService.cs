@@ -176,7 +176,7 @@ public sealed class LlmMealSuggestionService(
                 var completion = await executionGate.ExecuteAsync(new AiExecutionRequest(
                     AiTaskKind.WeekPlanning,
                     messages,
-                    "week-suggestions-v3",
+                    "week-suggestions-v4",
                     requestId,
                     attempt + 1,
                     MealSuggestionResponseContract.JsonSchemaFormat,

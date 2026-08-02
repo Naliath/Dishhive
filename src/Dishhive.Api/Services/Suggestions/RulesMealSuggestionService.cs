@@ -48,11 +48,12 @@ public class RulesMealSuggestionService : IMealSuggestionService
             }
 
             var date = remainingDays.Dequeue();
+            var matchedRecipe = MatchRecipe(request, item.Name);
             suggestions.Add(new MealSuggestion
             {
                 Date = date,
-                DishName = item.Name,
-                RecipeId = MatchRecipe(request, item.Name),
+                DishName = matchedRecipe?.Title ?? item.Name,
+                RecipeId = matchedRecipe?.Id,
                 FreezyItemRef = item.Id,
                 FreezyItemQuantity = 1,
                 Reason = $"From the freezer, expires {item.ExpirationDate:d MMMM}"
@@ -97,11 +98,12 @@ public class RulesMealSuggestionService : IMealSuggestionService
                 if (pick != null)
                 {
                     usedDishes.Add(pick);
+                    var matchedRecipe = MatchRecipe(request, pick);
                     suggestions.Add(new MealSuggestion
                     {
                         Date = date,
-                        DishName = pick,
-                        RecipeId = MatchRecipe(request, pick),
+                        DishName = matchedRecipe?.Title ?? pick,
+                        RecipeId = matchedRecipe?.Id,
                         Reason = $"From your #[{constraintsByDate[date].Name}] collection"
                     });
                 }
@@ -116,6 +118,11 @@ public class RulesMealSuggestionService : IMealSuggestionService
         // 3. Rotate favorites for the remaining days
 
         var candidates = request.Favorites
+            .Select(favorite =>
+            {
+                var recipe = MatchFavoriteRecipe(request, favorite);
+                return recipe == null ? favorite : favorite with { DishName = recipe.Title };
+            })
             .Where(f => !usedDishes.Contains(f.DishName))
             // A favorite matching a recipe whose assessed facts conflict with an
             // attendee's allergy is skipped ENTIRELY — proposing the dish name
@@ -123,8 +130,11 @@ public class RulesMealSuggestionService : IMealSuggestionService
             // are covered upstream: excluded titles never reach the constraint.)
             .Where(f =>
             {
-                var recipeId = MatchRecipe(request, f.DishName);
-                return recipeId == null || !request.AllergyExcludedRecipeIds.Contains(recipeId.Value);
+                // A linked favorite is resolved by its id. For a free-text favorite,
+                // exact title/alias matching is used only as an allergy safety net;
+                // it does not turn that favorite into a recipe link.
+                var recipe = MatchFavoriteRecipe(request, f) ?? MatchRecipe(request, f.DishName);
+                return recipe == null || !request.AllergyExcludedRecipeIds.Contains(recipe.Id);
             })
             .Where(f =>
             {
@@ -163,11 +173,12 @@ public class RulesMealSuggestionService : IMealSuggestionService
                     {
                         var date = remainingDays.Dequeue();
                         var history = historyByDish.GetValueOrDefault(favorite.DishName);
+                        var matchedRecipe = MatchFavoriteRecipe(request, favorite);
                         suggestions.Add(new MealSuggestion
                         {
                             Date = date,
-                            DishName = favorite.DishName,
-                            RecipeId = MatchRecipe(request, favorite.DishName),
+                            DishName = matchedRecipe?.Title ?? favorite.DishName,
+                            RecipeId = matchedRecipe?.Id,
                             Reason = history?.AverageRating >= 4
                                 ? $"{favorite.MemberName}'s favorite, rated {history.AverageRating:0.0}/5"
                                 : $"{favorite.MemberName}'s favorite"
@@ -185,10 +196,13 @@ public class RulesMealSuggestionService : IMealSuggestionService
                 .ToList());
     }
 
-    private static Guid? MatchRecipe(MealSuggestionRequest request, string dishName)
-    {
-        return request.KnownRecipes
-            .FirstOrDefault(r => r.Title.Equals(dishName, StringComparison.OrdinalIgnoreCase))
-            ?.Id;
-    }
+    private static RecipeOption? MatchRecipe(MealSuggestionRequest request, string dishName) =>
+        LocalRecipeResolver.ByTitle(request.KnownRecipes, dishName);
+
+    private static RecipeOption? MatchFavoriteRecipe(
+        MealSuggestionRequest request,
+        FavoriteDish favorite) =>
+        favorite.RecipeId is { } recipeId
+            ? request.KnownRecipes.FirstOrDefault(recipe => recipe.Id == recipeId)
+            : null;
 }

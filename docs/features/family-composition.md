@@ -63,6 +63,10 @@ FamilyMemberFavorite
   (DELETE = soft delete when history exists, hard delete otherwise)
 - Favorites managed as sub-resource: `GET/POST /api/familymembers/{id}/favorites`,
   `DELETE /api/familymembers/{id}/favorites/{favoriteId}`
+- Favorite semantics are explicit: submitting `RecipeId` creates a linked favorite and
+  canonicalizes `DishName` from the recipe's current title; submitting only `DishName`
+  creates a deliberately unlinked free-text favorite. The stored name is a deletion
+  fallback, while reads and planning use the linked recipe's current localized title.
 - DTOs: `FamilyMemberDtos.cs` (Create/Update/Read), validation via DataAnnotations
 - EF configuration with indexes on `IsActive`, `IsGuest`
 
@@ -109,6 +113,6 @@ FamilyMemberFavorite
 - [x] Soft-delete handling (deactivate with history)
 - [x] `FamilyMemberFavorite` entity + endpoints (recipe link or free text; dish name
       denormalized from recipe title so favorites survive recipe deletion) + tests
-- [x] Favorites UI (chips on member cards, add/remove in the edit form; free-text first,
-      recipe-linking UI is future polish)
+- [x] Favorites UI (chips on member cards, add/remove in the edit form; recipe search
+      selections submit a recipe link, while the add-text action creates free text)
 - [x] Allergy warning surface in planner (allergy hints for selected attendees in slot editor)

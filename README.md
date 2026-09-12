@@ -32,27 +32,45 @@ and generate shopping lists.
 
 ## Architecture
 
-The application runs as a **single container** with the .NET API serving both the REST
-endpoints and the Angular static files — the same platform approach as Freezy.
+Dishhive uses a **multi-container Docker Compose deployment**. The main application image
+still combines the Angular production build and the .NET API: ASP.NET Core serves the SPA,
+REST endpoints and MCP endpoint from one origin. PostgreSQL is the only required supporting
+service. The recipe-scraper and search containers provide bounded integrations and do not
+own application data.
 
+```mermaid
+flowchart LR
+    browser[Browser] -->|SPA and /api/*| app
+    mcp[MCP client] -->|/mcp| app
+
+    subgraph compose[Docker Compose]
+        app["dishhive-app<br/>Angular 21 + .NET 10<br/>host :5100"]
+        db[("dishhive-db<br/>PostgreSQL 16<br/>host :5433 / internal :5432")]
+        scraper["dishhive-scraper<br/>recipe-scrapers fallback<br/>host :5101 / internal :8000"]
+        search["dishhive-searxng<br/>recipe discovery<br/>host :5102 / internal :8080"]
+
+        app -->|EF Core| db
+        app -->|already-fetched HTML| scraper
+        app -->|search queries| search
+    end
+
+    app -. optional HTTP .-> freezy["Freezy<br/>default :5000"]
+    app -. optional model calls .-> ai["OpenAI-compatible AI provider<br/>local or hosted"]
+    app -->|validated outbound fetch| sites[Recipe websites]
+    search --> engines[Search engines]
+    scraper -. version checks and updates .-> pypi[PyPI]
 ```
-┌─────────────────────────────────────────┐
-│           Docker Environment            │
-│  ┌───────────────────────────────────┐  │
-│  │  dishhive-app (Port 5100)         │  │
-│  │  ┌─────────────────────────────┐  │  │
-│  │  │  .NET 10 API                │  │  │      ┌──────────────────┐
-│  │  │  - REST API (/api/*)        │──┼──┼─────►│ Freezy (optional)│
-│  │  │  - Static Files (Angular)   │  │  │ HTTP │ Port 5000        │
-│  │  └─────────────────────────────┘  │  │      └──────────────────┘
-│  └───────────────────────────────────┘  │
-│                    │                    │
-│  ┌───────────────────────────────────┐  │
-│  │  dishhive-db (PostgreSQL)         │  │
-│  │  Host port 5433                   │  │
-│  └───────────────────────────────────┘  │
-└─────────────────────────────────────────┘
-```
+
+- `dishhive-app` is the primary user-facing service. It serves the Angular static files,
+  `/api/*`, `/mcp`, `/health`, `/openapi/*` and `/scalar/*` on port 5100.
+- `dishhive-db` persists all application state. Migrations run automatically when the app
+  starts.
+- `dishhive-scraper` is a Python sidecar used only when no dedicated C# recipe importer can
+  handle a page. The .NET app performs the guarded web fetch and sends HTML to the sidecar
+  for extraction.
+- `dishhive-searxng` supplies web-search results for external recipe discovery by the AI
+  planner. Search is skipped when it is not configured or available.
+- Freezy and the OpenAI-compatible AI provider remain optional external integrations.
 
 ## Port Allocation
 
@@ -61,9 +79,14 @@ Dishhive deliberately uses different default ports than Freezy so both apps run 
 | Purpose | Freezy | Dishhive |
 |---------|--------|----------|
 | App container / API HTTP | 5000 | **5100** |
-| API HTTPS (local dev) | 5001 | **5101** |
-| PostgreSQL (host) | 5432 | **5433** |
+| Recipe-scraper sidecar (Docker host) | — | **5101** |
+| SearXNG UI/API (Docker host) | — | **5102** |
+| PostgreSQL (Docker host) | 5432 | **5433** |
 | Angular dev server | 4200 | **4300** |
+
+The .NET `https` launch profile also uses `https://localhost:5101`. Start only `db` (as in
+the local-development instructions below), or use the `http` profile, when developing the
+API outside Docker so that it does not conflict with the scraper's published port.
 
 ## Prerequisites
 

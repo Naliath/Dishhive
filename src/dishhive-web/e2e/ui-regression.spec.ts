@@ -166,6 +166,83 @@ test.afterEach(async ({ page }) => expect(runtimeErrors.get(page) ?? []).toEqual
 
 for (const width of [360, 1280]) {
   for (const language of ['en', 'nl'] as const) {
+    test(`cup settings and serving conversions work in ${language} at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      let conversions = [
+        { ingredient: 'Flour', aliases: ['bloem'], quantity: 120, unit: 'g' },
+        { ingredient: 'Water', aliases: [], quantity: 236.5882365, unit: 'ml' }
+      ];
+      let system = 'Metric';
+      const preferences = () => ({ measurementSystem: system, firstDayOfWeek: 1, preferredLanguage: language,
+        translateImportedRecipes: false, supportedLanguages: [], cupConversions: conversions });
+      await page.route('**/api/settings/preferences', async route => {
+        if (route.request().method() === 'PATCH') system = route.request().postDataJSON().measurementSystem;
+        await route.fulfill({ json: preferences() });
+      });
+      let failSave = true;
+      await page.route('**/api/settings/cup-conversions', async route => {
+        if (failSave) return route.fulfill({ status: 400, json: { title: 'Invalid conversion' } });
+        conversions = route.request().postDataJSON();
+        await route.fulfill({ json: preferences() });
+      });
+      const ingredients = [
+        { id: 'flour', name: 'flour', quantity: .5, unit: 'cup', sortOrder: 0, originalText: '½ cup flour' },
+        { id: 'corn', name: 'frozen corn', quantity: .25, unit: 'cup', sortOrder: 1, originalText: '¼ cup frozen corn' }
+      ];
+      await page.route(`**/api/recipes/${recipeId}`, route => route.fulfill({ json: { ...recipe, ingredients } }));
+      await page.route('**/api/shoppinglist?**', route => route.fulfill({ json: {
+        from: '2026-09-07', to: '2026-09-13', reminders: [],
+        items: ingredients.map(item => ({ ...item, sourceRecipes: [] }))
+      } }));
+
+      await page.goto('/settings');
+      const editor = page.locator('app-cup-conversion-settings');
+      await editor.getByRole('button').click();
+      await editor.locator('[name="quantity0"]').fill('125');
+      await expect(editor.locator('[name="quantity0"]')).toHaveValue('125');
+      await editor.getByRole('button', { name: language === 'en' ? 'Add ingredient' : 'Ingrediënt toevoegen' }).click();
+      const save = editor.getByRole('button', { name: language === 'en' ? 'Save' : 'Opslaan', exact: true });
+      await expect(save).toBeDisabled();
+      await editor.locator('[name="ingredient2"]').fill('Honey');
+      await editor.locator('[name="quantity2"]').fill('340');
+      await expect(save).toBeEnabled();
+      await editor.getByRole('button', { name: language === 'en' ? 'Remove conversion for Honey' : 'Omrekening voor Honey verwijderen' }).click();
+      await expect(editor.locator('.entry')).toHaveCount(2);
+      await assertGeometry(page);
+      await editor.screenshot({ path: testInfo.outputPath(`cup-editor-${language}-${width}.png`) });
+      await editor.locator('.actions').scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`cup-actions-${language}-${width}.png`) });
+      await save.click();
+      await expect(save).toBeEnabled();
+      await expect(editor.locator('[name="quantity0"]')).toHaveValue('125');
+      failSave = false;
+      await save.click();
+      await expect(editor.locator('form')).toHaveCount(0);
+
+      await page.goto(`/recipes/${recipeId}`);
+      await expect(page.locator('.ingredients li > span > strong')).toHaveText(['62.5 g', '0.25 cups']);
+      await page.getByRole('button', { name: language === 'en' ? 'Increase servings' : 'Meer porties' }).click();
+      await expect(page.locator('.ingredients li > span > strong')).toHaveText(['78.1 g', '0.31 cups']);
+      await assertGeometry(page);
+      await page.goto('/shopping-list');
+      await expect(page.locator('.item-quantity')).toHaveText(['62.5 g', '0.25 cups']);
+      await assertGeometry(page);
+      await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+        writeText: async (value: string) => { document.body.dataset['copiedText'] = value; }
+      } }));
+      await page.getByRole('button', { name: language === 'en' ? 'Copy as text' : 'Als tekst kopiëren' }).click();
+      await expect(page.locator('body')).toHaveAttribute('data-copied-text', /62.5 g flour/);
+      await expect(page.locator('body')).toHaveAttribute('data-copied-text', /0.25 cups frozen corn/);
+
+      await page.goto('/settings');
+      await page.getByRole('radio', { name: /Imperial|Imperiaal/ }).check();
+      await expect.poll(() => system).toBe('Imperial');
+      await page.goto(`/recipes/${recipeId}`);
+      await expect(page.locator('.ingredients li > span > strong')).toHaveText(['0.5 cups', '0.25 cups']);
+    });
+  }
+
+  for (const language of ['en', 'nl'] as const) {
     test(`normalized culinary units follow ${language} at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.route('**/api/settings/preferences', route => route.fulfill({ json: {

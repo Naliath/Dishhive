@@ -452,12 +452,12 @@ export class RecipeDetailPage implements OnInit {
     return normalize(originalValue) === normalize(current) ? null : originalValue;
   }
 
-  formatQuantity(quantity?: number | null, unit?: string | null): string {
+  formatQuantity(quantity?: number | null, unit?: string | null, ingredientName?: string | null): string {
     // Honors the household measurement preference (metric default)
     const baseServings = this.recipe()?.servings ?? 0;
     const scaledQuantity = quantity == null || baseServings < 1
       ? quantity
       : quantity * this.selectedServings() / baseServings;
-    return this.measurementService.format(scaledQuantity, unit);
+    return this.measurementService.format(scaledQuantity, unit, ingredientName);
   }
 }

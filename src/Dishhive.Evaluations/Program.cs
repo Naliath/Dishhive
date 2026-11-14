@@ -18,6 +18,7 @@ internal static class Program
         try
         {
             if (args.Contains("--dish-matching")) return await DishMatchingEvaluation.RunAsync(args);
+            if (args.Contains("--cup-translation")) return await CupTranslationEvaluation.RunAsync(args);
             string Argument(string name, string fallback) => Array.IndexOf(args, name) is var index && index >= 0
                 ? args[index + 1] : fallback;
             var path = Argument("--corpus", Path.Combine(AppContext.BaseDirectory, "facts-scenarios.json"));

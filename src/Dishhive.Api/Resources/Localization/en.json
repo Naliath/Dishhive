@@ -8,7 +8,7 @@
     { "aliases": ["l", "liter", "liters"], "canonicalUnit": "l", "factor": 1 },
     { "aliases": ["oz", "ounce", "ounces"], "canonicalUnit": "g", "factor": 28.35 },
     { "aliases": ["lb", "lbs", "pound", "pounds"], "canonicalUnit": "g", "factor": 453.59 },
-    { "aliases": ["cup", "cups"], "canonicalUnit": "ml", "factor": 240 },
+    { "aliases": ["cup", "cups"], "canonicalUnit": "cup", "factor": 1 },
     { "aliases": ["pint", "pints"], "canonicalUnit": "ml", "factor": 473 },
     { "aliases": ["tbsp", "tablespoon", "tablespoons"], "canonicalUnit": "el", "factor": 1 },
     { "aliases": ["tsp", "teaspoon", "teaspoons"], "canonicalUnit": "tl", "factor": 1 },

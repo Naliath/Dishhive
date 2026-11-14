@@ -12,6 +12,7 @@ public record UserPreferencesDto(
     IReadOnlyList<SupportedLanguageDto> SupportedLanguages)
 {
     public string HouseholdTimeZone { get; init; } = "Europe/Brussels";
+    public IReadOnlyList<CupConversionDto> CupConversions { get; init; } = [];
 }
 
 public record UpdateUserPreferencesDto(

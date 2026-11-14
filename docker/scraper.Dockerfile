@@ -16,7 +16,7 @@ WORKDIR /app
 COPY src/dishhive-scraper/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/dishhive-scraper/app.py .
+COPY src/dishhive-scraper/app.py src/dishhive-scraper/source_measurements.py ./
 
 # Non-root user; /data/lib must stay writable for package updates
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser \

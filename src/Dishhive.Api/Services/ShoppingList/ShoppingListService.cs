@@ -1,5 +1,6 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models.DTOs;
+using Dishhive.Api.Services.Import;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dishhive.Api.Services.ShoppingList;
@@ -68,7 +69,7 @@ public class ShoppingListService : IShoppingListService
                 ? (decimal)meal.Attendees.Count / recipe.Servings
                 : 1m;
 
-            foreach (var ingredient in recipe.Ingredients)
+            foreach (var ingredient in recipe.Ingredients.Select(i => IngredientMeasurementProjection.Resolve(i, recipe.SourceRawData)))
             {
                 var key = (ingredient.Name.ToLowerInvariant(), ingredient.Quantity.HasValue ? ingredient.Unit : null);
 

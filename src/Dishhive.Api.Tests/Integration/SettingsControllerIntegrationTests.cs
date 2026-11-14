@@ -9,6 +9,38 @@ namespace Dishhive.Api.Tests.Integration;
 public class SettingsControllerIntegrationTests : TestBase
 {
     [Fact]
+    public async Task CupConversions_ProvidesDefaultsAndPersistsEditsIncludingAnEmptyList()
+    {
+        var preferences = await Client.GetFromJsonAsync<UserPreferencesDto>("/api/settings/preferences");
+        preferences!.CupConversions.Should().Contain(entry => entry.Ingredient == "All-purpose flour");
+        (await Client.PutAsJsonAsync("/api/settings/cup-conversions", preferences.CupConversions))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var entries = new[] { new CupConversionDto("Flour", ["bloem"], 125, "g") };
+        var response = await Client.PutAsJsonAsync("/api/settings/cup-conversions", entries);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        preferences = await Client.GetFromJsonAsync<UserPreferencesDto>("/api/settings/preferences");
+        preferences!.CupConversions.Should().BeEquivalentTo(entries);
+        (await Client.PutAsJsonAsync("/api/settings/cup-conversions", Array.Empty<CupConversionDto>()))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        preferences = await Client.GetFromJsonAsync<UserPreferencesDto>("/api/settings/preferences");
+        preferences!.CupConversions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CupConversions_RejectsAmbiguousAliasesAndDoesNotSaveInvalidValues()
+    {
+        var entries = new[] { new CupConversionDto("Flour", ["bloem"], 120, "g"),
+            new CupConversionDto("Rice", [" BLOEM "], 180, "g") };
+        (await Client.PutAsJsonAsync("/api/settings/cup-conversions", entries)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await Client.PutAsJsonAsync("/api/settings/cup-conversions", new[] { new CupConversionDto("Flour", [], 0, "g") }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await Client.PutAsJsonAsync("/api/settings/cup-conversions", new[] { new CupConversionDto("Flour", [], 120, "oz") }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await Client.GetFromJsonAsync<UserPreferencesDto>("/api/settings/preferences"))!
+            .CupConversions.Count.Should().BeGreaterThan(1);
+    }
+
+    [Fact]
     public async Task Languages_AreDiscoveredFromBackendLocalizationFiles()
     {
         var languages = await Client.GetFromJsonAsync<List<SupportedLanguageDto>>(

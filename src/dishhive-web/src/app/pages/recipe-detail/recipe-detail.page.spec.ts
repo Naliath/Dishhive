@@ -45,8 +45,8 @@ describe('RecipeDetailPage serving scaling', () => {
 
     page.adjustServings(2);
 
-    expect(page.formatQuantity(200, 'g')).toBe('300 g');
-    expect(measurementService.format).toHaveBeenCalledWith(300, 'g');
+    expect(page.formatQuantity(200, 'g', 'flour')).toBe('300 g');
+    expect(measurementService.format).toHaveBeenCalledWith(300, 'g', 'flour');
   });
 
   it('leaves ingredient lines without a quantity unchanged', () => {
@@ -54,7 +54,7 @@ describe('RecipeDetailPage serving scaling', () => {
     page.adjustServings(2);
 
     expect(page.formatQuantity(undefined, 'piece')).toBe('');
-    expect(measurementService.format).toHaveBeenCalledWith(undefined, 'piece');
+    expect(measurementService.format).toHaveBeenCalledWith(undefined, 'piece', undefined);
   });
 
   it('keeps the serving count between one and one hundred', () => {

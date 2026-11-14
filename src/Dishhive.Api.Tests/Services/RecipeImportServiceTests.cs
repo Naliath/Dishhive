@@ -15,6 +15,22 @@ namespace Dishhive.Api.Tests.Services;
 /// </summary>
 public class RecipeImportServiceTests : IDisposable
 {
+    [Fact]
+    public void ApplyImport_PrefersPublishedMetricAndPreservesSourceFractions()
+    {
+        var recipe = new Dishhive.Api.Models.Recipe();
+        RecipeImportService.ApplyImportedRecipe(recipe, new ImportedRecipe
+        {
+            Title = "Test", IngredientLines = ["¼ cup flour"],
+            MetricIngredients = [new(40, "g", "flour")]
+        }, null, "recipe-scrapers");
+        var ingredient = recipe.Ingredients.Should().ContainSingle().Subject;
+        ingredient.Quantity.Should().Be(40);
+        ingredient.Unit.Should().Be("g");
+        ingredient.OriginalText.Should().Be("¼ cup flour");
+        ingredient.OriginalQuantity.Should().Be(.25m);
+        ingredient.OriginalUnit.Should().Be("cup");
+    }
     private const string FixtureUrl =
         "https://dagelijksekost.vrt.be/gerechten/cremeux-citroen-bodem-witte-chocolade-gepofte-rijst-rode-bessen";
 

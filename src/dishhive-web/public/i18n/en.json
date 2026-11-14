@@ -789,7 +789,26 @@
     "Side": "Side",
     "Dessert": "Dessert"
   },
+  "cupConversions": {
+    "title": "Cup conversions",
+    "explanation": "Approximate amounts for one US cup (236.59 ml). Only the ingredients and aliases in this list are converted. Other ingredients keep their cups. Changes apply to displayed recipes and shopping lists.",
+    "summary": "{count} common ingredients configured.",
+    "manage": "Manage cup conversions",
+    "perCup": "Metric amount per US cup",
+    "ingredient": "Ingredient",
+    "aliases": "Other names",
+    "aliasHint": "Separate exact names with commas; include translations if needed.",
+    "quantity": "Amount per cup",
+    "grams": "Grams (g)",
+    "milliliters": "Milliliters (ml)",
+    "remove": "Remove conversion for {name}",
+    "add": "Add ingredient",
+    "saved": "Cup conversions saved",
+    "saving": "Saving…",
+    "saveError": "Could not save conversions. Use unique ingredient names and aliases, positive amounts, and a short list."
+  },
   "measurementUnit": {
+    "cup": { "one": "cup", "other": "cups" },
     "tablespoon": { "other": "tbsp" },
     "teaspoon": { "other": "tsp" },
     "pinch": { "one": "pinch", "other": "pinches" },

@@ -1,5 +1,6 @@
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
+using Dishhive.Api.Services.Import;
 
 namespace Dishhive.Api.Services.Recipes;
 
@@ -48,16 +49,17 @@ public static class RecipeDtoMapper
         UpdatedAt = recipe.UpdatedAt,
         Ingredients = recipe.Ingredients
             .OrderBy(i => i.SortOrder)
-            .Select(i => new RecipeIngredientDto
+            .Select(i => (Ingredient: i, Measure: IngredientMeasurementProjection.Resolve(i, recipe.SourceRawData)))
+            .Select(item => new RecipeIngredientDto
             {
-                Id = i.Id,
-                SortOrder = i.SortOrder,
-                Name = i.Name,
-                Quantity = i.Quantity,
-                Unit = i.Unit,
-                OriginalText = i.OriginalText,
-                OriginalQuantity = i.OriginalQuantity,
-                OriginalUnit = i.OriginalUnit
+                Id = item.Ingredient.Id,
+                SortOrder = item.Ingredient.SortOrder,
+                Name = item.Measure.Name,
+                Quantity = item.Measure.Quantity,
+                Unit = item.Measure.Unit,
+                OriginalText = item.Ingredient.OriginalText,
+                OriginalQuantity = item.Measure.OriginalQuantity,
+                OriginalUnit = item.Measure.OriginalUnit
             })
             .ToList(),
         Steps = recipe.Steps

@@ -14,7 +14,7 @@ public static class UnitConversion
         if (LocalizationLexicon.Units.TryGetValue(unitToken.Trim(), out var info))
         {
             canonicalUnit = info.CanonicalUnit;
-            normalizedQuantity = Math.Round(quantity * info.Factor, 2);
+            normalizedQuantity = info.Factor == 1 ? quantity : Math.Round(quantity * info.Factor, 2);
             return true;
         }
         canonicalUnit = string.Empty;

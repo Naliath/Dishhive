@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace Dishhive.Api.Models;
 
 /// <summary>
-/// An ingredient line of a recipe. Stores normalized (metric) values used by Dishhive
+/// An ingredient line of a recipe. Stores metric, culinary, or retained cup values used by Dishhive
 /// alongside the verbatim original source values so manual correction stays possible.
 /// See docs/features/measurement-preferences.md for the model rules.
 /// </summary>

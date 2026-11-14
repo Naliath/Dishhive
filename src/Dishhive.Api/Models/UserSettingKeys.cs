@@ -13,6 +13,8 @@ public static class UserSettingKeys
     /// <summary>Household measurement preference: metric or imperial.</summary>
     public const string MeasurementSystem = "measurementSystem";
 
+    public const string CupConversions = "cupConversions";
+
     /// <summary>Week boundary preference: Monday or Sunday.</summary>
     public const string FirstDayOfWeek = "firstDayOfWeek";
 

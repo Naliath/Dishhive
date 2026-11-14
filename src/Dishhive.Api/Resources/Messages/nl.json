@@ -7,7 +7,12 @@
   },
   "settings": {
     "singlePreferenceRequired": "Geef precies één voorkeur op om bij te werken.",
-    "unsupportedValue": "Waarde '{value}' wordt niet ondersteund voor instelling '{key}'."
+    "unsupportedValue": "Waarde '{value}' wordt niet ondersteund voor instelling '{key}'.",
+    "cupConversions": {
+      "invalid": "Elke omrekening vereist een ingrediënt, geldige aliassen, een positieve hoeveelheid en g of ml.",
+      "duplicate": "Een ingrediëntnaam of alias hoort bij meer dan één cupomrekening.",
+      "limit": "De lijst met cupomrekeningen is te groot. Verwijder regels of verkort aliassen."
+    }
   },
   "plannedMeal": {
     "emptyTitle": "Lege maaltijdplanning",

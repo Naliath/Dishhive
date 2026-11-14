@@ -30,22 +30,23 @@ Each `RecipeIngredient` stores **two layers** (see recipe-store.md for full sche
 
 | Layer | Fields | Meaning |
 |-------|--------|---------|
-| Normalized | `Quantity`, `Unit` | Canonical **metric** values used by Dishhive everywhere (math, aggregation, scaling, shopping lists) |
+| Structured | `Quantity`, `Unit` | Metric values, count/culinary units, or retained cups; used for math, scaling and shopping lists |
 | Original | `OriginalText`, `OriginalQuantity`, `OriginalUnit` | Verbatim source line + parsed source values; never modified by conversion |
 
 Rules:
 
-1. **Storage is always metric.** The preference is a *display* concern; the database is
-   canonical. Imperial sources are converted to metric at import time.
+1. **The preference is a display concern.** Mass units are normalized to metric at import.
+   Cups stay cups unless the publisher provides a metric alternative. Ingredient-specific
+   cup conversions happen at display time using the editable household list.
 2. **Originals are immutable.** Conversion or re-normalization never touches the original
    fields, so a human can always verify and correct against the source.
 3. **Display converts on the way out.** Imperial preference ⇒ normalized metric values are
    converted in the frontend display layer (single `MeasurementService`); the API always
-   serves metric + originals.
+   serves structured quantities + originals.
 4. **Unparseable lines degrade gracefully.** `Quantity`/`Unit` null, `Name` = full line,
    `OriginalText` shown as-is. Shopping lists pass such lines through verbatim.
 
-Canonical units: `g`, `kg`, `ml`, `l`, `piece`, plus pass-through for culinary units that have
+Canonical units: `g`, `kg`, `ml`, `l`, `piece`, `cup`, plus pass-through for culinary units that have
 no system (`snuifje`/pinch, `blaadje`/leaf, `el`/`tl` spoons keep their quantities). Culinary
 unit labels follow the interface language through `measurementUnit` translation messages;
 English displays `el` as `tbsp` and `tl` as `tsp` in either measurement system.
@@ -89,8 +90,8 @@ Missing row ⇒ metric (default-by-absence, no seeding needed).
 
 ## Risks / Unknowns
 
-- Volume↔mass conversions ("1 cup flour" → grams) are ingredient-dependent — **not** attempted;
-  cups convert to ml only. Density tables are a possible future feature.
+- Cup conversions use a small, user-editable list of approximate amounts. Unlisted ingredients
+  remain in cups; there is no generic cup-to-ml fallback or guessed density.
 - Mixed-unit aggregation on shopping lists (g + "bakje") — unparseable units aggregate as
   separate lines.
 
@@ -115,3 +116,47 @@ Missing row ⇒ metric (default-by-absence, no seeding needed).
 - [x] Import-time normalization wired into import pipeline
 - [x] `MeasurementService` display conversion (g→oz, kg→lb, ml→fl oz, l→qt; culinary units pass through)
 - [x] Recipe detail/shopping list honor preference (loaded once at app startup)
+- [x] Editable common-ingredient cup conversions, US customary basis, without new dependencies
+- [x] Fraction parsing and safe read projection of recognizable older imports
+- [x] Generic extraction of published WP Recipe Maker metric alternatives
+
+## Common-ingredient cup conversions
+
+Settings provides a small initial list with names, exact aliases, a metric amount per US cup,
+and a unit (`g` or `ml`). Users can change amounts, add/remove ingredients, or save an empty
+list to disable these conversions. The list is validated and stored in the existing
+`UserSetting` table under `cupConversions`; no schema migration or new library is needed.
+Preferences include the effective list so it is also available from the existing offline cache.
+
+The default list covers flour, sugars, butter, oats, almond flour, and common liquids.
+Weight starting points are approximate references from
+[King Arthur Baking's chart](https://www.kingarthurbaking.com/learn/ingredient-weight-chart).
+Liquid entries use the US customary cup volume (approximately 236.59 ml), not a mass density.
+Only a full ingredient name or alias matches, ignoring case and repeated whitespace. For
+example, `almond flour` does not match `flour`, and `frozen corn` stays in cups unless the user
+adds it. Users can include English and Dutch names in the same entry.
+
+Metric display multiplies cups by the configured amount; Imperial display divides compatible
+metric quantities by that amount. Other metric quantities retain the existing oz/lb/fl oz/qt
+display. The shared formatter is used by recipes, scaled servings, shopping lists and copied
+text. Changing a conversion does not rewrite recipes. Mixed units remain separate shopping
+rows instead of being combined through an assumed ingredient equivalence.
+
+`IngredientLineParser` accepts Unicode fractions (`½`, `¼`, etc.), ASCII fractions (`1/2`),
+mixed numbers (`1½`, `1 1/2`), and attached metric units (`50g`). Parsed decimal quantities
+scale with servings. Ambiguous ranges and package quantities remain verbatim.
+The API also projects untouched older fraction lines into structured quantities, and reverses
+recognizable old cup-to-240-ml imports using preserved originals. It does not change database
+rows or overwrite a quantity that differs from the old conversion. Publisher metric payloads
+are excluded from this legacy rule.
+
+The scraper reads published metric alternatives from WP Recipe Maker data without running
+JavaScript or branching on a hostname. It requires one unambiguous recipe and alignment with
+the extracted ingredient lines; missing alternatives fall back individually. New imports
+store published metric amounts while preserving original text/quantity/unit. Existing imports
+need a source refresh to recover alternatives that were not previously retained.
+
+The [AI translation experiment](../research/CUP_TRANSLATION_EVALUATION.md) found that the model
+can follow a supplied conversion list, but otherwise guesses weights for unlisted foods.
+Production translation remains text-only; deterministic formatting applies the editable list
+whether translation is enabled or disabled.

@@ -253,6 +253,11 @@ public class RecipeImportService : IRecipeImportService
         foreach (var line in imported.IngredientLines)
         {
             var parsed = IngredientLineParser.Parse(line);
+            if (imported.MetricIngredients.Count == imported.IngredientLines.Count
+                && imported.MetricIngredients[sortOrder] is { Quantity: > 0 and <= 100000 } metric
+                && metric.Unit is "g" or "kg" or "ml" or "l"
+                && !string.IsNullOrWhiteSpace(metric.Name) && metric.Name.Length <= 200)
+                parsed = parsed with { Quantity = metric.Quantity, Unit = metric.Unit, Name = metric.Name };
             recipe.Ingredients.Add(new RecipeIngredient
             {
                 SortOrder = sortOrder++,

@@ -7,6 +7,7 @@ param(
     [switch]$DisableFactsReasoning,
     [switch]$NoBuild,
     [switch]$DishMatching,
+    [switch]$CupTranslation,
     [ValidateRange(0, 12000)][int]$MaxOutputTokens = 0,
     [switch]$ValidateOnly
 )
@@ -25,6 +26,7 @@ try {
     }
     $arguments = @('--iterations', "$Iterations", '--output', $OutputPath)
     if ($DishMatching) { $arguments += '--dish-matching' }
+    if ($CupTranslation) { $arguments += '--cup-translation' }
     if ($CaseId.Count -gt 0) { $arguments += @('--case', ($CaseId -join ',')) }
     if ($ValidateOnly) { $arguments += '--validate-only' }
     else {

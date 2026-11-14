@@ -31,6 +31,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from packaging.version import InvalidVersion, Version
 from pydantic import BaseModel
+from source_measurements import published_metric_ingredients
 
 PACKAGE = "recipe-scrapers"
 LIB_DIR = os.environ.get("SCRAPER_LIB_DIR", "/data/lib")
@@ -350,10 +351,18 @@ def scrape(req: ScrapeRequest):
     if isinstance(keywords, str):
         keywords = [k.strip() for k in keywords.split(",") if k.strip()]
 
+    ingredients = safe("ingredients", [])
+    metric_ingredients = published_metric_ingredients(req.html, ingredients)
+    if raw is not None and any(metric_ingredients):
+        raw_data = loads(raw)
+        if isinstance(raw_data, dict):
+            raw_data["metricIngredients"] = metric_ingredients
+            raw = dumps(raw_data, ensure_ascii=False)
     return {
         "title": str(title).strip(),
         "description": safe("description"),
-        "ingredients": safe("ingredients", []),
+        "ingredients": ingredients,
+        "metricIngredients": metric_ingredients,
         "instructions": safe("instructions_list", []),
         "yields": safe("yields"),
         "image": safe("image"),

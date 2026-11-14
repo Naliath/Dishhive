@@ -157,7 +157,7 @@ export class ShoppingListPage implements OnInit {
 
     const lines: string[] = [this.uiLanguage.t('ui.shoppingListValueValue', { p0: (list.from), p1: (list.to) }), ''];
     for (const item of list.items) {
-      const quantity = this.measurementService.format(item.quantity, item.unit);
+      const quantity = this.measurementService.format(item.quantity, item.unit, item.name);
       lines.push(quantity ? `- ${quantity} ${item.name}` : `- ${item.name}`);
     }
     if (list.reminders.length > 0) {

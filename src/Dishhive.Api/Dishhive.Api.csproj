@@ -24,6 +24,7 @@
   <ItemGroup>
     <!-- prompt/parse internals are asserted directly in tests -->
     <InternalsVisibleTo Include="Dishhive.Api.Tests" />
+    <InternalsVisibleTo Include="Dishhive.Evaluations" />
   </ItemGroup>
 
   <ItemGroup>

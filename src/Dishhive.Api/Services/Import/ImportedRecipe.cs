@@ -13,6 +13,9 @@ public record ImportedRecipe
     /// <summary>Verbatim ingredient lines as published by the source</summary>
     public IReadOnlyList<string> IngredientLines { get; init; } = [];
 
+    /// <summary>Optional aligned metric measurements published by the source, without changing originals.</summary>
+    public IReadOnlyList<PublishedIngredientMeasure?> MetricIngredients { get; init; } = [];
+
     /// <summary>Ordered preparation step texts</summary>
     public IReadOnlyList<string> Steps { get; init; } = [];
 
@@ -40,3 +43,5 @@ public record ImportedRecipe
     /// <summary>Raw source payload (JSON) for traceability and re-parsing</summary>
     public string? RawData { get; init; }
 }
+
+public sealed record PublishedIngredientMeasure(decimal Quantity, string Unit, string Name);

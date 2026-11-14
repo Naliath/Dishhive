@@ -4038,6 +4038,65 @@
         }
       }
     },
+    "/api/settings/cup-conversions": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "operationId": "Settings_SetCupConversions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CupConversionDto"
+                }
+              }
+            },
+            "text/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CupConversionDto"
+                }
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CupConversionDto"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/ai-prompt": {
       "get": {
         "tags": [
@@ -6428,6 +6487,42 @@
         },
         "additionalProperties": false
       },
+      "CupConversionDto": {
+        "required": [
+          "ingredient",
+          "aliases",
+          "unit",
+          "quantity"
+        ],
+        "type": "object",
+        "properties": {
+          "ingredient": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "quantity": {
+            "maximum": 10000,
+            "minimum": 0.01,
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "unit": {
+            "pattern": "^(g|ml)$",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "DietaryFactsStatus": {
         "enum": [
           0,
@@ -8788,7 +8883,8 @@
           "preferredLanguage",
           "translateImportedRecipes",
           "supportedLanguages",
-          "householdTimeZone"
+          "householdTimeZone",
+          "cupConversions"
         ],
         "type": "object",
         "properties": {
@@ -8812,6 +8908,12 @@
           },
           "householdTimeZone": {
             "type": "string"
+          },
+          "cupConversions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CupConversionDto"
+            }
           }
         },
         "additionalProperties": false

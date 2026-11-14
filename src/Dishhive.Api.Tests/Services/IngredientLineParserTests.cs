@@ -87,14 +87,46 @@ public class IngredientLineParserTests
     }
 
     [Fact]
-    public void Parse_ImperialVolume_ConvertsToMetricAndPreservesOriginal()
+    public void Parse_Cups_PreservesVolumeUntilAnIngredientConversionIsAvailable()
     {
         var result = IngredientLineParser.Parse("2 cups flour");
 
-        result.Quantity.Should().Be(480m);
-        result.Unit.Should().Be("ml");
+        result.Quantity.Should().Be(2m);
+        result.Unit.Should().Be("cup");
         result.OriginalQuantity.Should().Be(2m);
         result.OriginalUnit.Should().Be("cups");
+    }
+
+    [Theory]
+    [InlineData("½ cup frozen corn", 0.5, "cup", "frozen corn")]
+    [InlineData("¼ cup flour", 0.25, "cup", "flour")]
+    [InlineData("¾ cup sugar", 0.75, "cup", "sugar")]
+    [InlineData("1½ cups milk", 1.5, "cup", "milk")]
+    [InlineData("1 ½ cups milk", 1.5, "cup", "milk")]
+    [InlineData("1 1/2 cups milk", 1.5, "cup", "milk")]
+    [InlineData("1 / 4 cup flour", 0.25, "cup", "flour")]
+    [InlineData("50g butter", 50, "g", "butter")]
+    [InlineData("0,5 cups flour", 0.5, "cup", "flour")]
+    public void Parse_FractionsAndAttachedUnits_ProducesScalableQuantities(
+        string line, decimal quantity, string unit, string name)
+    {
+        var result = IngredientLineParser.Parse(line);
+        result.Quantity.Should().Be(quantity);
+        result.Unit.Should().Be(unit);
+        result.Name.Should().Be(name);
+        result.OriginalText.Should().Be(line);
+        result.OriginalQuantity.Should().Be(quantity);
+    }
+
+    [Theory]
+    [InlineData("1/0 cup flour")]
+    [InlineData("1-2 cups flour")]
+    [InlineData("2 400g cans tomatoes")]
+    public void Parse_AmbiguousQuantities_DoesNotInventAPartialAmount(string line)
+    {
+        var result = IngredientLineParser.Parse(line);
+        result.Quantity.Should().BeNull();
+        result.Name.Should().Be(line);
     }
 
     [Fact]

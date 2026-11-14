@@ -789,7 +789,26 @@
     "Side": "Bijgerecht",
     "Dessert": "Nagerecht"
   },
+  "cupConversions": {
+    "title": "Cupomrekeningen",
+    "explanation": "Benaderingen voor één Amerikaanse cup (236,59 ml). Alleen de ingrediënten en aliassen in deze lijst worden omgerekend. Andere ingrediënten behouden hun cups. Wijzigingen gelden voor weergegeven recepten en boodschappenlijsten.",
+    "summary": "{count} veelgebruikte ingrediënten ingesteld.",
+    "manage": "Cupomrekeningen beheren",
+    "perCup": "Metrische hoeveelheid per Amerikaanse cup",
+    "ingredient": "Ingrediënt",
+    "aliases": "Andere namen",
+    "aliasHint": "Scheid exacte namen met komma's; voeg zo nodig vertalingen toe.",
+    "quantity": "Hoeveelheid per cup",
+    "grams": "Gram (g)",
+    "milliliters": "Milliliter (ml)",
+    "remove": "Omrekening voor {name} verwijderen",
+    "add": "Ingrediënt toevoegen",
+    "saved": "Cupomrekeningen opgeslagen",
+    "saving": "Opslaan…",
+    "saveError": "Opslaan mislukt. Gebruik unieke ingrediëntnamen en aliassen, positieve hoeveelheden en een korte lijst."
+  },
   "measurementUnit": {
+    "cup": { "one": "cup", "other": "cups" },
     "tablespoon": { "other": "el" },
     "teaspoon": { "other": "tl" },
     "pinch": { "one": "snuifje", "other": "snuifjes" },

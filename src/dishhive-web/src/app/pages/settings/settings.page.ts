@@ -21,6 +21,7 @@ import { FirstDayOfWeek, MeasurementSystem } from '../../models/user-setting.mod
 import { SupportedLanguage } from '../../models/user-setting.model';
 import { AutoCollectionNamePipe, LanguageService, TranslatePipe, TranslatePluralPipe } from '../../services/language.service';
 import { AutoCollectionInfo } from '../../models/recipe.model';
+import { CupConversionSettingsComponent } from '../../components/cup-conversion-settings/cup-conversion-settings';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -29,7 +30,7 @@ import { environment } from '../../../environments/environment';
   imports: [
     MatButtonModule, MatButtonToggleModule, MatCardModule, MatFormFieldModule, MatIconModule, MatRadioModule,
     MatSlideToggleModule, MatSelectModule, MatSnackBarModule, AiPromptSettingsComponent, IntegrationsStatusComponent,
-    RecipeFactsSettingsComponent, TranslatePipe, TranslatePluralPipe, AutoCollectionNamePipe
+    RecipeFactsSettingsComponent, CupConversionSettingsComponent, TranslatePipe, TranslatePluralPipe, AutoCollectionNamePipe
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings.page.html',

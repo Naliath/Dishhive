@@ -46,6 +46,7 @@ public record ScrapedRecipe
     public required string Title { get; init; }
     public string? Description { get; init; }
     public IReadOnlyList<string> Ingredients { get; init; } = [];
+    public IReadOnlyList<PublishedIngredientMeasure?> MetricIngredients { get; init; } = [];
     public IReadOnlyList<string> Instructions { get; init; } = [];
     public string? Yields { get; init; }
     public string? Image { get; init; }

@@ -7,7 +7,12 @@
   },
   "settings": {
     "singlePreferenceRequired": "Supply exactly one preference to update.",
-    "unsupportedValue": "Value '{value}' is not supported for setting '{key}'."
+    "unsupportedValue": "Value '{value}' is not supported for setting '{key}'.",
+    "cupConversions": {
+      "invalid": "Each conversion needs an ingredient, valid aliases, a positive quantity, and g or ml.",
+      "duplicate": "An ingredient name or alias belongs to more than one cup conversion.",
+      "limit": "The cup conversion list is too large. Remove entries or shorten aliases."
+    }
   },
   "plannedMeal": {
     "emptyTitle": "Empty meal plan",

@@ -257,7 +257,7 @@
           @for (ingredient of r.ingredients; track ingredient.id) {
             <li>
               <span>
-                @if (formatQuantity(ingredient.quantity, ingredient.unit); as qty) {
+                @if (formatQuantity(ingredient.quantity, ingredient.unit, ingredient.name); as qty) {
                   <strong>{{ qty }}</strong>
                 }
                 {{ ingredient.name }}

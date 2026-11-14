@@ -12,6 +12,7 @@ import {
   UserPreferencesDto,
   SupportedLanguageDto
 } from '../api/generated/dishhive-api.client';
+import { CupConversionDto } from '../api/generated/dishhive-api.client';
 import {
   AiPromptSettings,
   SupportedLanguage
@@ -29,6 +30,7 @@ export class SettingsService {
   readonly firstDayOfWeek = signal(FirstDayOfWeek.Monday);
   readonly preferredLanguage = signal<SupportedLanguage>(this.browserLanguage());
   readonly translateImportedRecipes = signal(false);
+  readonly cupConversions = signal<ReadonlyArray<CupConversionDto>>([]);
   readonly supportedLanguages = signal<ReadonlyArray<{ code: string; displayName: string }>>([]);
 
   constructor(http: HttpClient, private readonly clock: HouseholdClockService) {
@@ -61,6 +63,10 @@ export class SettingsService {
     return this.updatePreference({ measurementSystem: system });
   }
 
+  setCupConversions(entries: CupConversionDto[]): Observable<UserPreferencesDto> {
+    return apiResponse(this.api.setCupConversions(entries)).pipe(tap(preferences => this.apply(preferences)));
+  }
+
   /** Loads the first-day-of-week preference from the backend into the signal */
   loadFirstDayOfWeek(): Observable<FirstDayOfWeek> {
     return this.loadPreferences().pipe(map(() => this.firstDayOfWeek()));
@@ -89,6 +95,7 @@ export class SettingsService {
   private apply(preferences: UserPreferencesDto): void {
     this.clock.timeZone.set(preferences.householdTimeZone ?? 'Europe/Brussels');
     this.measurementSystem.set(preferences.measurementSystem);
+    this.cupConversions.set(preferences.cupConversions ?? []);
     this.firstDayOfWeek.set(preferences.firstDayOfWeek);
     this.preferredLanguage.set(preferences.preferredLanguage);
     this.translateImportedRecipes.set(preferences.translateImportedRecipes);

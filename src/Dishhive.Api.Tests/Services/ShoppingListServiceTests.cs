@@ -37,6 +37,22 @@ public class ShoppingListServiceTests : IDisposable
         => new() { Name = name, Quantity = quantity, Unit = unit, OriginalText = $"{quantity} {unit} {name}".Trim() };
 
     [Fact]
+    public async Task Generate_ProjectsLegacyFractionsAndCupAmountsBeforeScalingAndGrouping()
+    {
+        var recipe = RecipeWith("Corn", 4,
+            new() { Name = "½ cup frozen corn", OriginalText = "½ cup frozen corn" },
+            new() { Name = "flour", Quantity = 240, Unit = "ml", OriginalQuantity = 1,
+                OriginalUnit = "cup", OriginalText = "1 cup flour" });
+        _context.PlannedMeals.Add(new PlannedMeal { Date = Monday, Recipe = recipe,
+            Attendees = { new() { FamilyMember = new() { Name = "Anna" } },
+                new() { FamilyMember = new() { Name = "Bert" } } } });
+        await _context.SaveChangesAsync();
+        var list = await _service.GenerateAsync(Monday, Monday);
+        list.Items.Should().Contain(item => item.Name == "frozen corn" && item.Quantity == .25m && item.Unit == "cup");
+        list.Items.Should().Contain(item => item.Name == "flour" && item.Quantity == .5m && item.Unit == "cup");
+    }
+
+    [Fact]
     public async Task Generate_ScalesQuantitiesByAttendeesVersusServings()
     {
         var recipe = RecipeWith("Puree", servings: 4, Ingredient("aardappelen", 1000m, "g"));

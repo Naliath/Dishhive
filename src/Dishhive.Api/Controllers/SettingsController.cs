@@ -4,6 +4,7 @@ using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.Localization;
 using Dishhive.Api.Services.Time;
+using Dishhive.Api.Services.Import;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -44,6 +45,7 @@ public class SettingsController : ControllerBase
             .Where(setting => setting.Key == UserSettingKeys.MeasurementSystem
                 || setting.Key == UserSettingKeys.FirstDayOfWeek
                 || setting.Key == UserSettingKeys.PreferredLanguage
+                || setting.Key == UserSettingKeys.CupConversions
                 || setting.Key == UserSettingKeys.TranslateImportedRecipes)
             .ToDictionaryAsync(setting => setting.Key, setting => setting.Value, cancellationToken);
         return BuildPreferences(values);
@@ -104,7 +106,20 @@ public class SettingsController : ControllerBase
             _languages.Contains(language) ? language!.ToLowerInvariant() : defaultLanguage,
             bool.TryParse(values.GetValueOrDefault(UserSettingKeys.TranslateImportedRecipes), out var translate) && translate,
             _languages.Languages.Select(language => new SupportedLanguageDto(language.Code, language.DisplayName)).ToList())
-            { HouseholdTimeZone = _clock.TimeZoneId };
+            { HouseholdTimeZone = _clock.TimeZoneId,
+                CupConversions = CupConversions.Read(values.GetValueOrDefault(UserSettingKeys.CupConversions)) };
+    }
+
+    [HttpPut("cup-conversions")]
+    [ProducesResponseType(typeof(UserPreferencesDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<UserPreferencesDto>> SetCupConversions(
+        List<CupConversionDto> entries, CancellationToken cancellationToken)
+    {
+        var error = CupConversions.Validate(entries);
+        if (error is not null)
+            return ValidationProblem(await _messages.GetAsync($"settings.cupConversions.{error}", cancellationToken));
+        await UpsertSettingAsync(UserSettingKeys.CupConversions, CupConversions.Write(entries), cancellationToken);
+        return await GetPreferences(cancellationToken);
     }
 
     /// <summary>
@@ -288,6 +303,7 @@ public class SettingsController : ControllerBase
 
     private bool IsValidKnownValue(string key, string value) => key switch
     {
+        UserSettingKeys.CupConversions => false, // Use the typed, validated endpoint.
         UserSettingKeys.PreferredLanguage => _languages.Contains(value),
         UserSettingKeys.TranslateImportedRecipes => bool.TryParse(value, out _),
         UserSettingKeys.MeasurementSystem => EnumNames.TryParse<MeasurementSystem>(value, out _),

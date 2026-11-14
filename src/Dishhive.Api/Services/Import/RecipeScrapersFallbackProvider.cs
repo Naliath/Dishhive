@@ -60,6 +60,7 @@ public partial class RecipeScrapersFallbackProvider(
             Title = scraped.Title,
             Description = scraped.Description,
             IngredientLines = scraped.Ingredients,
+            MetricIngredients = scraped.MetricIngredients,
             Steps = scraped.Instructions,
             Servings = ParseServings(scraped.Yields),
             ImageUrl = scraped.Image,

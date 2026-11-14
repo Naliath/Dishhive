@@ -4,8 +4,8 @@ import { LanguageService } from './language.service';
 import { MeasurementSystem } from '../models/user-setting.model';
 
 /**
- * Formats stored (metric) quantities in the household's preferred measurement system.
- * Storage is always metric; this service is the single display-conversion point
+ * Formats structured quantities in the household's preferred measurement system.
+ * Unconverted cups remain cups; this service is the single display-conversion point
  * (see docs/features/measurement-preferences.md). Culinary units keep their quantities
  * in both systems; their display labels follow the selected interface language.
  */
@@ -26,7 +26,8 @@ export class MeasurementService {
     blaadje: 'measurementUnit.leaf',
     teentje: 'measurementUnit.clove',
     takje: 'measurementUnit.sprig',
-    bakje: 'measurementUnit.container'
+    bakje: 'measurementUnit.container',
+    cup: 'measurementUnit.cup'
   };
 
   constructor(
@@ -38,15 +39,32 @@ export class MeasurementService {
    * Formats a stored metric quantity for display, e.g. (500, 'g') → "500 g" or "17.6 oz".
    * Returns an empty string when there is no quantity; bare number for countable pieces.
    */
-  format(quantity?: number | null, unit?: string | null): string {
+  format(quantity?: number | null, unit?: string | null, ingredientName?: string | null): string {
     if (quantity == null) {
       return '';
     }
+    if (unit?.trim().toLowerCase() === 'cups' || unit?.trim().toLowerCase() === 'cup') unit = 'cup';
 
     let value = quantity;
     let displayUnit = unit ?? '';
 
-    if (this.settingsService.measurementSystem() === MeasurementSystem.Imperial && unit) {
+    const normalize = (text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase();
+    const name = normalize(ingredientName ?? '');
+    const conversion = name ? this.settingsService.cupConversions().find(entry =>
+      [entry.ingredient, ...entry.aliases].some(alias => normalize(alias) === name)) : undefined;
+    const imperialSystem = this.settingsService.measurementSystem() === MeasurementSystem.Imperial;
+    if (unit === 'cup' && !imperialSystem && conversion) {
+      value *= conversion.quantity;
+      displayUnit = conversion.unit;
+    } else if (imperialSystem && conversion && unit) {
+      const metricUnit = unit === 'kg' ? 'g' : unit === 'l' ? 'ml' : unit;
+      if (metricUnit === conversion.unit) {
+        value = quantity * (unit === 'kg' || unit === 'l' ? 1000 : 1) / conversion.quantity;
+        displayUnit = 'cup';
+      }
+    }
+
+    if (imperialSystem && unit && displayUnit !== 'cup') {
       const imperial = MeasurementService.imperialUnits[unit];
       if (imperial) {
         value = quantity * imperial.factor;
@@ -71,6 +89,6 @@ export class MeasurementService {
     if (value >= 10) {
       return Math.round(value * 10) / 10;
     }
-    return Math.round(value * 100) / 100;
+    return value !== 0 && Math.abs(value) < 0.01 ? Number(value.toPrecision(2)) : Math.round(value * 100) / 100;
   }
 }

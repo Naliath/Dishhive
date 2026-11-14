@@ -25,7 +25,7 @@
           <ul class="shopping-items">
             @for (item of shoppingList.items; track item.name) {
               <li>
-                <span class="item-quantity">{{ measurementService.format(item.quantity, item.unit) }}</span>
+                <span class="item-quantity">{{ measurementService.format(item.quantity, item.unit, item.name) }}</span>
                 <span class="item-name">{{ item.name }}</span>
                 <span class="item-sources">{{ item.sourceRecipes.join(', ') }}</span>
               </li>

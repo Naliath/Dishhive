@@ -72,6 +72,8 @@ try {
         '--no-restore', '--disable-build-servers', '-m:1', '--logger', 'trx;LogFileName=backend.trx', '--results-directory', $ArtifactDirectory)
     Invoke-LocalCheck 'facts-corpus' $repoRoot 'dotnet' @('run', '--no-build', '--no-restore',
         '--project', 'src/Dishhive.Evaluations', '--', '--validate-only')
+    Invoke-LocalCheck 'planning-oracle' $repoRoot (Get-Process -Id $PID).Path @('-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', (Join-Path $repoRoot 'scripts/run-ai-week-planning-evals.ps1'), '-ValidateOracle')
     Invoke-LocalCheck 'browser-fixtures' $webRoot $npm @('run', 'test:browser')
     Invoke-LocalCheck 'production-pwa' $webRoot $npm @('exec', '--', 'playwright', 'test', '--config=playwright.pwa.config.ts')
     $pwaEvidence = Join-Path $ArtifactDirectory 'pwa'
@@ -99,7 +101,7 @@ try {
         '--env', 'PYTHONDONTWRITEBYTECODE=1', '--entrypoint', 'python', $scraperImage.Trim(), '-m', 'unittest', '-v')
     [pscustomobject]@{ completedAt=(Get-Date).ToUniversalTime().ToString('o'); outcome='passed';
         checks=@('api-generation', 'frontend-tests', 'localization', 'production-build', 'browser-contracts',
-            'backend-with-postgresql-and-real-api-browser', 'facts-corpus', 'browser-fixtures', 'production-pwa', 'linux-scraper') } |
+            'backend-with-postgresql-and-real-api-browser', 'facts-corpus', 'planning-oracle', 'browser-fixtures', 'production-pwa', 'linux-scraper') } |
         ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $ArtifactDirectory 'summary.json') -Encoding utf8
     Write-Host "All local checks passed. Evidence: $ArtifactDirectory"
 } finally {

@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using FluentAssertions;
@@ -137,8 +136,7 @@ public class RecipeFactsIntegrationTests : TestBase
     {
         var created = await CreateRecipeAsync("Notencake", containsClasses: ["TreeNuts", "Milk"]);
 
-        var exportJson = await Client.GetStringAsync("/api/recipes/export");
-        exportJson.Should().Contain("dishhive:dietaryFacts");
+        var export = await Client.GetByteArrayAsync("/api/recipes/export");
 
         // Import into an empty library
         using var fresh = CreateFreshContext();
@@ -150,7 +148,7 @@ public class RecipeFactsIntegrationTests : TestBase
 
         using var content = new MultipartFormDataContent
         {
-            { new ByteArrayContent(Encoding.UTF8.GetBytes(exportJson)), "file", "export.json" }
+            { new ByteArrayContent(export), "file", "export.zip" }
         };
         var importResponse = await Client.PostAsync("/api/recipes/import/file", content);
         importResponse.StatusCode.Should().Be(HttpStatusCode.OK);

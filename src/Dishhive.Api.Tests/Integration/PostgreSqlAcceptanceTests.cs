@@ -19,6 +19,30 @@ namespace Dishhive.Api.Tests.Integration;
 public sealed class PostgreSqlAcceptanceTests : IAsyncLifetime
 {
     [PostgresFact]
+    public async Task NewRecipeAndEnrichmentJobs_CommitTogetherWithGeneratedRecipeIds()
+    {
+        await using var scope = _provider!.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<DishhiveDbContext>();
+        var extractor = Substitute.For<Dishhive.Api.Services.Facts.IRecipeFactsExtractor>();
+        extractor.IsAvailable.Returns(true);
+        using var worker = new Dishhive.Api.Services.Facts.RecipeFactsAssessmentService(
+            _provider!.GetRequiredService<IServiceScopeFactory>(), extractor,
+            NullLogger<Dishhive.Api.Services.Facts.RecipeFactsAssessmentService>.Instance);
+        var first = new Recipe { Title = "New first import" };
+        var second = new Recipe { Title = "New second import" };
+        context.Recipes.AddRange(first, second);
+        await worker.StageAsync(context, first);
+        await worker.StageAsync(context, second);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var jobs = await context.RecipeEnrichmentJobs.Include(j => j.Recipe).ToListAsync();
+        Assert.Equal(2, jobs.Count);
+        Assert.Equal(2, jobs.Select(j => j.RecipeId).Distinct().Count());
+        Assert.All(jobs, j => Assert.NotEqual(Guid.Empty, j.RecipeId));
+        Assert.Equal(new[] { "New first import", "New second import" }, jobs.Select(j => j.Recipe!.Title).Order().ToArray());
+    }
+
+    [PostgresFact]
     public async Task Migration_LegacyReservationsAndUnknownInputVersionsSurviveUpgrade()
     {
         await using var scope = _provider!.CreateAsyncScope();

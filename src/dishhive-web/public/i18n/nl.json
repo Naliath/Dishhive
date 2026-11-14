@@ -21,7 +21,7 @@
       "other": "{count} recepten"
     },
     "recipeLibraryBackup": "Back-up van receptenbibliotheek",
-    "recipeBackupExplanation": "Exporteer alle recepten, inclusief foto's, in een draagbaar JSON-formaat. Bij import blijven bekende recepten behouden.",
+    "recipeBackupExplanation": "Exporteer een ZIP-back-up met alle recepten, foto's en beoordeelde voedingskenmerken. Importeer ZIP-back-ups of JSON-receptbestanden; bekende recepten blijven behouden.",
     "exportRecipes": "Recepten exporteren",
     "importRecipes": "Recepten importeren",
     "importing": "Importeren…",

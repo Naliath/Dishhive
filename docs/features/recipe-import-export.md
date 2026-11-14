@@ -20,7 +20,8 @@ managers. Initiated from the settings page.
 
 ## Design
 
-**Export — `GET /api/recipes/export`** downloads `dishhive-recipes-YYYY-MM-DD.json`:
+**Export — `GET /api/recipes/export`** downloads `dishhive-recipes-YYYY-MM-DD.zip`.
+The ZIP uses standard Deflate compression and contains exactly one `recipes.json` document:
 
 ```json
 {
@@ -46,10 +47,17 @@ managers. Initiated from the settings page.
 - Ingredient lines use the verbatim `OriginalText` (the canonical interchange form);
   composed from quantity/unit/name when a manual recipe has none.
 - Organization tags travel in a `dishhive:tags` extension property other tools ignore.
+- Manual cookbook memberships travel in `dishhive:collections`; current assessed facts
+  travel in `dishhive:dietaryFacts`, retaining `aiDetected` or `userConfirmed` status.
+- Dishhive exports ZIP only. Extract `recipes.json` when another tool needs a direct
+  schema.org JSON document.
+- ZIP was chosen for built-in operating-system support. Text compresses well and Deflate
+  removes most of the base64 overhead around images. Images already use normalized WebP;
+  the archive does not promise large additional savings on those compressed image bytes.
 
-**Import — `POST /api/recipes/import/file`** (multipart) accepts any schema.org Recipe
-JSON: a single object, an array, or an `@graph` document — including Dishhive's own export
-and files saved from other recipe managers. Per recipe:
+**Import — `POST /api/recipes/import/file`** (multipart) accepts a ZIP backup or schema.org Recipe
+JSON: a single object, an array, or an `@graph` document, including files saved from
+other recipe managers. Per recipe:
 
 | Situation | Outcome |
 |---|---|
@@ -62,7 +70,10 @@ and files saved from other recipe managers. Per recipe:
   WebP normalization pipeline before becoming locally stored bytes
   best-effort (failure never fails the import).
 - Response reports created/updated/skipped counts with per-recipe skip reasons.
-- Errors: 400 not JSON / no file, 422 JSON without any Recipe objects.
+- Uploads are limited to 64 MiB (plus multipart framing); the expanded document is limited
+  to 256 MiB. Archive metadata and actual streamed lengths are both checked. Only a single
+  root-level `recipes.json` is accepted; no archive paths are extracted to disk.
+- Errors: 400 invalid JSON/ZIP or no file, 413 oversized upload, 422 no Recipe objects.
 
 **Frontend** — settings page "Recipe library backup" card: an export download button and
 an import button (hidden file input). The result snackbar summarizes counts; skipped
@@ -74,8 +85,8 @@ recipes are listed underneath with their reasons.
   manual and visible.
 - schema.org has no structured quantity/unit per ingredient, so re-import re-parses the
   lines; manual corrections to parsed values (not the original text) don't round-trip.
-- Export holds the whole serialized library in memory (images ×1.33 base64) — fine at
-  household scale.
+- Export and import hold the serialized library in memory. Explicit size limits bound
+  the supported household backup size; this is not a streaming bulk-migration interface.
 
 ## Implementation Checklist
 
@@ -86,3 +97,5 @@ recipes are listed underneath with their reasons.
 - [x] Integration tests: export shape, own-export round-trip, create/update/skip paths,
       data-URI image, invalid JSON, no-recipe JSON
 - [x] Settings page backup card (export download, import picker, skipped list)
+- [x] ZIP-only export, direct JSON or ZIP import, bounded archive import and malformed archive tests
+- [x] ZIP round trip preserving images, assessed facts, tags and collections

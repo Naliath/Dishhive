@@ -207,7 +207,8 @@ public class RecipeFactsAssessmentService : BackgroundService
         CancellationToken cancellationToken)
     {
         var pending = context.RecipeEnrichmentJobs.Local.FirstOrDefault(job =>
-            job.RecipeId == recipe.Id && job.Task == task && job.State == RecipeEnrichmentJobState.Pending)
+            (job.Recipe == recipe || (recipe.Id != Guid.Empty && job.RecipeId == recipe.Id))
+            && job.Task == task && job.State == RecipeEnrichmentJobState.Pending)
             ?? await context.RecipeEnrichmentJobs.FirstOrDefaultAsync(job =>
             job.RecipeId == recipe.Id
             && job.Task == task
@@ -228,6 +229,9 @@ public class RecipeFactsAssessmentService : BackgroundService
 
         context.RecipeEnrichmentJobs.Add(new RecipeEnrichmentJob
         {
+            // New PostgreSQL recipes receive their UUID on insert. The navigation
+            // gives EF the insert dependency and propagates that generated key.
+            Recipe = recipe,
             RecipeId = recipe.Id,
             RecipeRevision = recipe.Revision,
             FactsConfirmationVersion = recipe.FactsConfirmationVersion,

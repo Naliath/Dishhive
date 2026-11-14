@@ -18,7 +18,7 @@ and generate shopping lists.
 - ✨ **AI Week Suggestions** - Propose dinners for unplanned days from your household's constraints, favorites, ratings and freezer *(optional; any OpenAI-compatible provider — Ollama, LM Studio, OpenAI, Mistral, OpenRouter, ...)*
 - 📏 **Measurement Preferences** - Metric (default) or imperial display
 - 🔌 **MCP Server** - Local AI assistants (LM Studio, Claude, …) can read the week plan, what was eaten (with ratings) and search recipes via `http://localhost:5100/mcp`
-- 🎬 **Demo Mode** - Seeds an empty database with 20 Dagelijkse Kost recipes and a demo household (on by default in Docker)
+- 🎬 **Demo Mode** - Seeds an empty database with 220 enriched recipes from five sources and a demo household (on by default in Docker)
 - 🐳 **Self-Hosted** - Run everything in Docker containers
 
 ## Tech Stack
@@ -110,7 +110,7 @@ docker-compose up -d --build
 ```
 
 Demo mode is **on by default** in `docker-compose.yml` (`Demo__Enabled: "true"`): an empty
-database is seeded in the background with 20 recipes scraped from Dagelijkse Kost and a demo
+database is seeded in the background from an offline ZIP containing 220 enriched recipes from five sources and a demo
 household (the Rocinante crew, including dietary constraints and favorite dishes). Set
 `Demo__Enabled: "false"` for real use; see
 [docs/features/demo-mode.md](docs/features/demo-mode.md).

@@ -4,16 +4,73 @@ using System.Text;
 using System.Text.Json;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
+using Dishhive.Api.Services.Import;
 using FluentAssertions;
 
 namespace Dishhive.Api.Tests.Integration;
 
 /// <summary>
 /// Integration tests for the recipe library exchange: GET /api/recipes/export
-/// (schema.org Recipe JSON) and POST /api/recipes/import/file
+/// (ZIP containing schema.org Recipe JSON) and POST /api/recipes/import/file
 /// </summary>
 public class RecipeExchangeIntegrationTests : TestBase
 {
+    [Fact]
+    public async Task ZipBackup_RestoresImageFactsTagsAndCollections()
+    {
+        var recipe = FullRecipe();
+        recipe.SourceUrl = "https://example.com/stoofvlees";
+        recipe.ImageData = Convert.FromBase64String(TinyPngBase64);
+        recipe.ImageContentType = "image/png";
+        recipe.DietaryFactsStatus = DietaryFactsStatus.AiDetected;
+        recipe.DietaryFactsAssessedRevision = recipe.Revision;
+        recipe.DietaryFactsAssessedAt = DateTime.UtcNow;
+        recipe.DietaryFacts.Add(new() { IngredientClass = IngredientClass.RedMeat });
+        recipe.Tags.Add(new() { Recipe = recipe, RecipeTag = new RecipeTag { Name = "Belgian" } });
+        var cookbook = new Cookbook { Name = "Belgian classics" };
+        cookbook.Entries.Add(new() { Cookbook = cookbook, Recipe = recipe });
+        DbContext.Recipes.Add(recipe);
+        DbContext.Cookbooks.Add(cookbook);
+        await DbContext.SaveChangesAsync();
+
+        var response = await Client.GetAsync("/api/recipes/export");
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("application/zip", response.Content.Headers.ContentType!.MediaType);
+        Assert.Contains(".zip", response.Content.Headers.ContentDisposition!.FileName!);
+        var archive = await response.Content.ReadAsByteArrayAsync();
+        using (var input = new MemoryStream(archive))
+        using (var document = await RecipeBackupArchive.ReadDocumentAsync(input))
+        using (var json = await JsonDocument.ParseAsync(document))
+            Assert.Equal("aiDetected", json.RootElement.GetProperty("@graph")[0]
+                .GetProperty("dishhive:dietaryFacts").GetProperty("status").GetString());
+
+        ClearDatabase();
+        using var form = new MultipartFormDataContent { { new ByteArrayContent(archive), "file", "recipes.zip" } };
+        var imported = await Client.PostAsync("/api/recipes/import/file", form);
+        imported.EnsureSuccessStatusCode();
+        Assert.Equal(1, (await imported.Content.ReadFromJsonAsync<RecipeFileImportResultDto>())!.Created);
+        using var fresh = CreateFreshContext();
+        var restored = fresh.Recipes.Single();
+        Assert.Equal(DietaryFactsStatus.AiDetected, restored.DietaryFactsStatus);
+        Assert.Equal(restored.Revision, restored.DietaryFactsAssessedRevision);
+        Assert.NotEmpty(restored.ImageData!);
+        Assert.Equal(IngredientClass.RedMeat, fresh.RecipeDietaryFacts.Single().IngredientClass);
+        Assert.Equal("Belgian", fresh.RecipeTags.Single().Name);
+        Assert.Equal("Belgian classics", fresh.Cookbooks.Single().Name);
+        Assert.Empty(fresh.RecipeEnrichmentJobs);
+    }
+
+    [Fact]
+    public async Task Import_CorruptZip_ReturnsBadRequest()
+    {
+        using var form = new MultipartFormDataContent
+        {
+            { new ByteArrayContent(Encoding.UTF8.GetBytes("PK invalid archive")), "file", "recipes.zip" }
+        };
+        var response = await Client.PostAsync("/api/recipes/import/file", form);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     // 1x1 transparent PNG
     private const string TinyPngBase64 =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
@@ -69,8 +126,11 @@ public class RecipeExchangeIntegrationTests : TestBase
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentDisposition!.FileName.Should().Contain("dishhive-recipes-");
+        response.Content.Headers.ContentType!.MediaType.Should().Be("application/zip");
 
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var archive = await response.Content.ReadAsStreamAsync();
+        using var json = await RecipeBackupArchive.ReadDocumentAsync(archive);
+        using var document = await JsonDocument.ParseAsync(json);
         document.RootElement.GetProperty("@context").GetString().Should().Be("https://schema.org");
         var graph = document.RootElement.GetProperty("@graph");
         graph.GetArrayLength().Should().Be(1);
@@ -135,8 +195,14 @@ public class RecipeExchangeIntegrationTests : TestBase
         DbContext.Recipes.Add(FullRecipe());
         await DbContext.SaveChangesAsync();
 
-        var export = await Client.GetStringAsync("/api/recipes/export");
-        var result = await ImportFileAsync(export);
+        var export = await Client.GetByteArrayAsync("/api/recipes/export");
+        using var content = new MultipartFormDataContent
+        {
+            { new ByteArrayContent(export), "file", "recipes.zip" }
+        };
+        var response = await Client.PostAsync("/api/recipes/import/file", content);
+        response.EnsureSuccessStatusCode();
+        var result = (await response.Content.ReadFromJsonAsync<RecipeFileImportResultDto>())!;
 
         // manual recipe (no source URL) with a known title -> the library version wins
         result.Created.Should().Be(0);
@@ -158,9 +224,9 @@ public class RecipeExchangeIntegrationTests : TestBase
         DbContext.Cookbooks.Add(cookbook);
         await DbContext.SaveChangesAsync();
 
-        var export = await Client.GetStringAsync("/api/recipes/export");
-
-        using var document = JsonDocument.Parse(export);
+        using var archive = await Client.GetStreamAsync("/api/recipes/export");
+        using var json = await RecipeBackupArchive.ReadDocumentAsync(archive);
+        using var document = await JsonDocument.ParseAsync(json);
         var node = document.RootElement.GetProperty("@graph")[0];
         node.GetProperty("dishhive:collections").EnumerateArray()
             .Select(c => c.GetString()).Should().Equal("Comfort Food");

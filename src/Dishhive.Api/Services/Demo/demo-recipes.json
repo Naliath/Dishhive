@@ -1,0 +1,882 @@
+[
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/lasagne-verde",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/courgette-fetaburger-tomatensla-rode-ui-orzo",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/bloemkool-in-zoetzure-saus-met-groenten-en-rijst",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/gegrilde-gegratineerde-artisjok-tomatencompote-peterseliepesto",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/aardappelballetjes-gevuld-met-scamorza-botersaus-met-salie-en-broccolini",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/kalfsoester-looksaus-broccolini-puree",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/iga-bakar-rijst-boontjes-atjar",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/kiprollade-ei-champignonsaus-kroketten-kropsla",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/kip-in-romige-tomatensaus-met-gebakken-aardappelen-en-sla",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/lamsschenkel-bier-asperges-geroosterde-aardappelen",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/pad-khee-mao-drunken-noodles",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/pasta-half-en-half",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/loaded-fries-pulled-chicken-jalapenomaiyonaise",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/gambas-saffraanrijst-salsa-pimiento-del-piquillo",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/kabeljauw-met-aspergepuree-en-hollandaise-met-daslook",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/zalmballetjes-met-avocadolabneh-en-kruidensalade",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/komkommersandwich-geitenkaas-gerookte-zalm",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/cheesecake-met-aardbeien-en-coulis-van-aardbei",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/havermoutcrumble-rabarber-gember",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/eton-mess-frambozen-violette",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/stoofvlees-friet",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/vol-au-vent",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/hutsepot-2",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/waterzooi-van-griet-met-saffraan",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/garnaalkroketten",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/witloof-in-de-oven",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/mosselen-friet",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/balletjes-in-tomatensaus",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/konijn-zoetzuur",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/steak-tartaar-met-frietjes-0",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/kalfstong-in-madeirasaus",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/stoemp-met-witloof-ham-en-kaas",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/blinde-vinken-met-pasta",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/paling-in-t-groen",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/gehaktbrood-met-belgische-kaas",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/tomatensoep-met-veel-balletjes",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/gehaktballen-in-uiensaus-met-frietjes",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/karnemelkpudding-met-perzik-en-bladerdeeg",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/stoofvlees-met-friet",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/vol-au-vent-met-puree",
+    "collection": "Belgian classics"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/rijstpap-belle-helene",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/pannenkoekentaart",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/brusselse-wafels",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/dame-blanche-met-zelfgemaakte-sigaren",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/chocolademoussetaart",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/creme-brulee",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/appeltaart-met-vanilleroom",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/tarte-tatin-frangipane",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/speculaascake-met-mokka",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/rijstpap-met-kokos-en-mango",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/vegetarische-wok",
+    "collection": "Vegetable inspired"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/groentecurry",
+    "collection": "Vegetable inspired"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/falafels-met-een-yoghurtdip",
+    "collection": "Vegetable inspired"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/ratatouillesoep",
+    "collection": "Vegetable inspired"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/linzenschotel-parmentier",
+    "collection": "Vegetable inspired"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/couscoussalade-met-gegrilde-gambas",
+    "collection": "Vegetable inspired"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/auberginesoep-met-kikkererwten",
+    "collection": "Vegetable inspired"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/groentelasagne-met-4-kazen",
+    "collection": "Vegetable inspired"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/pompoencurry-met-naan",
+    "collection": "Vegetable inspired"
+  },
+  {
+    "url": "https://dagelijksekost.vrt.be/gerechten/groenteburgers-met-portobello",
+    "collection": "Vegetable inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/one-pan-mongolian-beef-noodles-with-broccoli/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/beef-rice-noodles/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/taiwanese-three-cup-chicken/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/mapo-tofu/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/thai-grilled-chicken-gai-yang/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/easy-classic-chinese-beef-stir-fry/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/korean-beef-bulgogi-rice-bowls-the-easy-way/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/crispy-thai-pork-bites-with-sweet-chilli-sauce/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/crispy-chinese-lemon-chicken/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/filipino-pork-adobo/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/the-fastest-noodle-stir-fry-i-know/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/ginger-chicken-and-rice/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/hokkien-noodles/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/beef-tataki/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/singapore-vermicelli-noodles-with-chicken/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/southern-thai-tumeric-chicken-grilled-or-baked/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/spicy-wontons-in-chilli-sauce-din-tai-fung/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/bok-choy-in-ginger-sauce/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/garlic-noodles/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/vietnamese-caramel-ginger-chicken/",
+    "collection": "Asian inspired"
+  },
+  {
+    "url": "https://www.recipetineats.com/chocolate-crinkle-cookies/",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.recipetineats.com/rich-chocolate-cheesecake-no-bake/",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.recipetineats.com/monster-cookies-recipe/",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.recipetineats.com/white-chocolate-raspberry-muffins/",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.recipetineats.com/choc-chip-peanut-butter-cookies/",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.recipetineats.com/raspberry-tartlets-recipe/",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.recipetineats.com/sweet-tartlet-shells-individual-tart-crusts/",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.recipetineats.com/lemon-delicious-pudding/",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.recipetineats.com/lace-almond-tuiles-recipe/",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.recipetineats.com/french-apple-cake-recipe/",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.recipetineats.com/french-glazed-carrots-carottes-vichy-recipe/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.recipetineats.com/thai-red-lentil-soup/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.recipetineats.com/50-clove-garlic-soup-recipe/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.recipetineats.com/crispy-shredded-halloumi-salad-with-kale/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.recipetineats.com/vegetable-tian-recipe/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.recipetineats.com/nagis-salad-sandwich/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.recipetineats.com/french-mushroom-tart/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.recipetineats.com/greek-zucchini-tots-mini-fritters/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.recipetineats.com/maple-sweet-potato-salad-with-whipped-tahini/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.recipetineats.com/cheese-herb-garlic-quick-bread/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/spiced-carrot-lentil-soup",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/best-ever-macaroni-cheese-recipe",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/creamy-courgette-lasagne",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/satay-sweet-potato-curry",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/burnt-aubergine-veggie-chilli",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/coconut-squash-dhansak",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/double-bean-roasted-pepper-chilli",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/veggie-shepherds-pie-sweet-potato-mash",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/crispy-greek-style-pie",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/red-lentil-chickpea-chilli-soup",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/simple-mushroom-curry",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/butternut-squash-cherry-tomato-crumble",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/brussels-sprouts-winter-salad-with-clementine-dressing",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/roasted-red-pepper-soup-with-crispy-croutons",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/easy-chocolate-molten-cakes",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/biscoff-cheesecake",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/chocolate-tiffin",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/white-chocolate-cheesecake",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/lemon-sponge",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/vanilla-panna-cotta",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/easy-cornflake-tart",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/chocolate-hazelnut-ice-cream-cheesecake",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/plum-apple-cobbler",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/quick-easy-tiramisu",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/pistachio-tiramisu",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/apple-crumble-sundae",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/treacle-tart",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/toffee-apple-bread-butter-pudding",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/blackberry-lemon-fool",
+    "collection": "Desserts \u0026 baking"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/family-meals-easy-fish-pie-recipe",
+    "collection": "Fish \u0026 seafood"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/superhealthy-salmon-burgers",
+    "collection": "Fish \u0026 seafood"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/thai-style-steamed-fish",
+    "collection": "Fish \u0026 seafood"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/creamy-salmon-leek-potato-traybake",
+    "collection": "Fish \u0026 seafood"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/confit-salmon-with-tahini-pistachio-herb-crust",
+    "collection": "Fish \u0026 seafood"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/cod-prawn-pie-with-saffron-potatoes",
+    "collection": "Fish \u0026 seafood"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/smoky-hake-beans-greens",
+    "collection": "Fish \u0026 seafood"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/salmon-greens-creme-fraiche",
+    "collection": "Fish \u0026 seafood"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/simple-fish-stew",
+    "collection": "Fish \u0026 seafood"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/pasta-salmon-peas",
+    "collection": "Fish \u0026 seafood"
+  },
+  {
+    "url": "https://www.budgetbytes.com/coconut-curry-chickpeas/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/creamy-cucumber-salad/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/hearty-black-bean-quesadillas/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/honey-sriracha-tofu/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/spinach-feta-grilled-cheese/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/vegan-creamy-mushroom-ramen/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/chipotle-portobello-oven-fajitas/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/peanut-tofu-noodle-bowls/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/creamy-coconut-curry-lentils-with-spinach/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/cauliflower-steak/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/can-eat-cabbage-soup/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/bruschetta-pasta/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/salad-bar-vegetable-lo-mein/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/cheese-enchiladas/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/white-beans-with-mushrooms-and-marinara/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/black-bean-burgers/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/creamy-white-bean-and-spinach-quesadillas/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/eggplant-parmesan/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/bbq-beans-and-greens/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/sopa-de-fideo/",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.budgetbytes.com/chicken-noodle-soup/",
+    "collection": "Soups \u0026 lunches"
+  },
+  {
+    "url": "https://www.budgetbytes.com/taco-soup/",
+    "collection": "Soups \u0026 lunches"
+  },
+  {
+    "url": "https://www.budgetbytes.com/loaded-potato-soup/",
+    "collection": "Soups \u0026 lunches"
+  },
+  {
+    "url": "https://www.budgetbytes.com/easy-dumpling-soup/",
+    "collection": "Soups \u0026 lunches"
+  },
+  {
+    "url": "https://www.budgetbytes.com/slow-cooker-chicken-tortilla-soup/",
+    "collection": "Soups \u0026 lunches"
+  },
+  {
+    "url": "https://www.budgetbytes.com/coconut-turmeric-chicken-soup/",
+    "collection": "Soups \u0026 lunches"
+  },
+  {
+    "url": "https://www.budgetbytes.com/chicken-lime-soup/",
+    "collection": "Soups \u0026 lunches"
+  },
+  {
+    "url": "https://www.budgetbytes.com/chicken-stew/",
+    "collection": "Soups \u0026 lunches"
+  },
+  {
+    "url": "https://www.budgetbytes.com/tomato-lentil-soup/",
+    "collection": "Soups \u0026 lunches"
+  },
+  {
+    "url": "https://www.budgetbytes.com/thai-curry-vegetable-soup/",
+    "collection": "Soups \u0026 lunches"
+  },
+  {
+    "url": "https://www.budgetbytes.com/one-pot-creamy-cajun-chicken-pasta/",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://www.budgetbytes.com/baked-chicken-drumsticks/",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://www.budgetbytes.com/one-pot-creamy-pesto-chicken-pasta/",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://www.budgetbytes.com/one-pot-chicken-and-rice/",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://www.budgetbytes.com/creamy-pesto-chicken/",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://www.budgetbytes.com/creamy-garlic-chicken/",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://www.budgetbytes.com/chicken-stir-fry/",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://www.budgetbytes.com/spinach-stuffed-chicken-breast/",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://www.budgetbytes.com/french-onion-chicken/",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://www.budgetbytes.com/chicken-and-broccoli-skillet-lasagna/",
+    "collection": "Everyday favourites"
+  },
+  {
+    "url": "https://www.bbcgoodfood.com/recipes/easy-caponata",
+    "collection": "Vegetarian meals"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegan-pasta/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/lentil-pasta/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/butternut-squash-pasta/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/spaghetti-aglio-e-olio/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/pasta-pomodoro/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegan-mac-and-cheese/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/orecchiette-with-broccoli-rabe/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegan-tacos/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegan-enchiladas/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegan-burrito/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/mushroom-tacos/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/sofritas/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/burrito-bowl/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/sesame-soba-noodles/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegan-ramen/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/fresh-spring-rolls/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/maki-sushi-recipe/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/peanut-noodles/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/bok-choy-stir-fry/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/best-veggie-burger-recipe/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/falafel/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/bbq-jackfruit-recipes/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegan-egg-salad/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/chickpea-salad-sandwich/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/black-bean-burger-recipe/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/portobello-mushroom-burger/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/curry-recipe/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegan-meatballs/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegan-pizza/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/chana-masala/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegetarian-chili-recipe/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/sushi-bowl/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/sesame-tofu-recipe/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/cauliflower-steak-recipe/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/tomato-soup-recipe/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/butternut-squash-soup/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/curry-lentil-soup/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/cabbage-soup/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/vegetable-soup/",
+    "collection": "Plant based cooking"
+  },
+  {
+    "url": "https://www.loveandlemons.com/dumpling-soup/",
+    "collection": "Plant based cooking"
+  }
+]

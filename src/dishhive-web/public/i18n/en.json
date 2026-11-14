@@ -21,7 +21,7 @@
       "other": "{count} recipes"
     },
     "recipeLibraryBackup": "Recipe library backup",
-    "recipeBackupExplanation": "Export downloads every recipe, including photos, in a portable JSON format. Import restores the file while keeping known recipes.",
+    "recipeBackupExplanation": "Export downloads a ZIP backup with every recipe, photo and assessed dietary fact. Import accepts ZIP backups and JSON recipe files while keeping known recipes.",
     "exportRecipes": "Export recipes",
     "importRecipes": "Import recipes",
     "importing": "Importing…",

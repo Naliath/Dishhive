@@ -57,7 +57,7 @@ services:
       ApiSecurity__McpReadApiKey: "${DISHHIVE_MCP_READ_API_KEY:-}"
       # Optional Freezy integration; set to e.g. http://host.docker.internal:5000
       Freezy__BaseUrl: "http://host.docker.internal:5000"
-      # Demo mode: seeds an empty database with 20 Dagelijkse Kost recipes and a
+      # Demo mode: seeds an empty database with 220 enriched recipes from five sources and a
       # demo household (the Rocinante crew). Set to "false" for real use.
       Demo__Enabled: "true"
       # Optional AI week-plan suggestions (disabled while Ai__Provider is empty).

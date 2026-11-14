@@ -18,10 +18,11 @@ public interface IRecipeExchangeService
     Task<string> ExportAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Imports recipes from a schema.org Recipe JSON file (a single Recipe object, an
+    /// Imports recipes from a ZIP backup or schema.org Recipe JSON file (a single Recipe object, an
     /// array, or an @graph document — including Dishhive's own export).
     /// </summary>
     /// <exception cref="JsonException">The file is not valid JSON</exception>
+    /// <exception cref="InvalidDataException">The ZIP structure or backup size is invalid</exception>
     /// <exception cref="RecipeExtractionFailedException">The JSON contains no Recipe objects</exception>
     Task<RecipeFileImportResultDto> ImportAsync(Stream json, CancellationToken cancellationToken = default);
 }
@@ -105,7 +106,8 @@ public partial class RecipeExchangeService : IRecipeExchangeService
     public async Task<RecipeFileImportResultDto> ImportAsync(Stream json, CancellationToken cancellationToken = default)
     {
         var operationId = $"file-import-{Guid.NewGuid():N}";
-        using var document = await JsonDocument.ParseAsync(json, cancellationToken: cancellationToken);
+        using var documentStream = await RecipeBackupArchive.ReadDocumentAsync(json, cancellationToken);
+        using var document = await JsonDocument.ParseAsync(documentStream, cancellationToken: cancellationToken);
         var nodes = SchemaOrgRecipeExtractor.FindRecipeNodes(document.RootElement);
         if (nodes.Count == 0)
         {

@@ -16,10 +16,17 @@ public static class RecipeImageProcessor
     public const string StoredContentType = "image/webp";
     private const long MaxDecodedPixels = 50_000_000;
 
-    public static async Task<ProcessedRecipeImage> ProcessAsync(
+    public static Task<ProcessedRecipeImage> ProcessAsync(
         Stream source, CancellationToken cancellationToken = default)
+        => ProcessAsync(source, MaxDimension, WebpQuality, cancellationToken);
+
+    internal static async Task<ProcessedRecipeImage> ProcessAsync(
+        Stream source, int maxDimension, int webpQuality, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDimension);
+        ArgumentOutOfRangeException.ThrowIfNegative(webpQuality);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(webpQuality, 100);
 
         await using var boundedSource = new MemoryStream();
         await CopyWithLimitAsync(source, boundedSource, MaxSourceBytes, cancellationToken);
@@ -46,7 +53,7 @@ public static class RecipeImageProcessor
             var sourceOrientedWidth = swapsAxes ? codec.Info.Height : codec.Info.Width;
             var sourceOrientedHeight = swapsAxes ? codec.Info.Width : codec.Info.Height;
             var storageScale = Math.Min(1D,
-                (double)MaxDimension / Math.Max(sourceOrientedWidth, sourceOrientedHeight));
+                (double)maxDimension / Math.Max(sourceOrientedWidth, sourceOrientedHeight));
 
             // JPEG and several other codecs can decode close to the requested size,
             // avoiding a full-resolution pixel buffer. Other formats safely fall back
@@ -66,7 +73,7 @@ public static class RecipeImageProcessor
 
             using var oriented = ApplyOrientation(decoded, codec.EncodedOrigin);
             var finalScale = Math.Min(1D,
-                (double)MaxDimension / Math.Max(oriented.Width, oriented.Height));
+                (double)maxDimension / Math.Max(oriented.Width, oriented.Height));
             var finalWidth = Math.Max(1, (int)Math.Round(oriented.Width * finalScale));
             var finalHeight = Math.Max(1, (int)Math.Round(oriented.Height * finalScale));
 
@@ -84,7 +91,7 @@ public static class RecipeImageProcessor
             }
 
             using var image = SKImage.FromBitmap(resized);
-            using var output = image.Encode(SKEncodedImageFormat.Webp, WebpQuality);
+            using var output = image.Encode(SKEncodedImageFormat.Webp, webpQuality);
             if (output == null || output.Size == 0 || output.Size > MaxStoredBytes)
             {
                 throw new RecipeImageException("The processed image is too large to store.");

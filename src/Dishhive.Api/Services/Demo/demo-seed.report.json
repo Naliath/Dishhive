@@ -1,0 +1,78 @@
+{
+  "generatedAt": "2026-11-14T10:31:39.4775499Z",
+  "recipes": 220,
+  "sources": {
+    "dagelijksekost.vrt.be": 60,
+    "www.recipetineats.com": 40,
+    "www.budgetbytes.com": 40,
+    "www.loveandlemons.com": 40,
+    "www.bbcgoodfood.com": 40
+  },
+  "collections": {
+    "Everyday favourites": 27,
+    "Desserts \u0026 baking": 38,
+    "Belgian classics": 20,
+    "Vegetable inspired": 10,
+    "Asian inspired": 20,
+    "Vegetarian meals": 45,
+    "Fish \u0026 seafood": 10,
+    "Soups \u0026 lunches": 10,
+    "Plant based cooking": 40
+  },
+  "assessed": 220,
+  "images": 220,
+  "enrichmentSecondsThisRun": 1,
+  "jsonBytes": 18676651,
+  "zipBytes": 14364259,
+  "aiRuns": [
+    {
+      "task": "recipe.facts",
+      "outcome": "parseFailure",
+      "provider": "openai-compatible",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "contractVersion": "recipe-facts-v7",
+      "count": 3,
+      "inputTokens": 3957,
+      "outputTokens": 24576
+    },
+    {
+      "task": "recipe.facts",
+      "outcome": "success",
+      "provider": "openai-compatible",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "contractVersion": "recipe-facts-v7",
+      "count": 220,
+      "inputTokens": 287297,
+      "outputTokens": 324065
+    },
+    {
+      "task": "recipe.import_extract",
+      "outcome": "validationFailure",
+      "provider": "openai-compatible",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "contractVersion": "recipe-import-extraction-v1",
+      "count": 27,
+      "inputTokens": 47984,
+      "outputTokens": 3750
+    },
+    {
+      "task": "recipe.import_extract",
+      "outcome": "noResult",
+      "provider": "openai-compatible",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "contractVersion": "recipe-import-extraction-v1",
+      "count": 2,
+      "inputTokens": 2827,
+      "outputTokens": 108
+    }
+  ],
+  "imageProfile": {
+    "maxDimension": 1000,
+    "webpQuality": 75
+  },
+  "imageOptimization": {
+    "optimizedAt": "2026-11-14T10:57:45.6035227Z",
+    "previousZipBytes": 34030964,
+    "savedBytes": 19666705
+  }
+}

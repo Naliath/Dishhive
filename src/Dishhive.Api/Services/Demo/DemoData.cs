@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Dishhive.Api.Services.Demo;
 
 /// <summary>
@@ -19,41 +21,27 @@ public record DemoMember(
     IReadOnlyList<string> FavoriteDishNames);
 
 /// <summary>
-/// Static demo dataset: 20 recipes scraped live from Dagelijkse Kost at seed time,
-/// and the crew of the Rocinante (The Expanse) as the household.
+/// Curated offline recipe selection and the crew of the Rocinante (The Expanse).
 /// </summary>
 public static class DemoData
 {
     private const string Base = "https://dagelijksekost.vrt.be/gerechten/";
 
     /// <summary>
-    /// 20 Dagelijkse Kost recipe URLs with a spread of meat, fish, vegetarian
-    /// dishes, lunches and desserts. Imported through the regular recipe import
-    /// pipeline so they get ingredients, steps and locally stored images.
+    /// Recipes collected through the regular importer and enrichment queue before
+    /// being exported into the embedded demo ZIP. Runtime seeding is offline.
     /// </summary>
-    public static readonly IReadOnlyList<string> RecipeUrls =
-    [
-        Base + "lasagne-verde",
-        Base + "courgette-fetaburger-tomatensla-rode-ui-orzo",
-        Base + "bloemkool-in-zoetzure-saus-met-groenten-en-rijst",
-        Base + "gegrilde-gegratineerde-artisjok-tomatencompote-peterseliepesto",
-        Base + "aardappelballetjes-gevuld-met-scamorza-botersaus-met-salie-en-broccolini",
-        Base + "kalfsoester-looksaus-broccolini-puree",
-        Base + "iga-bakar-rijst-boontjes-atjar",
-        Base + "kiprollade-ei-champignonsaus-kroketten-kropsla",
-        Base + "kip-in-romige-tomatensaus-met-gebakken-aardappelen-en-sla",
-        Base + "lamsschenkel-bier-asperges-geroosterde-aardappelen",
-        Base + "pad-khee-mao-drunken-noodles",
-        Base + "pasta-half-en-half",
-        Base + "loaded-fries-pulled-chicken-jalapenomaiyonaise",
-        Base + "gambas-saffraanrijst-salsa-pimiento-del-piquillo",
-        Base + "kabeljauw-met-aspergepuree-en-hollandaise-met-daslook",
-        Base + "zalmballetjes-met-avocadolabneh-en-kruidensalade",
-        Base + "komkommersandwich-geitenkaas-gerookte-zalm",
-        Base + "cheesecake-met-aardbeien-en-coulis-van-aardbei",
-        Base + "havermoutcrumble-rabarber-gember",
-        Base + "eton-mess-frambozen-violette"
-    ];
+    public static readonly IReadOnlyList<string> RecipeUrls = LoadSelection().Select(s => s.Url).ToArray();
+
+    private static DemoRecipeSelection[] LoadSelection()
+    {
+        var assembly = typeof(DemoData).Assembly;
+        using var stream = assembly.GetManifestResourceStream(
+            "Dishhive.Api.Services.Demo.demo-recipes.json")
+            ?? throw new InvalidOperationException("Embedded demo recipe selection not found.");
+        return JsonSerializer.Deserialize<DemoRecipeSelection[]>(stream, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            ?? throw new InvalidDataException("The demo recipe selection is empty.");
+    }
 
     /// <summary>
     /// Demo collections over the seeded recipes, so the collections feature (and the

@@ -10,12 +10,14 @@ namespace Dishhive.Api.Tests.Services;
 public class DemoDataTests
 {
     [Fact]
-    public void RecipeUrls_ContainsTwentyDistinctDagelijkseKostUrls()
+    public void RecipeUrls_ContainsAtLeastTwoHundredDistinctUrlsFromFiveBalancedSources()
     {
-        DemoData.RecipeUrls.Should().HaveCount(20);
+        DemoData.RecipeUrls.Count.Should().BeGreaterThanOrEqualTo(200);
         DemoData.RecipeUrls.Should().OnlyHaveUniqueItems();
-        DemoData.RecipeUrls.Should().OnlyContain(url =>
-            url.StartsWith("https://dagelijksekost.vrt.be/gerechten/"));
+        var sources = DemoData.RecipeUrls.GroupBy(url => new Uri(url).Host).ToList();
+        sources.Should().HaveCount(5);
+        sources.Should().OnlyContain(group => group.Count() >= 35);
+        sources.Select(group => group.Key).Should().Contain("dagelijksekost.vrt.be");
     }
 
     [Fact]

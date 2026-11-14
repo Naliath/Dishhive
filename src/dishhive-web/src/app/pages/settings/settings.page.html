@@ -149,7 +149,7 @@
         <mat-icon>upload</mat-icon>
         {{ (importing() ? 'settings.importing' : 'settings.importRecipes') | translate }}
       </button>
-      <input #fileInput type="file" accept=".json,application/json" hidden
+      <input #fileInput type="file" accept=".zip,.json,application/zip,application/json" hidden
              (change)="importRecipes(fileInput.files); fileInput.value = ''" />
     </div>
     @if (importSkipped().length > 0) {

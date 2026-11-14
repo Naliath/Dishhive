@@ -19,14 +19,17 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 
-// one-time seed generation: dotnet run --project src/Dishhive.Api -- --generate-demo-seed
-if (args.Contains("--generate-demo-seed"))
+var generateDemoSeed = args.Contains("--generate-demo-seed");
+var builder = WebApplication.CreateBuilder(args.Where(a => a != "--generate-demo-seed").ToArray());
+if (generateDemoSeed)
 {
-    await Dishhive.Api.Services.Demo.DemoSeedGenerator.RunAsync();
-    return;
+    builder.Configuration["Demo:Enabled"] = "false";
+    builder.Configuration["BackgroundJobs:Enabled"] = "false";
+    var generationDatabase = new Npgsql.NpgsqlConnectionStringBuilder(
+        builder.Configuration.GetConnectionString("DefaultConnection")).Database;
+    if (generationDatabase?.StartsWith("dishhive_demo_seed_", StringComparison.Ordinal) != true)
+        throw new InvalidOperationException("Demo generation requires a dedicated dishhive_demo_seed_* database.");
 }
-
-var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
@@ -414,7 +417,10 @@ if (!app.Environment.IsEnvironment("Testing")
     await app.MigrateDatabaseAsync();
 }
 
-app.Run();
+if (generateDemoSeed)
+    await DemoSeedGenerator.RunAsync(app.Services, app.Configuration);
+else
+    app.Run();
 
 // Make Program accessible to test projects
 public partial class Program { }

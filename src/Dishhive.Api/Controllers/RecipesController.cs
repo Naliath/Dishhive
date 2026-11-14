@@ -453,25 +453,26 @@ public class RecipesController : ControllerBase
     }
 
     /// <summary>
-    /// Downloads the whole recipe library as a schema.org Recipe JSON file —
-    /// the interchange format other recipe managers understand. Locally stored
-    /// images are embedded so the file is self-contained.
+    /// Downloads a ZIP backup containing schema.org recipes.json, embedded images
+    /// and assessed facts.
     /// </summary>
     [HttpGet("export")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportRecipes()
     {
         var json = await _exchangeService.ExportAsync(HttpContext.RequestAborted);
-        var fileName = $"dishhive-recipes-{DateTime.UtcNow:yyyy-MM-dd}.json";
-        return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
+        var fileName = $"dishhive-recipes-{DateTime.UtcNow:yyyy-MM-dd}.zip";
+        return File(RecipeBackupArchive.Create(json), "application/zip", fileName);
     }
 
     /// <summary>
-    /// Imports recipes from a schema.org Recipe JSON file (including Dishhive's own
+    /// Imports recipes from a ZIP backup or schema.org Recipe JSON file (including Dishhive's own
     /// export). Recipes with a known source URL are updated; recipes whose title is
     /// already in the library are skipped; the rest are created.
     /// </summary>
     [HttpPost("import/file")]
+    [RequestSizeLimit(RecipeBackupArchive.MaxUploadBytes + 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = RecipeBackupArchive.MaxUploadBytes)]
     [EnableRateLimiting("expensive")]
     [ProducesResponseType(typeof(RecipeFileImportResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -487,15 +488,18 @@ public class RecipesController : ControllerBase
             });
         }
 
+        if (file.Length > RecipeBackupArchive.MaxUploadBytes)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge);
+
         try
         {
             await using var stream = file.OpenReadStream();
             var result = await _exchangeService.ImportAsync(stream, HttpContext.RequestAborted);
             return Ok(result);
         }
-        catch (System.Text.Json.JsonException ex)
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidDataException)
         {
-            _logger.LogInformation(ex, "Invalid recipe import JSON file");
+            _logger.LogInformation(ex, "Invalid recipe backup file");
             return BadRequest(new ProblemDetails
             {
                 Title = await _messages.GetAsync("recipe.invalidFileTitle", HttpContext.RequestAborted),

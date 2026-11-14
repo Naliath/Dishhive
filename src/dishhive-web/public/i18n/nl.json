@@ -789,6 +789,15 @@
     "Side": "Bijgerecht",
     "Dessert": "Nagerecht"
   },
+  "measurementUnit": {
+    "tablespoon": { "other": "el" },
+    "teaspoon": { "other": "tl" },
+    "pinch": { "one": "snuifje", "other": "snuifjes" },
+    "leaf": { "one": "blaadje", "other": "blaadjes" },
+    "clove": { "one": "teentje", "other": "teentjes" },
+    "sprig": { "one": "takje", "other": "takjes" },
+    "container": { "one": "bakje", "other": "bakjes" }
+  },
   "paginator": {
     "itemsPerPage": "Items per pagina:",
     "nextPage": "Volgende pagina",

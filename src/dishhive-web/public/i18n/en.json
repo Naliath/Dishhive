@@ -789,6 +789,15 @@
     "Side": "Side",
     "Dessert": "Dessert"
   },
+  "measurementUnit": {
+    "tablespoon": { "other": "tbsp" },
+    "teaspoon": { "other": "tsp" },
+    "pinch": { "one": "pinch", "other": "pinches" },
+    "leaf": { "one": "leaf", "other": "leaves" },
+    "clove": { "one": "clove", "other": "cloves" },
+    "sprig": { "one": "sprig", "other": "sprigs" },
+    "container": { "one": "container", "other": "containers" }
+  },
   "paginator": {
     "itemsPerPage": "Items per page:",
     "nextPage": "Next page",

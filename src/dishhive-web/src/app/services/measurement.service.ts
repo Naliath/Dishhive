@@ -1,12 +1,13 @@
 import { Injectable } from '@angular/core';
 import { SettingsService } from './settings.service';
+import { LanguageService } from './language.service';
 import { MeasurementSystem } from '../models/user-setting.model';
 
 /**
  * Formats stored (metric) quantities in the household's preferred measurement system.
  * Storage is always metric; this service is the single display-conversion point
- * (see docs/features/measurement-preferences.md). Culinary units (el, tl, blaadje, …)
- * pass through unchanged in both systems.
+ * (see docs/features/measurement-preferences.md). Culinary units keep their quantities
+ * in both systems; their display labels follow the selected interface language.
  */
 @Injectable({ providedIn: 'root' })
 export class MeasurementService {
@@ -18,7 +19,20 @@ export class MeasurementService {
     l: { unit: 'qt', factor: 1.0567 }
   };
 
-  constructor(private settingsService: SettingsService) {}
+  private static readonly unitLabelKeys: Record<string, string> = {
+    el: 'measurementUnit.tablespoon',
+    tl: 'measurementUnit.teaspoon',
+    snuifje: 'measurementUnit.pinch',
+    blaadje: 'measurementUnit.leaf',
+    teentje: 'measurementUnit.clove',
+    takje: 'measurementUnit.sprig',
+    bakje: 'measurementUnit.container'
+  };
+
+  constructor(
+    private readonly settingsService: SettingsService,
+    private readonly language: LanguageService
+  ) {}
 
   /**
    * Formats a stored metric quantity for display, e.g. (500, 'g') → "500 g" or "17.6 oz".
@@ -44,7 +58,9 @@ export class MeasurementService {
     if (!displayUnit || displayUnit === 'piece') {
       return `${rounded}`;
     }
-    return `${rounded} ${displayUnit}`;
+    const key = MeasurementService.unitLabelKeys[displayUnit];
+    const label = key ? this.language.plural(key, rounded) : displayUnit;
+    return `${rounded} ${label === key ? displayUnit : label}`;
   }
 
   private round(value: number): number {

@@ -2,7 +2,8 @@
 
 **Status legend:** `[ ]` = new · `[~]` = in progress · `[x]` = done
 **Related:** [recipe-store.md](recipe-store.md), [recipe-import.md](recipe-import.md),
-[shopping-list-export.md](shopping-list-export.md)
+[shopping-list-export.md](shopping-list-export.md),
+[ingredient-aware conversion research and plan](../plans/INGREDIENT_MEASUREMENT_CONVERSION_PLAN.md)
 
 ## Feature Goal
 
@@ -45,8 +46,9 @@ Rules:
    `OriginalText` shown as-is. Shopping lists pass such lines through verbatim.
 
 Canonical units: `g`, `kg`, `ml`, `l`, `piece`, plus pass-through for culinary units that have
-no system (`snuifje`/pinch, `blaadje`/leaf, `el`/`tl` spoons kept as-is — converting spoons is
-noise, not value).
+no system (`snuifje`/pinch, `blaadje`/leaf, `el`/`tl` spoons keep their quantities). Culinary
+unit labels follow the interface language through `measurementUnit` translation messages;
+English displays `el` as `tbsp` and `tl` as `tsp` in either measurement system.
 
 ## User Stories / Use Cases
 

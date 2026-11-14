@@ -165,6 +165,47 @@ test.beforeEach(async ({ page }) => installReadOnlyFixtures(page));
 test.afterEach(async ({ page }) => expect(runtimeErrors.get(page) ?? []).toEqual([]));
 
 for (const width of [360, 1280]) {
+  for (const language of ['en', 'nl'] as const) {
+    test(`normalized culinary units follow ${language} at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.route('**/api/settings/preferences', route => route.fulfill({ json: {
+        measurementSystem: 0, firstDayOfWeek: 1, preferredLanguage: language,
+        translateImportedRecipes: false, supportedLanguages: []
+      } }));
+      const ingredients = [
+        { id: 'spoon', name: 'olive oil', quantity: 2, unit: 'el', sortOrder: 0, originalText: '2 eetlepels olijfolie' },
+        { id: 'teaspoon', name: 'salt', quantity: 0.5, unit: 'tl', sortOrder: 1 },
+        { id: 'leaves', name: 'basil', quantity: 3, unit: 'blaadje', sortOrder: 2 }
+      ];
+      await page.route(`**/api/recipes/${recipeId}`, route => route.fulfill({ json: { ...recipe, ingredients } }));
+      await page.route('**/api/shoppinglist?**', route => route.fulfill({ json: {
+        from: '2026-09-07', to: '2026-09-13', reminders: [],
+        items: ingredients.map(ingredient => ({ ...ingredient, sourceRecipes: [] }))
+      } satisfies ShoppingList }));
+      const expected = language === 'en'
+        ? ['2 tbsp', '0.5 tsp', '3 leaves'] : ['2 el', '0.5 tl', '3 blaadjes'];
+
+      await page.goto(`/recipes/${recipeId}`);
+      await expect(page.locator('.ingredients li > span > strong')).toHaveText(expected);
+      await page.getByRole('switch').click();
+      await expect(page.locator('.original-value')).toContainText('2 eetlepels olijfolie');
+      await assertGeometry(page);
+
+      await page.goto('/shopping-list');
+      await expect(page.locator('.item-quantity')).toHaveText(expected);
+      await assertGeometry(page);
+      await page.evaluate(() => {
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+          writeText: async (value: string) => { document.body.dataset['copiedText'] = value; }
+        } });
+      });
+      await page.getByRole('button', { name: language === 'en' ? 'Copy as text' : 'Als tekst kopiëren' }).click();
+      for (const [index, ingredient] of ingredients.entries()) {
+        await expect(page.locator('body')).toHaveAttribute('data-copied-text', new RegExp(`- ${expected[index]} ${ingredient.name}`));
+      }
+    });
+  }
+
   test(`Dutch labels and long collection names fit at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.route('**/api/settings/preferences', route => route.fulfill({ json: {

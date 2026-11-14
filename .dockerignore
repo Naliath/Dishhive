@@ -23,6 +23,8 @@ npm-debug.log*
 .angular/
 dist/
 coverage/
+**/playwright-report/
+**/test-results/
 
 # .NET
 **/bin/
@@ -34,5 +36,7 @@ docker-compose*.yml
 .docker/
 
 # Misc
+artifacts/
+**/__pycache__/
 *.log
 *.bak

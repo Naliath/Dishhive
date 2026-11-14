@@ -58,7 +58,7 @@ public class RecipesControllerIntegrationTests : TestBase
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         created!.HasLocalImage.Should().BeTrue();
-        created.ImageUrl.Should().Be($"/api/recipes/{created.Id}/image");
+        created.ImageUrl.Should().Be($"/api/recipes/{created.Id}/image?v={created.UpdatedAt.Ticks}");
         created.ImageSourceUrl.Should().Be(dto.ImageUrl);
 
         using var freshContext = CreateFreshContext();
@@ -234,6 +234,12 @@ public class RecipesControllerIntegrationTests : TestBase
         stored.ImageUrl.Should().BeNull();
         stored.ImageContentType.Should().Be("image/webp");
         stored.ImageData.Should().NotBeNullOrEmpty();
+
+        var detail = await Client.GetFromJsonAsync<RecipeDto>($"/api/recipes/{recipe.Id}");
+        detail!.ImageUrl.Should().Be($"/api/recipes/{recipe.Id}/image?v={stored.UpdatedAt.Ticks}");
+        detail.ImageUrl.Should().NotBe($"/api/recipes/{recipe.Id}/image?v={recipe.UpdatedAt.Ticks}");
+        var listed = await Client.GetFromJsonAsync<RecipePageDto>("/api/recipes/page");
+        listed!.Items.Single(r => r.Id == recipe.Id).ImageUrl.Should().Be(detail.ImageUrl);
 
         var imageResponse = await Client.GetAsync($"/api/recipes/{recipe.Id}/image");
         imageResponse.Content.Headers.ContentType!.MediaType.Should().Be("image/webp");

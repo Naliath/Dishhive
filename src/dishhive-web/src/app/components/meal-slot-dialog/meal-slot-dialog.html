@@ -1,29 +1,29 @@
-<h2 mat-dialog-title>Plan meal — {{ data.date }}</h2>
+<h2 mat-dialog-title>{{ 'ui.planMealValue' | translate:{ p0: (data.date) } }}</h2>
 
 <mat-dialog-content>
   <div class="dialog-body">
-    <mat-button-toggle-group [value]="mode()" (change)="mode.set($event.value)" aria-label="Planning style">
-      <mat-button-toggle value="recipe">Recipe</mat-button-toggle>
-      <mat-button-toggle value="dish">Dish</mat-button-toggle>
-      <mat-button-toggle value="idea">Idea</mat-button-toggle>
+    <mat-button-toggle-group [value]="mode()" (change)="mode.set($event.value)" [attr.aria-label]="'ui.planningStyle' | translate">
+      <mat-button-toggle value="recipe">{{ 'ui.recipe' | translate }}</mat-button-toggle>
+      <mat-button-toggle value="dish">{{ 'ui.dish' | translate }}</mat-button-toggle>
+      <mat-button-toggle value="idea">{{ 'ui.idea' | translate }}</mat-button-toggle>
     </mat-button-toggle-group>
 
     <!-- Defaults (Dinner / Main) cover the everyday case; only changed when
          planning a lunch or an extra course like an appetizer or dessert -->
     <div class="slot-selects">
       <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-label>Meal</mat-label>
+        <mat-label>{{ 'ui.meal' | translate }}</mat-label>
         <mat-select name="mealType" [(ngModel)]="mealType">
-          @for (option of mealTypeOptions; track option.value) {
-            <mat-option [value]="option.value">{{ option.label }}</mat-option>
+          @for (option of mealTypeOptions; track option) {
+            <mat-option [value]="option">{{ uiLanguage.mealTypeLabel(option) }}</mat-option>
           }
         </mat-select>
       </mat-form-field>
       <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-label>Course</mat-label>
+        <mat-label>{{ 'ui.course' | translate }}</mat-label>
         <mat-select name="course" [(ngModel)]="course">
-          @for (option of courseOptions; track option.value) {
-            <mat-option [value]="option.value">{{ option.label }}</mat-option>
+          @for (option of courseOptions; track option) {
+            <mat-option [value]="option">{{ uiLanguage.courseLabel(option) }}</mat-option>
           }
         </mat-select>
       </mat-form-field>
@@ -36,16 +36,16 @@
             <mat-icon>menu_book</mat-icon>
             <span>{{ recipe.title }}</span>
             <a mat-icon-button [routerLink]="['/recipes', recipe.id]" mat-dialog-close
-               aria-label="Open recipe">
+               [attr.aria-label]="'ui.openRecipe' | translate">
               <mat-icon>open_in_new</mat-icon>
             </a>
-            <button mat-icon-button (click)="clearRecipe()" aria-label="Clear recipe">
+            <button mat-icon-button (click)="clearRecipe()" [attr.aria-label]="'ui.clearRecipe' | translate">
               <mat-icon>close</mat-icon>
             </button>
           </div>
         } @else {
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>Search recipes</mat-label>
+            <mat-label>{{ 'ui.searchRecipes' | translate }}</mat-label>
             <input matInput name="recipeSearch" [(ngModel)]="recipeSearch" (input)="searchRecipes()">
             <mat-icon matSuffix>search</mat-icon>
           </mat-form-field>
@@ -60,7 +60,7 @@
             </mat-action-list>
           }
           @if (collections().length > 0) {
-            <div class="collection-pick-row" aria-label="Pick from a collection">
+            <div class="collection-pick-row" [attr.aria-label]="'ui.pickFromACollection' | translate">
               @for (collection of collections(); track collection.id) {
                 <button mat-stroked-button class="collection-pick-chip" type="button"
                         [disabled]="picking()" (click)="surpriseFrom(collection)">
@@ -74,20 +74,20 @@
       }
       @case ('dish') {
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
-          <mat-label>Dish name</mat-label>
+          <mat-label>{{ 'ui.dishName' | translate }}</mat-label>
           <input matInput name="dishName" [(ngModel)]="dishName" maxlength="200"
                  (ngModelChange)="currentDishName.set($event)"
-                 placeholder="e.g. spaghetti bolognese">
+                 [placeholder]="'ui.eGSpaghettiBolognese' | translate">
         </mat-form-field>
       }
       @case ('idea') {
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
-          <mat-label>Vague instruction</mat-label>
+          <mat-label>{{ 'ui.vagueInstruction' | translate }}</mat-label>
           <input matInput name="vagueInstruction" [(ngModel)]="vagueInstruction" maxlength="500"
-                 placeholder="e.g. something quick, # for a collection, @ for a website"
+                 [placeholder]="'ui.eGSomethingQuickForACollectionForAWebsite' | translate"
                  appCollectionMention #mention="appCollectionMention"
                  [matAutocomplete]="collectionAuto">
-          <mat-hint>Type # for a collection or @ for a source, e.g. #[Easy Weekday Dishes]</mat-hint>
+          <mat-hint>{{ 'ui.typeForACollectionOrForASourceEGEasyWeekdayDishes' | translate }}</mat-hint>
           <mat-autocomplete #collectionAuto="matAutocomplete">
             @for (item of mention.suggestions(); track item.id) {
               <mat-option [value]="mention.valueFor(item)">
@@ -106,29 +106,29 @@
     @if (lastPlannedHint(); as hint) {
       <p class="last-planned-hint">
         <mat-icon>history</mat-icon>
-        Last planned {{ hint.lastPlanned }} ({{ hint.timesPlanned }}× total)
+        {{ 'ui.lastPlannedValueValueTotal' | translate:{ p0: hint.lastPlanned, p1: hint.timesPlanned } }}
       </p>
     }
 
     @if (data.freezerEnabled) {
       <div class="section">
-        <h3 class="mat-title-small">From the freezer (Freezy)</h3>
+        <h3 class="mat-title-small">{{ 'ui.fromTheFreezerFreezy' | translate }}</h3>
         @if (selectedFreezerItem(); as item) {
           <div class="selected-recipe">
             <mat-icon>ac_unit</mat-icon>
             <span>{{ item.name }}</span>
-            <button mat-icon-button (click)="clearFreezerItem()" aria-label="Clear freezer item">
+            <button mat-icon-button (click)="clearFreezerItem()" [attr.aria-label]="'ui.clearFreezerItem' | translate">
               <mat-icon>close</mat-icon>
             </button>
           </div>
           <mat-form-field appearance="outline" subscriptSizing="dynamic" class="freezer-qty">
-            <mat-label>Portions to use</mat-label>
+            <mat-label>{{ 'ui.portionsToUse' | translate }}</mat-label>
             <input matInput type="number" name="freezyQty" min="1" [max]="maxFreezerQuantity()"
                    [(ngModel)]="freezyItemQuantity">
-            <span matTextSuffix>of {{ item.quantity }}{{ item.unit ? ' ' + item.unit : '' }} left</span>
+            <span matTextSuffix>{{ 'ui.ofValueValueLeft' | translate:{ p0: (item.quantity), p1: (item.unit ? ' ' + item.unit : '') } }}</span>
           </mat-form-field>
         } @else if (data.freezerItems.length === 0) {
-          <p class="hint-text">No frozen items available.</p>
+          <p class="hint-text">{{ 'ui.noFrozenItemsAvailable' | translate }}</p>
         } @else {
           <div class="freezer-chips">
             @for (item of data.freezerItems.slice(0, 8); track item.id) {
@@ -147,13 +147,13 @@
     }
 
     <div class="section">
-      <h3 class="mat-title-small">Who is eating?</h3>
-      <mat-chip-listbox aria-label="Attendees" multiple>
+      <h3 class="mat-title-small">{{ 'ui.whoIsEating' | translate }}</h3>
+      <mat-chip-listbox [attr.aria-label]="'ui.attendees' | translate" multiple>
         @for (member of data.members; track member.id) {
           <mat-chip-option
             [selected]="attendeeIds().has(member.id)"
             (click)="toggleAttendee(member.id)">
-            {{ member.name }}@if (member.isGuest) { <span class="guest-suffix">(guest)</span> }
+            {{ member.name }}@if (member.isGuest) { <span class="guest-suffix">{{ 'ui.guest' | translate }}</span> }
           </mat-chip-option>
         }
       </mat-chip-listbox>
@@ -170,13 +170,13 @@
     </div>
 
     <mat-form-field appearance="outline" subscriptSizing="dynamic">
-      <mat-label>Notes</mat-label>
+      <mat-label>{{ 'ui.notes' | translate }}</mat-label>
       <input matInput name="notes" [(ngModel)]="notes" maxlength="500">
     </mat-form-field>
   </div>
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close>Cancel</button>
-  <button mat-flat-button (click)="save()" [disabled]="!canSave()">Save</button>
+  <button mat-button mat-dialog-close>{{ 'family.cancel' | translate }}</button>
+  <button mat-flat-button (click)="save()" [disabled]="!canSave()">{{ 'common.save' | translate }}</button>
 </mat-dialog-actions>

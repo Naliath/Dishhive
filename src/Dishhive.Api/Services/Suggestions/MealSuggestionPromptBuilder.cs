@@ -9,6 +9,8 @@ namespace Dishhive.Api.Services.Suggestions;
 /// a planning request into the model's user prompt.</summary>
 public static class MealSuggestionPromptBuilder
 {
+    private const int FollowUpReserveTokens = 1024;
+
     public const string EditableSystemPromptDefault =
         """
         You are a meal planner for a family household. Propose a dinner for each requested date.
@@ -64,8 +66,12 @@ public static class MealSuggestionPromptBuilder
           none]" = verified to contain none of the tracked classes). A dish whose
           contained classes overlap ANY attendee's excluded classes is forbidden.
           Recipes conflicting with an allergy are already omitted from the known-
-          recipes list; apply the same exclusions yourself to any free-text dish you
-          propose.
+          recipes list. When any attendee has machine-checkable allergies, use only
+          candidates with current assessed facts that pass those exclusions. A plain
+          dish or unmatched freezer item has unknown ingredients and is unavailable.
+          If too few distinct assessed meals remain, leave those dates without a
+          suggestion. The application reports a partial plan; never invent a dish,
+          repeat a meal, or relax an allergy to make the week appear complete.
         - Use expiring freezer items ONLY when the item is a complete meal by itself —
           a frozen pizza, lasagna, soup, stew, or a container of home-made leftovers are
           fine. A raw ingredient or side component (e.g. a bag of peas, frozen corn,
@@ -90,11 +96,12 @@ public static class MealSuggestionPromptBuilder
           every dish you suggest for that day must satisfy it.
         - Instructions may reference a recipe collection as #[Collection Name]. When a
           day's instruction references a collection, the dish for that day MUST be one of
-          the recipes listed under "Referenced collections" for it. Find that title in the
+          its member recipes. The names under "Referenced collections" are a ranked
+          sample; membership is enforced by stable ids. Find the selected recipe in the
           known-recipes list and copy its exact current title into {{recipeTitleField}} and its
-          exact id into {{localRecipeIdField}}. When the planner's general instructions reference one, prefer
-          its recipes for the matching wish. If a referenced collection has no recipe list
-          below, treat the reference as a plain-text hint.
+          exact id into {{localRecipeIdField}}. Honor mandatory collection ids in the
+          normalized intent, including global requirements. Only explicitly soft
+          preferences are optional. An empty required collection leaves an unmet requirement.
         - Instructions may reference an EXTERNAL website as @[Source] (listed under
           "Referenced sources" with its host). Dishhive performs that research before
           this planning call and supplies a bounded set of verified candidates. For every
@@ -103,8 +110,10 @@ public static class MealSuggestionPromptBuilder
           into "{{externalCandidateIdField}}". Use the recipe's real title as {{dishNameField}} and leave
           {{recipeTitleField}} and {{localRecipeIdField}} null (it is not in the store yet — it will be
           imported when accepted).
-          Every day without a @[Source] reference must be filled from the known-recipes list
-          below or a plain dish name, never from a supplied external candidate.
+          For dates without a @[Source] reference, use eligible known recipes below.
+          Plain dish names are allowed only when assessed ingredient facts are not
+          required by an attendee's allergies. Never use a supplied external candidate
+          for an unrelated source requirement. Leave an unavailable date empty.
         - When the planner gives additional instructions, they override the other
           preferences (never the allergies/constraints).
         - Treat the explicit weekday/date table in the request as authoritative. Never
@@ -130,6 +139,28 @@ public static class MealSuggestionPromptBuilder
             ? EditableSystemPromptDefault
             : editableOverride.Trim();
         return editable + "\n\n" + ProtectedSystemPrompt;
+    }
+
+    /// <summary>
+    /// Caps the variable user prompt so fixed system/intent/research messages and one
+    /// bounded corrective turn still fit inside the execution gate's total input budget.
+    /// </summary>
+    public static int FitUserPromptTokenBudget(
+        int requestedTokens,
+        int maxInputTokens,
+        params string[] fixedMessages)
+    {
+        var fixedCharacters = fixedMessages.Sum(message => (long)message.Length);
+        var maxInputCharacters = (long)maxInputTokens
+            * AiTokenBudget.ConservativeCharactersPerToken;
+        var reserveCharacters = (long)FollowUpReserveTokens
+            * AiTokenBudget.ConservativeCharactersPerToken;
+        var availableUserCharacters = Math.Max(
+            AiTokenBudget.PromptBuilderCharactersPerToken,
+            maxInputCharacters - fixedCharacters - reserveCharacters);
+        var availableBuilderTokens = availableUserCharacters
+            / AiTokenBudget.PromptBuilderCharactersPerToken;
+        return (int)Math.Min(Math.Max(1, requestedTokens), availableBuilderTokens);
     }
 
     public static string BuildUserPrompt(
@@ -210,6 +241,7 @@ public static class MealSuggestionPromptBuilder
                     ? string.Join(", ", constraint.RecipeTitles.Select(title => $"\"{title}\""))
                     : "(no recipes in this collection)";
                 sb.AppendLine($"- \"{constraint.Name}\" ({scope}): {titles}");
+                sb.AppendLine($"  Collection id: {constraint.Id}; member count: {constraint.RecipeIds.Count}");
             }
         }
 
@@ -245,8 +277,8 @@ public static class MealSuggestionPromptBuilder
             sb.AppendLine($"Additional instructions from the planner: {request.Instructions}");
         }
 
-        var unlimited = maxPromptTokens >= int.MaxValue / 4;
-        var budgetChars = unlimited ? int.MaxValue : maxPromptTokens * 4;
+        var unlimited = maxPromptTokens >= int.MaxValue / AiTokenBudget.ConservativeCharactersPerToken;
+        var budgetChars = unlimited ? int.MaxValue : maxPromptTokens * AiTokenBudget.ConservativeCharactersPerToken;
         var recentLines = request.RecentDishes
             .Select(dish => $"{dish.DishName} ({dish.LastPlanned:yyyy-MM-dd})")
             .ToList();
@@ -299,7 +331,7 @@ public static class MealSuggestionPromptBuilder
             unlimited ? int.MaxValue : Math.Max(0, budgetChars - sb.Length),
             minLines: 10);
 
-        sb.AppendLine($"Selected dates are authoritative. Propose meals only for these dates and ensure each has a dinner/main proposal unless the instructions request another slot: {string.Join(", ", request.DaysToFill.Select(date => date.ToString("yyyy-MM-dd")))}");
+        sb.AppendLine($"Selected dates are authoritative. Propose meals only for these dates, aiming for a dinner/main unless another slot was requested. Leave a date empty when no distinct eligible assessed meal can satisfy the allergy requirements: {string.Join(", ", request.DaysToFill.Select(date => date.ToString("yyyy-MM-dd")))}");
         return sb.ToString();
     }
 

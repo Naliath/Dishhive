@@ -12,13 +12,27 @@ public sealed class UserMessageLocalizer(DishhiveDbContext context)
     private static readonly IReadOnlyDictionary<string, JsonElement> Catalogs = LoadCatalogs();
     private string? _language;
 
+    public Task<string> GetAsync(LocalizedUserText text, CancellationToken cancellationToken = default) =>
+        GetAsync(text.Key, cancellationToken, text.Parameters);
+
     public async Task<string> GetAsync(string key, CancellationToken cancellationToken = default,
         params (string Name, object? Value)[] parameters)
     {
         var language = await GetLanguageAsync(cancellationToken);
         var message = Resolve(language, key) ?? Resolve("en", key) ?? key;
         foreach (var (name, value) in parameters)
-            message = message.Replace($"{{{name}}}", Convert.ToString(value) ?? "", StringComparison.Ordinal);
+        {
+            var display = value switch
+            {
+                LocalizedUserText nested => await GetAsync(nested, cancellationToken),
+                LocalizedUserValue formatted => formatted.Value.ToString(formatted.Format,
+                    System.Globalization.CultureInfo.GetCultureInfo(language)),
+                IEnumerable<IngredientClass> classes => string.Join(", ", classes.Select(item =>
+                    Resolve(language, "ingredientClass." + EnumNames.ToName(item)) ?? EnumNames.ToName(item))),
+                _ => Convert.ToString(value, System.Globalization.CultureInfo.GetCultureInfo(language)) ?? ""
+            };
+            message = message.Replace($"{{{name}}}", display, StringComparison.Ordinal);
+        }
         return message;
     }
 

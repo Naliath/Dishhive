@@ -2,6 +2,14 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Dishhive.Api.Models.DTOs;
 
+public sealed class RecipePageDto
+{
+    public List<RecipeListItemDto> Items { get; set; } = [];
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+}
+
 /// <summary>
 /// A recipe's dietary facts: the canonical ingredient classes it contains plus the
 /// tri-state assessment status. An Unassessed recipe's empty Contains list means
@@ -15,11 +23,25 @@ public class RecipeDietaryFactsDto
     public DietaryFactsStatus Status { get; set; }
 
     public DateTime? AssessedAt { get; set; }
+    public long? AssessedRevision { get; set; }
+    public long RecipeRevision { get; set; }
+    public bool IsCurrent => (Status is DietaryFactsStatus.AiDetected or DietaryFactsStatus.UserConfirmed)
+        && AssessedRevision == RecipeRevision;
+    public List<RecipeDietaryFactsHistoryDto> History { get; set; } = [];
 }
+
+public record RecipeDietaryFactsHistoryDto(
+    long RecipeRevision,
+    DietaryFactsStatus Status,
+    List<string> Contains,
+    DateTime? AssessedAt,
+    DateTime ArchivedAt);
 
 /// <summary>Slim DTO for recipe lists and planner autocomplete</summary>
 public class RecipeListItemDto
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public DateTime ImageUpdatedAt { get; set; }
     public Guid Id { get; set; }
     public string Title { get; set; } = string.Empty;
 
@@ -116,7 +138,7 @@ public class RecipeStepDto
 public class CreateRecipeDto
 {
     [Required]
-    [MaxLength(300)]
+    [MaxLength(DomainLimits.RecipeTitle)]
     public string Title { get; set; } = string.Empty;
 
     [MaxLength(300)]
@@ -305,6 +327,9 @@ public class RecipeFactsStatusDto
     public int Unassessed { get; set; }
     public int AiDetected { get; set; }
     public int UserConfirmed { get; set; }
+    public int Stale { get; set; }
+    public int Pending { get; set; }
+    public int Failed { get; set; }
 
     /// <summary>Recipes waiting in (or being processed by) the assessment queue</summary>
     public int QueueDepth { get; set; }

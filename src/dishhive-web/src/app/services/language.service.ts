@@ -1,14 +1,12 @@
 import { Injectable, Pipe, PipeTransform, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { SupportedLanguage } from '../models/user-setting.model';
+import { Course, MealType } from '../api/generated/dishhive-api.client';
 
 @Injectable({ providedIn: 'root' })
 export class LanguageService {
   private readonly messages = signal<TranslationTree>({});
-  // Public translation files are not bundled into the hashed JavaScript chunks.
-  // Give every application load its own catalog URL so a newly deployed template
-  // can never be paired with an older browser/PWA-cached JSON response.
-  private readonly catalogVersion = Date.now().toString(36);
+  // Catalogs are versioned with the application by the production service worker.
   readonly language = signal<SupportedLanguage>('en');
   private loadSequence = 0;
 
@@ -23,7 +21,7 @@ export class LanguageService {
     this.language.set(language);
     document.documentElement.lang = language;
     this.http.get<TranslationTree>(
-      `/i18n/${language}.json?v=${this.catalogVersion}`
+      `/i18n/${language}.json`
     ).subscribe({
       next: messages => {
         if (loadSequence === this.loadSequence) {
@@ -51,6 +49,15 @@ export class LanguageService {
     return value.replace(/\{(\w+)\}/g, (_, name: string) =>
       String(name === 'count' ? count : params[name] ?? `{${name}}`));
   }
+
+  mealTypeLabel(value: MealType): string { return this.t(`mealType.${MealType[value]}`); }
+  courseLabel(value: Course): string { return this.t(`course.${Course[value]}`); }
+  classLabel(value: string): string {
+    const key = `ingredientClass.${value}`;
+    const label = this.t(key);
+    return label === key ? value : label;
+  }
+  classLabels(values: string[]): string { return values.map(value => this.classLabel(value)).join(', '); }
 
   private resolve(key: string): string | TranslationTree | undefined {
     return key.split('.').reduce<string | TranslationTree | undefined>((current, segment) =>
@@ -92,7 +99,7 @@ export class TranslatePluralPipe implements PipeTransform {
 }
 
 type TranslationTree = { [key: string]: string | TranslationTree };
-export type TranslationParams = Record<string, string | number>;
+export type TranslationParams = Record<string, string | number | null | undefined>;
 
 @Pipe({ name: 'autoCollectionName', standalone: true, pure: false })
 export class AutoCollectionNamePipe implements PipeTransform {
@@ -106,11 +113,13 @@ export class AutoCollectionNamePipe implements PipeTransform {
 export class LocalizedDatePipe implements PipeTransform {
   constructor(private readonly language: LanguageService) {}
 
-  transform(value: string | Date, format: 'weekday' | 'weekdayShort' | 'weekdayMonth' | 'dayMonth' | 'dayMonthYear' = 'weekday'): string {
+  transform(value: string | Date, format: 'weekday' | 'weekdayShort' | 'weekdayMonth' | 'dayMonth' | 'dayMonthYear' | 'dateTime' = 'weekday'): string {
     const date = value instanceof Date
       ? value
       : new Date(value.includes('T') ? value : `${value}T00:00:00`);
-    const options: Intl.DateTimeFormatOptions = format === 'weekday'
+    const options: Intl.DateTimeFormatOptions = format === 'dateTime'
+      ? { dateStyle: 'short', timeStyle: 'short' }
+      : format === 'weekday'
       ? { weekday: 'long' }
       : format === 'weekdayShort'
         ? { weekday: 'long', day: 'numeric', month: 'short' }

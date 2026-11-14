@@ -123,6 +123,7 @@ coverage/
 ## Optional npm cache
 .npm
 .eslintcache
+.unsnooze/
 
 # =============================================================================
 # IDEs and Editors
@@ -219,6 +220,10 @@ secrets.json
 # Testing
 # =============================================================================
 TestResults/
+test-results/
+playwright-report/
+__pycache__/
+*.py[cod]
 *.trx
 *.coverage
 *.coveragexml

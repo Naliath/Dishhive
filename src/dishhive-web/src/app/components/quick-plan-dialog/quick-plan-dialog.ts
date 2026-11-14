@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, Inject, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../services/language.service';
+import { HouseholdClockService, householdDate } from '../../services/household-clock.service';
+import { inject, ChangeDetectionStrategy, Component, Inject, signal } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -6,11 +9,9 @@ import { MatIconModule } from '@angular/material/icon';
 import { FamilyMember } from '../../models/family-member.model';
 import { Recipe } from '../../models/recipe.model';
 import {
-  COURSE_LABELS,
   COURSE_ORDER,
   Course,
   CreatePlannedMeal,
-  MEAL_TYPE_LABELS,
   MealType,
   PlannedMeal
 } from '../../models/planned-meal.model';
@@ -44,7 +45,7 @@ function toIso(date: Date): string {
 export function buildQuickPlanDays(
   startDate: string,
   meals: PlannedMeal[],
-  today = toIso(new Date())
+  today = householdDate(new Date(), 'Europe/Brussels')
 ): QuickPlanDay[] {
   const mealsByDate = new Map<string, PlannedMeal[]>();
   for (const meal of meals) {
@@ -66,7 +67,7 @@ export function buildQuickPlanDays(
 @Component({
   selector: 'app-quick-plan-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslatePipe,
     LocalizedDatePipe,
     MatButtonModule,
     MatButtonToggleModule,
@@ -78,23 +79,25 @@ export function buildQuickPlanDays(
   styleUrl: './quick-plan-dialog.scss'
 })
 export class QuickPlanDialog {
+  readonly uiLanguage = inject(UiLanguageService);
   readonly Course = Course;
   readonly course = signal(Course.Main);
   readonly days: QuickPlanDay[];
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: QuickPlanDialogData,
-    private dialogRef: MatDialogRef<QuickPlanDialog, CreatePlannedMeal>
+    private dialogRef: MatDialogRef<QuickPlanDialog, CreatePlannedMeal>,
+    private clock: HouseholdClockService
   ) {
-    this.days = buildQuickPlanDays(data.startDate, data.meals);
+    this.days = buildQuickPlanDays(data.startDate, data.meals, clock.today());
   }
 
   mealLabel(meal: PlannedMeal): string {
-    return `${MEAL_TYPE_LABELS[meal.mealType]} · ${COURSE_LABELS[meal.course]}`;
+    return `${this.uiLanguage.mealTypeLabel(meal.mealType)} · ${this.uiLanguage.courseLabel(meal.course)}`;
   }
 
   mealSummary(meal: PlannedMeal): string {
-    return meal.recipeTitle ?? meal.dishName ?? meal.vagueInstruction ?? 'Planned meal';
+    return meal.recipeTitle ?? meal.dishName ?? meal.vagueInstruction ?? this.uiLanguage.t('ui.plannedMeal');
   }
 
   plan(day: QuickPlanDay): void {

@@ -1,0 +1,43 @@
+<h2 mat-dialog-title>{{ 'freezerReview.title' | translate }}</h2>
+<mat-dialog-content>
+  <p>{{ 'freezerReview.intro' | translate }}</p>
+  @if (error()) { <p role="alert">{{ error() }}</p> }
+  @if (busy()) { <p role="status">{{ 'freezerReview.checking' | translate }}</p> }
+  @if (data(); as result) {
+    <p class="mat-body-small">{{ 'freezerReview.checked' | translate }} {{ result.checkedAt | localizedDate:'dateTime' }}</p>
+    @if (result.state === 'unavailable') {
+      <p role="status">{{ 'freezerReview.unavailable' | translate }}</p>
+    } @else if (result.state === 'unconfigured') {
+      <p>{{ 'freezerReview.unconfigured' | translate }}</p>
+    } @else if (result.issues.length === 0) {
+      <p role="status">{{ 'freezerReview.clear' | translate }}</p>
+    }
+    <div class="issues">
+      @for (issue of result.issues; track issue.itemRef) {
+        <mat-card appearance="outlined">
+          <mat-card-header><mat-card-title>{{ issue.name || ('freezerReview.missingItem' | translate) }}</mat-card-title></mat-card-header>
+          <mat-card-content class="card-content-padded">
+            <p>{{ ('freezerReview.' + issue.issue) | translate }}</p>
+            <p>{{ 'freezerReview.quantities' | translate:{stock: issue.stockQuantity, reserved: issue.reservedQuantity} }}</p>
+            @for (meal of issue.meals; track meal.id) {
+              <div class="meal">
+                <p><strong>{{ meal.dishName }}</strong><br>{{ meal.date | localizedDate:'dayMonth' }} · {{ meal.quantity }}</p>
+                <div class="actions">
+                  <button mat-button [disabled]="busy()" (click)="edit(meal.id)">{{ 'freezerReview.edit' | translate }}</button>
+                  <button mat-button [disabled]="busy()" (click)="resolve(issue, meal, 'release')">{{ 'freezerReview.release' | translate }}</button>
+                  @if (issue.fingerprint && issue.shortage === 0) {
+                    <button mat-stroked-button [disabled]="busy()" (click)="resolve(issue, meal, 'confirm')">{{ 'freezerReview.confirm' | translate }}</button>
+                  }
+                </div>
+              </div>
+            }
+          </mat-card-content>
+        </mat-card>
+      }
+    </div>
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button [disabled]="busy()" (click)="refresh()">{{ 'freezerReview.refresh' | translate }}</button>
+  <button mat-button (click)="close()">{{ 'freezerReview.close' | translate }}</button>
+</mat-dialog-actions>

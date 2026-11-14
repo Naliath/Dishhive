@@ -1,3 +1,5 @@
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { HouseholdClockService } from '../../services/household-clock.service';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { LocalizedDatePipe, TranslatePipe } from '../../services/language.service';
 import { RouterLink } from '@angular/router';
@@ -16,17 +18,17 @@ import { MealSuggestionsService } from '../../services/meal-suggestions.service'
 import { SettingsService } from '../../services/settings.service';
 import { SuggestionReviewResult } from '../../models/meal-suggestion.model';
 import {
-  COURSE_LABELS,
   COURSE_ORDER,
   Course,
   CreatePlannedMeal,
   EatenStatus,
-  MEAL_TYPE_LABELS,
   MealType,
   PlannedMeal
 } from '../../models/planned-meal.model';
 import { FamilyMember } from '../../models/family-member.model';
 import { FreezerSuggestions } from '../../models/frozen-item.model';
+import { FreezerReconciliationDto } from '../../api/generated/dishhive-api.client';
+import { FreezerReservationsDialog, FreezerReservationsResult } from '../../components/freezer-reservations-dialog/freezer-reservations-dialog';
 import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-loader';
 import { MealSlotDialog, MealSlotDialogData } from '../../components/meal-slot-dialog/meal-slot-dialog';
 import {
@@ -71,16 +73,20 @@ function toIso(date: Date): string {
   styleUrl: './week-planner.page.scss'
 })
 export class WeekPlannerPage implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
+  readonly clock = inject(HouseholdClockService);
   /** Below this, a load doesn't show the spinner at all — avoids a flash for fast responses */
   private static readonly LOADING_INDICATOR_DELAY_MS = 100;
 
   private readonly destroyRef = inject(DestroyRef);
   private loadingTimer: ReturnType<typeof setTimeout> | undefined;
+  private weekLoadSequence = 0;
 
-  readonly weekStart = signal<Date>(new Date());
+  readonly weekStart = signal<Date>(this.clock.date());
   readonly meals = signal<PlannedMeal[]>([]);
   readonly members = signal<FamilyMember[]>([]);
   readonly freezer = signal<FreezerSuggestions>({ enabled: false, items: [] });
+  readonly freezerReservations = signal<FreezerReconciliationDto | null>(null);
   readonly suggestionsEnabled = signal(false);
   readonly loading = signal(true);
 
@@ -97,7 +103,7 @@ export class WeekPlannerPage implements OnInit {
   }));
 
   readonly days = computed<PlannerDay[]>(() => {
-    const todayIso = toIso(new Date());
+    const todayIso = this.clock.today();
     const mealsByDate = new Map<string, PlannedMeal[]>();
     for (const meal of this.meals()) {
       const list = mealsByDate.get(meal.date) ?? [];
@@ -123,7 +129,7 @@ export class WeekPlannerPage implements OnInit {
     private dialog: MatDialog,
     private snackBar: MatSnackBar
   ) {
-    this.weekStart.set(this.settingsService.startOfWeek(new Date()));
+    this.weekStart.set(this.settingsService.startOfWeek(this.clock.date()));
     this.destroyRef.onDestroy(() => this.clearLoadingTimer());
   }
 
@@ -136,23 +142,28 @@ export class WeekPlannerPage implements OnInit {
       next: ({ members, freezer, suggestions }) => {
         this.members.set(members);
         this.freezer.set(freezer);
+        if (freezer.enabled) this.refreshFreezerReservations();
         this.suggestionsEnabled.set(suggestions.enabled);
       },
-      error: () => this.snackBar.open('Could not load planner data', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotLoadPlannerData'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
     this.loadWeek();
   }
 
   loadWeek(): void {
+    if (this.freezer().enabled) this.refreshFreezerReservations();
+    const sequence = ++this.weekLoadSequence;
     this.beginLoading();
     this.plannedMealsService.getMeals(toIso(this.weekStart()), toIso(this.weekEnd())).subscribe({
       next: meals => {
+        if (sequence !== this.weekLoadSequence) return;
         this.meals.set(meals);
         this.endLoading();
       },
       error: () => {
+        if (sequence !== this.weekLoadSequence) return;
         this.endLoading();
-        this.snackBar.open('Could not load the week plan', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotLoadTheWeekPlan'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       }
     });
   }
@@ -189,7 +200,7 @@ export class WeekPlannerPage implements OnInit {
   }
 
   goToCurrentWeek(): void {
-    this.weekStart.set(this.settingsService.startOfWeek(new Date()));
+    this.weekStart.set(this.settingsService.startOfWeek(this.clock.date()));
     this.loadWeek();
   }
 
@@ -200,7 +211,28 @@ export class WeekPlannerPage implements OnInit {
     this.loadWeek();
   }
 
-  openSlot(day: PlannerDay, meal?: PlannedMeal): void {
+  private refreshFreezerReservations(): void {
+    this.freezerService.getReservations().subscribe({
+      next: result => this.freezerReservations.set(result),
+      error: () => this.freezerReservations.set({ state: 'unavailable', checkedAt: new Date().toISOString(), issues: [] })
+    });
+  }
+
+  reviewFreezerReservations(): void {
+    this.dialog.open<FreezerReservationsDialog, void, FreezerReservationsResult>(FreezerReservationsDialog, {
+      width: '700px', maxWidth: 'calc(100vw - 32px)'
+    }).afterClosed().subscribe(result => {
+      this.refreshFreezerReservations();
+      this.freezerService.getSuggestions().subscribe(stock => this.freezer.set(stock));
+      this.loadWeek();
+      if (result?.editMealId) this.plannedMealsService.getMeal(result.editMealId).subscribe({
+        next: meal => this.openSlot({ iso: meal.date }, meal),
+        error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotLoadTheMeal'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
+      });
+    });
+  }
+
+  openSlot(day: Pick<PlannerDay, 'iso'>, meal?: PlannedMeal): void {
     const data: MealSlotDialogData = {
       date: day.iso,
       meal,
@@ -224,12 +256,13 @@ export class WeekPlannerPage implements OnInit {
           // Update the affected slot in place instead of reloading the whole week —
           // a full loadWeek() would flash the grid to a spinner and back for a
           // single-slot change
-          next: saved => this.meals.update(meals => meal
-            ? meals.map(m => m.id === saved.id ? saved : m)
-            : [...meals, saved]),
+          next: saved => {
+            this.meals.update(meals => meal ? meals.map(m => m.id === saved.id ? saved : m) : [...meals, saved]);
+            if (this.freezer().enabled) this.refreshFreezerReservations();
+          },
           error: (error: HttpErrorResponse) => {
-            const detail = error.error?.title ?? 'Could not save the meal';
-            this.snackBar.open(detail, 'Dismiss', { duration: 4000 });
+            const detail = error.error?.title ?? this.uiLanguage.t('aiStats.reviewOutcomes.planningFailed');
+            this.snackBar.open(detail, this.uiLanguage.t('common.dismiss'), { duration: 4000 });
           }
         });
       });
@@ -254,12 +287,16 @@ export class WeekPlannerPage implements OnInit {
         maxWidth: '100vw'
       })
       .afterClosed().subscribe(selection => {
+        this.loadWeek();
+        if (selection?.applied) {
+          return;
+        }
         if (!selection || selection.suggestions.length === 0) {
           return;
         }
 
         this.mealSuggestionsService
-          .acceptSuggestions(selection.batchId, selection.suggestions)
+          .acceptSuggestions(selection.batchId, selection.suggestions, selection.rejectedSuggestionIds)
           .subscribe({
           next: response => {
             this.loadWeek();
@@ -269,13 +306,16 @@ export class WeekPlannerPage implements OnInit {
               result.status !== 'created' && result.status !== 'alreadyApplied');
             const failedNames = failed.slice(0, 2).map(result => result.dishName).join(', ');
             const message = failed.length === 0
-              ? `Added ${added} suggested dinner${added === 1 ? '' : 's'}`
-              : `Added ${added}; could not apply ${failedNames}${failed.length > 2 ? ` and ${failed.length - 2} more` : ''}`;
-            this.snackBar.open(message, 'Dismiss', { duration: failed.length === 0 ? 3000 : 5000 });
+              ? this.uiLanguage.plural('weekPlanner.addedSuggestions', added)
+              : this.uiLanguage.t('weekPlanner.partialSuggestions', {
+                  count: added, names: failedNames,
+                  more: failed.length > 2 ? this.uiLanguage.t('weekPlanner.moreFailures', { count: failed.length - 2 }) : ''
+                });
+            this.snackBar.open(message, this.uiLanguage.t('common.dismiss'), { duration: failed.length === 0 ? 3000 : 5000 });
           },
           error: () => {
             this.loadWeek();
-            this.snackBar.open('Could not apply the selected suggestions', 'Dismiss', { duration: 4000 });
+            this.snackBar.open(this.uiLanguage.t('ui.couldNotApplyTheSelectedSuggestions'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
           }
         });
       });
@@ -285,8 +325,11 @@ export class WeekPlannerPage implements OnInit {
     this.plannedMealsService.deleteMeal(meal.id).subscribe({
       // Remove the slot locally instead of reloading the whole week — a full
       // loadWeek() would flash the grid to a spinner and back for one removed dish
-      next: () => this.meals.update(meals => meals.filter(m => m.id !== meal.id)),
-      error: () => this.snackBar.open('Could not clear the slot', 'Dismiss', { duration: 4000 })
+      next: () => {
+        this.meals.update(meals => meals.filter(m => m.id !== meal.id));
+        if (this.freezer().enabled) this.refreshFreezerReservations();
+      },
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotClearTheSlot'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -303,7 +346,7 @@ export class WeekPlannerPage implements OnInit {
     const next = this.isEaten(meal) ? null : EatenStatus.Eaten;
     this.plannedMealsService.setEaten(meal.id, next).subscribe({
       next: updated => this.meals.update(meals => meals.map(m => m.id === updated.id ? updated : m)),
-      error: () => this.snackBar.open('Could not update the meal', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotUpdateTheMeal'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -314,10 +357,10 @@ export class WeekPlannerPage implements OnInit {
   mealLabel(meal: PlannedMeal): string | null {
     const parts: string[] = [];
     if (meal.mealType !== MealType.Dinner) {
-      parts.push(MEAL_TYPE_LABELS[meal.mealType]);
+      parts.push(this.uiLanguage.mealTypeLabel(meal.mealType));
     }
     if (meal.course !== Course.Main) {
-      parts.push(COURSE_LABELS[meal.course]);
+      parts.push(this.uiLanguage.courseLabel(meal.course));
     }
     return parts.length > 0 ? parts.join(' · ') : null;
   }

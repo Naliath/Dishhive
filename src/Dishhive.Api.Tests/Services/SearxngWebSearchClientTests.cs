@@ -14,8 +14,8 @@ public class SearxngWebSearchClientTests
     private const string JsonResponse = """
         {
           "results": [
-            {"url": "https://dagelijksekost.vrt.be/a", "title": "Vegetarische lasagne", "content": "30 min"},
-            {"url": "https://dagelijksekost.vrt.be/b", "title": "Groentecurry", "content": "quick"},
+            {"url": "https://dagelijksekost.vrt.be/gerechten/a", "title": "Vegetarische lasagne", "content": "30 min"},
+            {"url": "https://dagelijksekost.vrt.be/gerechten/b", "title": "Groentecurry", "content": "quick"},
             {"url": "", "title": "no url — dropped"}
           ]
         }
@@ -29,6 +29,34 @@ public class SearxngWebSearchClientTests
     }
 
     [Fact]
+    public async Task Search_EnginesIgnoringTheSiteOperatorCannotSuppressTheSourceFallback()
+    {
+        var handler = new MockHttpMessageHandler().RespondWith(BaseUrl + "search",
+            """{"results":[{"url":"https://other.example/vegan-curry","title":"Wrong source"}]}""", "application/json");
+        var sitemap = Substitute.For<ISitemapRecipeSearch>();
+        sitemap.SearchAsync("curry", "example.com", 1, Arg.Any<CancellationToken>())
+            .Returns([new WebSearchResult("Source curry", "https://example.com/curry", null)]);
+        var client = new SearxngWebSearchClient(new HttpClient(handler) { BaseAddress = new Uri(BaseUrl) },
+            sitemap, NullLogger<SearxngWebSearchClient>.Instance);
+        var result = Assert.Single(await client.SearchAsync("curry", "example.com", 1));
+        Assert.Equal("https://example.com/curry", result.Url);
+    }
+
+    [Fact]
+    public async Task Search_RelevantEngineResultsAreNotReplacedBySitemapSlugMatches()
+    {
+        var handler = new MockHttpMessageHandler().RespondWith(BaseUrl + "search", JsonResponse, "application/json");
+        var sitemap = Substitute.For<ISitemapRecipeSearch>();
+        sitemap.SearchAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([new WebSearchResult("Less specific slug", "https://dagelijksekost.vrt.be/gerechten/other", null)]);
+        var client = new SearxngWebSearchClient(new HttpClient(handler) { BaseAddress = new Uri(BaseUrl) },
+            sitemap, NullLogger<SearxngWebSearchClient>.Instance);
+        var results = await client.SearchAsync("vegetarian pasta", "dagelijksekost.vrt.be", 2);
+        Assert.Equal(new[] { "Vegetarische lasagne", "Groentecurry" }, results.Select(result => result.Title));
+        await sitemap.DidNotReceive().SearchAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Search_MapsResultsAndDropsIncompleteHits()
     {
         var handler = new MockHttpMessageHandler().RespondWith(BaseUrl + "search", JsonResponse, "application/json");
@@ -37,7 +65,7 @@ public class SearxngWebSearchClientTests
 
         results.Should().HaveCount(2);
         results[0].Title.Should().Be("Vegetarische lasagne");
-        results[0].Url.Should().Be("https://dagelijksekost.vrt.be/a");
+        results[0].Url.Should().Be("https://dagelijksekost.vrt.be/gerechten/a");
         results[0].Snippet.Should().Be("30 min");
     }
 

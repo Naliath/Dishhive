@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Dishhive.Api.Tests.Mocks;
 using Dishhive.Api.Services.Import;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Dishhive.Api.Tests;
 
@@ -27,6 +28,10 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        // WebApplicationFactory should never depend on the host machine's Windows
+        // Event Log permissions; console output also preserves the original startup
+        // exception instead of masking it with an EventLog write failure.
+        builder.ConfigureLogging(logging => logging.ClearProviders().AddConsole());
 
         builder.ConfigureTestServices(services =>
         {

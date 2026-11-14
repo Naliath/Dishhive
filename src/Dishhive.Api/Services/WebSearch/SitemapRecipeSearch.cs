@@ -44,14 +44,27 @@ public sealed partial class SitemapRecipeSearch(
             return [];
         }
 
-        return urls
-            .Select((url, index) => new { Url = url, Index = index, Text = Normalize(url.AbsolutePath) })
-            .Where(candidate => RecipePageClassifier.IsPotentialRecipeUri(candidate.Url.AbsoluteUri))
+        var candidates = urls
+            // Shared category paths (for example /gerechten/) carry no relevance:
+            // matching them made a generic query retrieve arbitrary sitemap entries.
+            .Select((url, index) => new { Url = url, Index = index, Text = Normalize(url.Segments.LastOrDefault() ?? "") })
+            .Where(candidate => RecipePageClassifier.IsPotentialRecipeUri(candidate.Url.AbsoluteUri)).ToList();
+        var vocabulary = candidates.SelectMany(candidate => candidate.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Where(word => word.Length >= 3).ToHashSet(StringComparer.Ordinal);
+        var expandedTerms = terms.Keys.SelectMany(term => SplitCompound(term, vocabulary)).Distinct().ToList();
+        bool Matches(string text, string term) => text.Contains(term, StringComparison.Ordinal)
+            || text.Replace(" ", "").Contains(term, StringComparison.Ordinal);
+        // Ordinary inverse document frequency keeps a rare food term from losing
+        // to common words that happen to occur earlier in a sitemap. This ranks
+        // relevance only; it never establishes ingredient or dietary facts.
+        var weights = expandedTerms.ToDictionary(term => term, term =>
+            Math.Log(1d + (candidates.Count + 1d) / (candidates.Count(candidate => Matches(candidate.Text, term)) + 1d)));
+        return candidates
             .Select(candidate => new
             {
                 candidate.Url,
                 candidate.Index,
-                Score = terms.Sum(term => candidate.Text.Contains(term.Key, StringComparison.Ordinal) ? term.Value : 0)
+                Score = weights.Sum(term => Matches(candidate.Text, term.Key) ? term.Value : 0)
             })
             .Where(candidate => candidate.Score > 0)
             .OrderByDescending(candidate => candidate.Score)
@@ -60,6 +73,26 @@ public sealed partial class SitemapRecipeSearch(
             .Select(candidate => new WebSearchResult(
                 TitleFromUrl(candidate.Url), candidate.Url.AbsoluteUri, "Found in the source sitemap"))
             .ToList();
+    }
+
+    // Segment unseen compounds using ONLY the source index's vocabulary. This
+    // handles "linzencurry" versus "curry-met-linzen" without language mappings,
+    // inferring dietary suitability or inventing words absent from the source.
+    private static IReadOnlyList<string> SplitCompound(string term, HashSet<string> vocabulary)
+    {
+        if (term.Length > 64 || vocabulary.Contains(term)) return [term];
+        var parts = new List<string>?[term.Length + 1];
+        parts[0] = [];
+        for (var end = 3; end <= term.Length; end++)
+        {
+            for (var start = 0; start <= end - 3; start++)
+            {
+                if (parts[start] is not { } prefix || !vocabulary.Contains(term[start..end])) continue;
+                var candidate = prefix.Append(term[start..end]).ToList();
+                if (parts[end] is null || candidate.Count < parts[end]!.Count) parts[end] = candidate;
+            }
+        }
+        return parts[term.Length] is { Count: > 1 } split ? split : [term];
     }
 
     private async Task<IReadOnlyList<Uri>> BuildIndexAsync(string host, CancellationToken cancellationToken)

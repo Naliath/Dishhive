@@ -67,7 +67,7 @@ public class PlannedMeal
     /// Dish name; always denormalized from the recipe title when a recipe is linked,
     /// so history survives recipe deletion or rename
     /// </summary>
-    [MaxLength(200)]
+    [MaxLength(DomainLimits.DishName)]
     public string? DishName { get; set; }
 
     /// <summary>
@@ -88,6 +88,10 @@ public class PlannedMeal
     /// stock is never planned twice (see FreezerAvailabilityService).
     /// </summary>
     public int FreezyItemQuantity { get; set; }
+
+    /// <summary>Identity/details reviewed at reservation time; null on legacy or unavailable stock.</summary>
+    [MaxLength(64)]
+    public string? FreezyItemFingerprint { get; set; }
 
     /// <summary>Idempotency key for a suggestion accepted through the batch endpoint.
     /// Null for manually created meals.</summary>

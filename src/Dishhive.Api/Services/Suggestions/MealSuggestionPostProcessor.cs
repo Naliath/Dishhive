@@ -1,5 +1,6 @@
 using Dishhive.Api.Models;
 using Dishhive.Api.Services.Freezy;
+using Dishhive.Api.Services.Import;
 using System.Globalization;
 
 namespace Dishhive.Api.Services.Suggestions;
@@ -118,7 +119,7 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
             string? sourceUrl = null;
             string? sourceName = null;
             if (externalCandidate != null
-                && ResolveExternalSource(externalCandidate.SourceUrl, date, request) is { } resolved)
+                && ResolveExternalSource(externalCandidate.SourceUrl, date, mealType, course, request) is { } resolved)
             {
                 sourceUrl = resolved.Url;
                 sourceName = resolved.Name;
@@ -147,16 +148,28 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
                 ResolvedFactsAssessed = externalCandidate?.FactsAssessed
                     ?? request.KnownRecipes.FirstOrDefault(recipe => recipe.Id == recipeId)?.FactsAssessed
                     ?? false,
-                ExternalIngredients = externalCandidate?.Ingredients ?? [],
+                ResolvedTotalTimeMinutes = externalCandidate?.TotalTimeMinutes
+                    ?? request.KnownRecipes.FirstOrDefault(recipe => recipe.Id == recipeId)?.TotalTimeMinutes,
+                ExternalIngredients = externalCandidate?.Ingredients ?? (recipeId is { } ingredientRecipeId
+                    ? request.RecipeAllergens.GetValueOrDefault(ingredientRecipeId)?.Ingredients ?? [] : []),
+                ResearchConstraintIds = externalCandidate?.ResearchConstraintIds ?? [],
+                CandidateVersion = externalCandidate is not null
+                    ? SuggestionCandidateVersion.ForContent(externalCandidate.Title,
+                        externalCandidate.Ingredients, steps: externalCandidate.Instructions,
+                        totalTimeMinutes: externalCandidate.TotalTimeMinutes)
+                    : recipeId is { } localId
+                        ? SuggestionCandidateVersion.ForLocal(request.KnownRecipes
+                            .First(recipe => recipe.Id == localId))
+                        : null,
                 FreezyItemRef = freezerItem?.Id
             });
         }
 
-        foreach (var constraint in request.CollectionConstraints.Where(constraint => constraint.Dates.Count > 0))
+        foreach (var constraint in request.CollectionConstraints)
         {
-            var titles = constraint.RecipeTitles.ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var offList in suggestions.Where(suggestion =>
-                constraint.Dates.Contains(suggestion.Date) && !titles.Contains(suggestion.DishName!)))
+                constraint.AppliesTo(new(suggestion.Date, suggestion.MealType, suggestion.Course))
+                && (suggestion.RecipeId is not { } id || !constraint.RecipeIds.Contains(id))))
             {
                 logger.LogWarning(
                     "AI suggested \"{Dish}\" for {Date}, which is not in the referenced collection {Collection}",
@@ -209,14 +222,33 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
         IReadOnlyList<MealSuggestion> suggestions,
         MealSuggestionRequest request)
     {
-        var result = suggestions.ToList();
+        var result = suggestions.Select(suggestion => Normalize(suggestion, request)).ToList();
         FlagCanonicalConstraintConflicts(result, request);
         return result;
+    }
+
+    internal static MealSuggestion Normalize(MealSuggestion suggestion, MealSuggestionRequest request)
+    {
+        var recipe = request.KnownRecipes.FirstOrDefault(recipe => recipe.Id == suggestion.RecipeId);
+        return suggestion with
+        {
+            AttendeeIds = suggestion.AttendeeIds.Count > 0 ? suggestion.AttendeeIds
+                : request.Members.Select(member => member.Id).Where(id => id != Guid.Empty).Distinct().ToList(),
+            CandidateVersion = recipe is null ? suggestion.CandidateVersion
+                : SuggestionCandidateVersion.ForLocal(recipe),
+            ResolvedFactsAssessed = recipe?.FactsAssessed ?? suggestion.ResolvedFactsAssessed,
+            ResolvedContainsClasses = recipe?.ContainsClasses ?? suggestion.ResolvedContainsClasses,
+            ResolvedTotalTimeMinutes = recipe?.TotalTimeMinutes ?? suggestion.ResolvedTotalTimeMinutes,
+            ExternalIngredients = recipe is null ? suggestion.ExternalIngredients
+                : request.RecipeAllergens.GetValueOrDefault(recipe.Id)?.Ingredients ?? []
+        };
     }
 
     private (string Url, string Name)? ResolveExternalSource(
         string? sourceUrl,
         DateOnly date,
+        MealType mealType,
+        Course course,
         MealSuggestionRequest request)
     {
         if (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out var uri)
@@ -240,7 +272,8 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
         }
 
         var requiredHost = request.Intent?.Constraints.FirstOrDefault(constraint =>
-            constraint.SourceHost != null && constraint.Dates.Contains(date))?.SourceHost;
+            constraint.SourceHost != null && constraint.Dates.Contains(date)
+                && constraint.MealType == mealType && constraint.Course == course)?.SourceHost;
         if (requiredHost != null
             && !string.Equals(requiredHost, host, StringComparison.OrdinalIgnoreCase))
         {
@@ -319,7 +352,8 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
                     suggestion = suggestion with
                     {
                         ResolvedFactsAssessed = known.FactsAssessed,
-                        ResolvedContainsClasses = known.ContainsClasses
+                        ResolvedContainsClasses = known.ContainsClasses,
+                        ResolvedTotalTimeMinutes = known.TotalTimeMinutes
                     };
                 }
             }
@@ -340,6 +374,9 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
                 {
                     AllergyWarning = !hasAllergyTags ? null
                         : "Dietary facts have not been verified; review household allergies",
+                    AllergyWarningText = !hasAllergyTags ? null : new("planningWarnings.unverifiedAllergies"),
+                    DietWarningText = dietByClass.Count == 0 ? null : new(explicitlyOverridesDiet
+                        ? "planningWarnings.unverifiedOverride" : "planningWarnings.unverifiedDiets"),
                     DietWarning = dietByClass.Count == 0 ? null
                         : explicitlyOverridesDiet
                             ? "Explicitly requested for everyone; dietary facts are unverified, so review or replace individual portions"
@@ -354,10 +391,18 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
             {
                 AllergyWarning = allergyHits.Count == 0 ? null
                     : $"Contains {string.Join(", ", allergyHits)} — conflicts with {allergyByClass[allergyHits[0]]} allergy",
+                AllergyWarningText = allergyHits.Count == 0 ? null : new("planningWarnings.allergyConflict",
+                    ("classes", allergyHits), ("member", allergyByClass[allergyHits[0]].MemberName),
+                    ("tag", allergyByClass[allergyHits[0]].TagName)),
+                ResolvedAllergyConflict = allergyHits.Count > 0,
                 DietWarning = dietHits.Count == 0 ? null
                     : explicitlyOverridesDiet
                         ? $"Explicitly requested with {string.Join(", ", dietHits)} despite {dietByClass[dietHits[0]]} diet; review or replace individual portions"
-                        : $"Contains {string.Join(", ", dietHits)} — conflicts with {dietByClass[dietHits[0]]} diet"
+                        : $"Contains {string.Join(", ", dietHits)} — conflicts with {dietByClass[dietHits[0]]} diet",
+                DietWarningText = dietHits.Count == 0 ? null : new(explicitlyOverridesDiet
+                    ? "planningWarnings.dietOverride" : "planningWarnings.dietConflict",
+                    ("classes", dietHits), ("member", dietByClass[dietHits[0]].MemberName),
+                    ("tag", dietByClass[dietHits[0]].TagName))
             };
             if (allergyHits.Count > 0)
             {
@@ -368,91 +413,23 @@ public sealed class MealSuggestionPostProcessor(ILogger<MealSuggestionPostProces
         }
     }
 
-    [Obsolete("Remove after canonical-facts migration", error: true)]
-    private void FlagConstraintConflicts(
-        List<MealSuggestion> suggestions,
-        MealSuggestionRequest request)
+    private sealed record DietaryExclusion(string MemberName, string TagName)
     {
-        var recipesById = request.KnownRecipes
-            .GroupBy(recipe => recipe.Id)
-            .ToDictionary(group => group.Key, group => group.First());
-        for (var index = 0; index < suggestions.Count; index++)
-        {
-            var suggestion = suggestions[index];
-            var attendees = suggestion.AttendeeIds.Count == 0
-                ? request.Members
-                : request.Members.Where(member => suggestion.AttendeeIds.Contains(member.Id)).ToList();
-            var allergyByClass = BuildExclusions(attendees, member => member.Allergies);
-            var dietByClass = BuildExclusions(attendees, member => member.Diets);
-            if (allergyByClass.Count == 0 && dietByClass.Count == 0)
-            {
-                continue;
-            }
-            var inferredClasses = new HashSet<IngredientClass>();
-            var inferredAllergyHits = inferredClasses.Where(allergyByClass.ContainsKey).ToList();
-            var inferredDietHits = inferredClasses.Where(dietByClass.ContainsKey).ToList();
-            if (inferredAllergyHits.Count > 0 || inferredDietHits.Count > 0)
-            {
-                suggestions[index] = suggestion = suggestion with
-                {
-                    AllergyWarning = inferredAllergyHits.Count == 0
-                        ? suggestion.AllergyWarning
-                        : $"Appears to contain {string.Join(", ", inferredAllergyHits)} — review {allergyByClass[inferredAllergyHits[0]]} allergy",
-                    DietWarning = inferredDietHits.Count == 0
-                        ? suggestion.DietWarning
-                        : $"Appears to contain {string.Join(", ", inferredDietHits)} — review or replace portions for {dietByClass[inferredDietHits[0]]} diet"
-                };
-            }
-            if (suggestion.RecipeId is null)
-            {
-                continue;
-            }
-
-            if (recipesById.TryGetValue(suggestion.RecipeId.Value, out var recipe) && recipe.FactsAssessed)
-            {
-                var allergyHits = recipe.ContainsClasses.Where(allergyByClass.ContainsKey).ToList();
-                if (allergyHits.Count > 0)
-                {
-                    suggestions[index] = suggestion = suggestion with
-                    {
-                        AllergyWarning =
-                            $"Contains {string.Join(", ", allergyHits)} — conflicts with {allergyByClass[allergyHits[0]]} allergy"
-                    };
-                    logger.LogWarning(
-                        "Suggested \"{Dish}\" for {Date}; linked recipe contains [{Classes}] conflicting with a household allergy",
-                        suggestion.DishName, suggestion.Date, string.Join(", ", allergyHits));
-                }
-
-                var dietHits = recipe.ContainsClasses.Where(dietByClass.ContainsKey).ToList();
-                if (dietHits.Count > 0)
-                {
-                    suggestions[index] = suggestion with
-                    {
-                        DietWarning =
-                            $"Contains {string.Join(", ", dietHits)} — conflicts with {dietByClass[dietHits[0]]} diet"
-                    };
-                    logger.LogInformation(
-                        "Suggested \"{Dish}\" for {Date}; linked recipe contains [{Classes}] conflicting with a diet tag",
-                        suggestion.DishName, suggestion.Date, string.Join(", ", dietHits));
-                }
-                continue;
-            }
-
-        }
+        public override string ToString() => $"{MemberName}'s \"{TagName}\"";
     }
 
-    private static Dictionary<IngredientClass, string> BuildExclusions(
+    private static Dictionary<IngredientClass, DietaryExclusion> BuildExclusions(
         IEnumerable<MemberProfile> members,
         Func<MemberProfile, IReadOnlyList<DietaryTagProfile>> selectTags)
     {
-        var result = new Dictionary<IngredientClass, string>();
+        var result = new Dictionary<IngredientClass, DietaryExclusion>();
         foreach (var member in members)
         {
             foreach (var tag in selectTags(member))
             {
                 foreach (var ingredientClass in tag.ExcludedClasses)
                 {
-                    result.TryAdd(ingredientClass, $"{member.Name}'s \"{tag.Name}\"");
+                    result.TryAdd(ingredientClass, new(member.Name, tag.Name));
                 }
             }
         }

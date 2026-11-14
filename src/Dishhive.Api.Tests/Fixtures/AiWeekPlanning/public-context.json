@@ -1,0 +1,16 @@
+{
+  "description": "Synthetic public evaluation context. Never copy recipes or household rows from a development database into this benchmark.",
+  "members": [
+    { "name": "Public evaluation adult A", "allergyTags": [{ "name": "Milk fixture", "excludedClasses": ["Milk"] }], "dietTags": [], "preferenceNotes": "Synthetic evaluation profile." },
+    { "name": "Public evaluation adult B", "allergyTags": [{ "name": "Peanut fixture", "excludedClasses": ["Peanuts"] }], "dietTags": [{ "name": "No pork fixture", "excludedClasses": ["Pork"] }], "preferenceNotes": "Synthetic evaluation profile." },
+    { "name": "Public evaluation adult C", "allergyTags": [], "dietTags": [{ "name": "Vegetarian fixture", "excludedClasses": ["RedMeat", "Poultry", "Pork", "Fish", "Crustaceans", "Molluscs", "Gelatin"] }], "preferenceNotes": "Synthetic evaluation profile." },
+    { "name": "Public evaluation guest", "isGuest": true, "allergyTags": [], "dietTags": [], "preferenceNotes": "Synthetic guest, excluded from default household attendance." }
+  ],
+  "recipes": [
+    { "title": "Evaluation fixture - carrot soup", "servings": 4, "totalTimeMinutes": 20, "containsClasses": [], "ingredients": [{ "name": "carrot", "quantity": 500, "unit": "g", "originalText": "500 g carrot" }, { "name": "water", "quantity": 1, "unit": "l", "originalText": "1 l water" }], "steps": [{ "stepNumber": 1, "instruction": "Cook the declared ingredients until tender." }] },
+    { "title": "Evaluation fixture - chicken rice", "servings": 4, "totalTimeMinutes": 25, "containsClasses": ["Poultry"], "ingredients": [{ "name": "chicken", "quantity": 400, "unit": "g", "originalText": "400 g chicken" }, { "name": "rice", "quantity": 300, "unit": "g", "originalText": "300 g rice" }], "steps": [{ "stepNumber": 1, "instruction": "Cook the chicken through and serve with cooked rice." }] },
+    { "title": "Evaluation fixture - chickpea rice", "servings": 4, "totalTimeMinutes": 20, "containsClasses": [], "ingredients": [{ "name": "chickpeas", "quantity": 400, "unit": "g", "originalText": "400 g chickpeas" }, { "name": "rice", "quantity": 300, "unit": "g", "originalText": "300 g rice" }], "steps": [{ "stepNumber": 1, "instruction": "Cook the rice and heat the chickpeas." }] },
+    { "title": "Evaluation fixture - lentil bowl", "servings": 4, "totalTimeMinutes": 25, "containsClasses": [], "ingredients": [{ "name": "lentils", "quantity": 300, "unit": "g", "originalText": "300 g lentils" }, { "name": "carrot", "quantity": 200, "unit": "g", "originalText": "200 g carrot" }], "steps": [{ "stepNumber": 1, "instruction": "Cook the lentils and carrot until tender." }] }
+  ],
+  "collection": { "name": "Easy Weekday Dishes", "recipeIndexes": [0, 1, 2] }
+}

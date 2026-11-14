@@ -10,8 +10,8 @@ decisions; the shared Angular and .NET standards are mirrored in [angular/](angu
 - Single .NET container serves both API and Angular static files (Freezy pattern)
 - PostgreSQL for persistence with Entity Framework Core; own database instance (port 5433),
   never shared with Freezy
-- Angular Material 21 with Material Design 3 theming — Green/Yellow palettes
-  (Freezy uses Azure/Cyan; distinct identity, same theming system)
+- Angular Material 21 with Material Design 3 theming — custom Amber primary and Cyan
+  tertiary palettes (distinct identity, same theming system as Freezy)
 - PWA following Freezy's service-worker setup: installable, offline **read** access to the
   week plan and shopping list; no offline write queue (see `features/pwa-support.md`;
   added later — the initial setup deliberately skipped it, see
@@ -20,10 +20,19 @@ decisions; the shared Angular and .NET standards are mirrored in [angular/](angu
   (see `features/recipe-import.md`)
 - Freezy integration only through `IFreezyClient` over Freezy's REST API; optional and
   read-only (see `features/freezy-integration.md`)
-- AI-assisted planning goes exclusively through the `IMealSuggestionService` seam:
-  LLM-backed (Microsoft.Extensions.AI, configurable provider) with a deterministic rules
-  fallback when `Ai:Provider` is set, no-op otherwise — AI is never bolted on anywhere
-  else (see `features/ai-week-planning.md`)
+- Every model completion goes through `IAiExecutionGate`, which owns task profiles,
+  capability eligibility, deadlines, admission priority, response format and per-call
+  telemetry. Planning additionally uses `IMealSuggestionService` with deterministic
+  validation and fallback (see `features/ai-week-planning.md`).
+- Feature services use `ExecuteValidatedAsync` so a returned response reaches one
+  terminal semantic outcome even when validation throws or is cancelled. Planning
+  requires both planning quality checks; response-format support alone is insufficient.
+- One `BeginOperation` scope supplies the deadline, correlation id and provider-attempt
+  counter for nested calls, chunks and corrections. The gate owns transport retries;
+  SDK retries are disabled. Capability probes use an independent shared operation tied
+  to host lifetime, while each planning caller's wait observes its own deadline.
+- Recipe facts and translation use durable revision-bound enrichment jobs. A model result
+  may only apply while the recipe source revision and human confirmation version match.
 - Ingredient storage is always metric; original source values preserved verbatim; measurement
   preference is a display concern (see `features/measurement-preferences.md`)
 
@@ -97,7 +106,13 @@ Identical to Freezy:
 - **OnPush** change detection on all components
 - **EF Core** for all database access (never raw SQL); **DTOs** in/out (never entities)
 - **Manual mapping**, no AutoMapper
-- Migrations via `dotnet ef migrations add {name}`; applied automatically at startup
+- Migrations via `dotnet ef migrations add {name}`; production startup applies them only
+  when `Database:AutoMigrate=true` (the Compose profile enables this explicitly)
+- Wire contracts are generated from the build-produced OpenAPI document.
+  `scripts/verify-local.ps1` regenerates them and rejects unexpected changes.
+- Development and verification run locally. The verification command covers backend and
+  disposable PostgreSQL tests, the real API browser workflow, frontend tests/build,
+  browser fixture regressions and Linux scraper tests in Docker.
 
 ## API Conventions
 
@@ -112,7 +127,8 @@ Identical to Freezy:
 Follows Freezy's `TESTING_STRATEGY.md` approach:
 
 - Backend: xUnit + FluentAssertions + NSubstitute; integration tests via
-  `TestWebApplicationFactory` (EF InMemory, `Testing` environment)
+  `TestWebApplicationFactory` (EF InMemory, `Testing` environment), plus opt-in PostgreSQL
+  migration/concurrency tests through `DISHHIVE_TEST_POSTGRES`
 - Recipe extraction: offline fixture tests against stored HTML
   (`Fixtures/dagelijkse-kost-recipe.html`) — never network-dependent
 - Frontend: Vitest via `@angular/build:unit-test`

@@ -23,6 +23,10 @@ public record FrozenItem
 /// </summary>
 public interface IFreezyClient
 {
+    async Task<FreezyStockSnapshot> GetStockSnapshotAsync(CancellationToken cancellationToken = default) =>
+        !IsConfigured ? new(false, false, DateTime.UtcNow, [])
+        : !await IsReachableAsync(cancellationToken) ? new(true, false, DateTime.UtcNow, [])
+        : new(true, true, DateTime.UtcNow, await GetFrozenItemsAsync(cancellationToken));
     /// <summary>Whether a Freezy base URL is configured</summary>
     bool IsConfigured { get; }
 
@@ -40,3 +44,5 @@ public interface IFreezyClient
     /// </summary>
     Task<IReadOnlyList<FrozenItem>> GetFrozenItemsAsync(CancellationToken cancellationToken = default);
 }
+
+public sealed record FreezyStockSnapshot(bool Configured, bool Available, DateTime CheckedAt, IReadOnlyList<FrozenItem> Items);

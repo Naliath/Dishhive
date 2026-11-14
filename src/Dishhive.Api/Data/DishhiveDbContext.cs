@@ -16,6 +16,8 @@ public class DishhiveDbContext : DbContext
     public DbSet<FamilyMemberDietaryTag> FamilyMemberDietaryTags => Set<FamilyMemberDietaryTag>();
     public DbSet<Recipe> Recipes => Set<Recipe>();
     public DbSet<RecipeDietaryFact> RecipeDietaryFacts => Set<RecipeDietaryFact>();
+    public DbSet<RecipeDietaryFactHistory> RecipeDietaryFactHistory => Set<RecipeDietaryFactHistory>();
+    public DbSet<RecipeEnrichmentJob> RecipeEnrichmentJobs => Set<RecipeEnrichmentJob>();
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
     public DbSet<RecipeStep> RecipeSteps => Set<RecipeStep>();
     public DbSet<RecipeTag> RecipeTags => Set<RecipeTag>();
@@ -24,15 +26,25 @@ public class DishhiveDbContext : DbContext
     public DbSet<CookbookEntry> CookbookEntries => Set<CookbookEntry>();
     public DbSet<PlannedMeal> PlannedMeals => Set<PlannedMeal>();
     public DbSet<PlannedMealAttendee> PlannedMealAttendees => Set<PlannedMealAttendee>();
+    public DbSet<MealSuggestionBatch> MealSuggestionBatches => Set<MealSuggestionBatch>();
+    public DbSet<MealSuggestionCandidate> MealSuggestionCandidates => Set<MealSuggestionCandidate>();
     public DbSet<MealRating> MealRatings => Set<MealRating>();
     public DbSet<UserSetting> UserSettings => Set<UserSetting>();
     public DbSet<AiModelTestRecord> AiModelTestRecords => Set<AiModelTestRecord>();
     public DbSet<AiPlanningRun> AiPlanningRuns => Set<AiPlanningRun>();
     public DbSet<AiTaskRun> AiTaskRuns => Set<AiTaskRun>();
+    public DbSet<AiReviewEvent> AiReviewEvents => Set<AiReviewEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<AiReviewEvent>(entity =>
+        {
+            entity.Property(item => item.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.HasIndex(item => item.OccurredAt);
+            entity.HasIndex(item => item.OperationId);
+            entity.HasIndex(item => item.RecipeId);
+        });
 
         // FamilyMember configuration
         modelBuilder.Entity<FamilyMember>(entity =>
@@ -54,7 +66,7 @@ public class DishhiveDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
-            entity.Property(e => e.DishName).HasMaxLength(200);
+            entity.Property(e => e.DishName).HasMaxLength(DomainLimits.DishName);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasOne(e => e.FamilyMember)
@@ -120,7 +132,7 @@ public class DishhiveDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
-            entity.Property(e => e.Title).IsRequired().HasMaxLength(300);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(DomainLimits.RecipeTitle);
             entity.Property(e => e.OriginalTitle).HasMaxLength(300);
             entity.Property(e => e.Description).HasMaxLength(2000);
             entity.Property(e => e.OriginalDescription).HasMaxLength(2000);
@@ -136,6 +148,8 @@ public class DishhiveDbContext : DbContext
             entity.Property(e => e.SourceRawData).HasColumnType("jsonb");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.Revision).HasDefaultValue(1L).IsConcurrencyToken();
+            entity.Property(e => e.FactsConfirmationVersion).IsConcurrencyToken();
 
             // Index for title search
             entity.HasIndex(e => e.Title);
@@ -153,6 +167,41 @@ public class DishhiveDbContext : DbContext
                   .WithMany(r => r.DietaryFacts)
                   .HasForeignKey(e => e.RecipeId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RecipeDietaryFactHistory>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.Contains).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.ArchivedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasOne(e => e.Recipe)
+                  .WithMany(r => r.DietaryFactsHistory)
+                  .HasForeignKey(e => e.RecipeId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.RecipeId, e.ArchivedAt });
+        });
+
+        modelBuilder.Entity<RecipeEnrichmentJob>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.OperationId).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.TargetLanguage).HasMaxLength(10);
+            entity.Property(e => e.Error).HasMaxLength(1000);
+            entity.Property(e => e.State).IsConcurrencyToken();
+            entity.Property(e => e.LeaseExpiresAt).IsConcurrencyToken();
+            entity.Property(e => e.RecipeRevision).IsConcurrencyToken();
+            entity.Property(e => e.FactsConfirmationVersion).IsConcurrencyToken();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasOne(e => e.Recipe)
+                  .WithMany()
+                  .HasForeignKey(e => e.RecipeId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.State, e.NotBefore });
+            entity.HasIndex(e => new { e.RecipeId, e.Task, e.State });
+            entity.HasIndex(e => new { e.RecipeId, e.Task }).IsUnique().HasFilter("\"State\" = 0");
         });
 
         // RecipeIngredient configuration
@@ -255,13 +304,36 @@ public class DishhiveDbContext : DbContext
         });
 
         // PlannedMeal configuration
+        modelBuilder.Entity<MealSuggestionBatch>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+            entity.HasIndex(e => e.ExpiresAt);
+        });
+        modelBuilder.Entity<MealSuggestionCandidate>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.DishName).HasMaxLength(DomainLimits.DishName).IsRequired();
+            entity.Property(e => e.SourceUrl).HasMaxLength(1000);
+            entity.Property(e => e.CandidateVersion).HasMaxLength(80).IsRequired();
+            entity.Property(e => e.FreezyItemRef).HasMaxLength(100);
+            entity.Property(e => e.ReviewOutcome).HasMaxLength(30);
+            entity.HasOne(e => e.Batch).WithMany(b => b.Candidates)
+                .HasForeignKey(e => e.BatchId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.BatchId, e.Id }).IsUnique();
+        });
+
+        // PlannedMeal configuration
         modelBuilder.Entity<PlannedMeal>(entity =>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
-            entity.Property(e => e.DishName).HasMaxLength(200);
+            entity.Property(e => e.DishName).HasMaxLength(DomainLimits.DishName);
             entity.Property(e => e.VagueInstruction).HasMaxLength(500);
-            entity.Property(e => e.FreezyItemRef).HasMaxLength(100);
+            entity.Property(e => e.FreezyItemRef).HasMaxLength(100).IsConcurrencyToken();
+            entity.Property(e => e.FreezyItemQuantity).IsConcurrencyToken();
+            entity.Property(e => e.FreezyItemFingerprint).HasMaxLength(64).IsConcurrencyToken();
             entity.Property(e => e.SuggestionKey).HasMaxLength(100);
             entity.Property(e => e.Notes).HasMaxLength(500);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -353,6 +425,7 @@ public class DishhiveDbContext : DbContext
             entity.Property(run => run.Outcome).HasMaxLength(30);
             entity.Property(run => run.Provider).HasMaxLength(50);
             entity.Property(run => run.Model).HasMaxLength(200);
+            entity.Property(run => run.ConfigFingerprint).HasMaxLength(500);
             entity.Property(run => run.Instructions).HasMaxLength(500);
             entity.Property(run => run.NormalizedIntentJson).HasColumnType("jsonb");
             entity.Property(run => run.Error).HasMaxLength(1000);
@@ -375,6 +448,7 @@ public class DishhiveDbContext : DbContext
             entity.Property(run => run.ResponseMode).HasMaxLength(30);
             entity.Property(run => run.FinishReason).HasMaxLength(40);
             entity.Property(run => run.Error).HasMaxLength(1000);
+            entity.Property(run => run.PromptHash).HasMaxLength(64);
         });
     }
 

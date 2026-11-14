@@ -1,13 +1,13 @@
 <div class="page-header">
-  <h1 class="mat-headline-medium">Recipes</h1>
+  <h1 class="mat-headline-medium">{{ 'navigation.recipes' | translate }}</h1>
   <div class="header-actions">
     <a mat-stroked-button routerLink="/recipes/new">
       <mat-icon>add</mat-icon>
-      New recipe
+      {{ 'recipeForm.newRecipe' | translate }}
     </a>
     <button mat-stroked-button (click)="toggleImport()">
       <mat-icon>download</mat-icon>
-      Import from URL
+      {{ 'ui.importFromURL' | translate }}
     </button>
   </div>
 </div>
@@ -17,16 +17,16 @@
     <mat-card-content>
       <form class="import-form" (ngSubmit)="import()">
         <mat-form-field appearance="outline" class="import-field">
-          <mat-label>Recipe URL</mat-label>
+          <mat-label>{{ 'ui.recipeURL' | translate }}</mat-label>
           <input matInput name="importUrl" [(ngModel)]="importUrl"
                  placeholder="https://...">
 
         </mat-form-field>
         <button mat-flat-button type="submit" [disabled]="importing() || !importUrl.trim()">
           @if (importing()) {
-            Importing…
+            {{ 'settings.importing' | translate }}
           } @else {
-            Import
+            {{ 'ui.import' | translate }}
           }
         </button>
       </form>
@@ -36,16 +36,16 @@
 
 <div class="filter-bar">
   <mat-form-field appearance="outline" class="search-field" subscriptSizing="dynamic">
-    <mat-label>Search recipes</mat-label>
+    <mat-label>{{ 'ui.searchRecipes' | translate }}</mat-label>
     <input matInput name="search" [(ngModel)]="searchTerm" (input)="onSearchInput()">
     <mat-icon matSuffix>search</mat-icon>
   </mat-form-field>
 
   @if (categories().length > 0) {
     <mat-form-field appearance="outline" class="filter-field" subscriptSizing="dynamic">
-      <mat-label>Category</mat-label>
+      <mat-label>{{ 'recipeForm.category' | translate }}</mat-label>
       <mat-select [value]="selectedCategory()" (selectionChange)="onCategoryChange($event.value)">
-        <mat-option [value]="null">All categories</mat-option>
+        <mat-option [value]="null">{{ 'ui.allCategories' | translate }}</mat-option>
         @for (category of categories(); track category) {
           <mat-option [value]="category">{{ category }}</mat-option>
         }
@@ -55,7 +55,7 @@
 
   @if (knownTags().length > 0) {
     <mat-form-field appearance="outline" class="filter-field" subscriptSizing="dynamic">
-      <mat-label>Tags</mat-label>
+      <mat-label>{{ 'recipeForm.tags' | translate }}</mat-label>
       <mat-select multiple [value]="selectedTags()" (selectionChange)="onTagsChange($event.value)">
         @for (tag of knownTags(); track tag) {
           <mat-option [value]="tag">{{ tag }}</mat-option>
@@ -65,35 +65,41 @@
   }
 
   @if (hasFilter()) {
-    <button mat-icon-button (click)="clearFilter()" matTooltip="Clear filter" aria-label="Clear filter">
+    <button mat-icon-button (click)="clearFilter()" [matTooltip]="'ui.clearFilter' | translate" [attr.aria-label]="'ui.clearFilter' | translate">
       <mat-icon>filter_alt_off</mat-icon>
     </button>
   }
 </div>
 
-<div class="cookbook-row" aria-label="Collections">
-  <mat-icon class="cookbook-row-icon" matTooltip="Collections: curated recipe sets">collections_bookmark</mat-icon>
+<div class="cookbook-row" [attr.aria-label]="'ui.collections' | translate">
+  <mat-icon class="cookbook-row-icon" [matTooltip]="'ui.collectionsCuratedRecipeSets' | translate">collections_bookmark</mat-icon>
+  <mat-chip-listbox [attr.aria-label]="'ui.filterByCollection' | translate">
   @for (cookbook of cookbooks(); track cookbook.id) {
-    <button class="cookbook-chip" type="button"
-            [class.is-active]="activeCookbookId() === cookbook.id"
-            [class.is-auto]="cookbook.kind === 'auto'"
-            (click)="applyCookbook(cookbook)">
-      <mat-icon class="cookbook-kind-icon">{{ cookbook.kind === 'auto' ? 'auto_awesome' : 'bookmark' }}</mat-icon>
-      {{ cookbook | autoCollectionName }}
+    <mat-chip-option class="cookbook-chip" [value]="cookbook.id"
+            [selected]="activeCookbookId() === cookbook.id"
+            [removable]="cookbook.kind === 'manual'"
+            (selectionChange)="$event.isUserInput && applyCookbook(cookbook)"
+            (removed)="deleteCookbook(cookbook)">
+      <mat-icon matChipAvatar>{{ cookbook.kind === 'auto' ? 'auto_awesome' : 'bookmark' }}</mat-icon>
+      <span class="collection-name" [matTooltip]="cookbook | autoCollectionName">{{ cookbook | autoCollectionName }}</span>
       <span class="cookbook-count">{{ cookbook.recipeCount }}</span>
       @if (cookbook.kind === 'manual') {
-        <mat-icon class="cookbook-delete" (click)="deleteCookbook(cookbook, $event)"
-                  [attr.aria-label]="'Delete collection ' + cookbook.name">close</mat-icon>
+        <button matChipRemove [attr.aria-label]="'ui.deleteCollectionName' | translate:{ name: cookbook.name }">
+          <mat-icon>close</mat-icon>
+        </button>
       }
-    </button>
+    </mat-chip-option>
   }
+  </mat-chip-listbox>
   <div class="cookbook-save">
-    <input class="cookbook-name-input" name="cookbookName" [(ngModel)]="cookbookName"
-           placeholder="New collection…" maxlength="100"
-           (keydown.enter)="createCookbook()">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>{{ 'ui.newCollection' | translate }}</mat-label>
+      <input matInput name="cookbookName" [(ngModel)]="cookbookName" maxlength="100"
+             (keydown.enter)="createCookbook()">
+    </mat-form-field>
     <button mat-icon-button (click)="createCookbook()"
             [disabled]="savingCookbook() || !cookbookName.trim()"
-            matTooltip="Create a new collection" aria-label="Create collection">
+            [matTooltip]="'ui.createANewCollection' | translate" [attr.aria-label]="'ui.createCollection' | translate">
       <mat-icon>bookmark_add</mat-icon>
     </button>
   </div>
@@ -107,11 +113,11 @@
   <div class="empty-state">
     <mat-icon class="empty-icon">menu_book</mat-icon>
     @if (hasFilter()) {
-      <h2>No recipes match this filter</h2>
-      <p>Loosen the filter or clear it to see the whole library.</p>
+      <h2>{{ 'ui.noRecipesMatchThisFilter' | translate }}</h2>
+      <p>{{ 'ui.loosenTheFilterOrClearItToSeeTheWholeLibrary' | translate }}</p>
     } @else {
-      <h2>No recipes yet</h2>
-      <p>Import a recipe from a URL to get started.</p>
+      <h2>{{ 'ui.noRecipesYet' | translate }}</h2>
+      <p>{{ 'ui.importARecipeFromAURLToGetStarted' | translate }}</p>
     }
   </div>
 } @else {
@@ -121,13 +127,13 @@
         @if (manualCookbooks().length > 0) {
           <button mat-icon-button class="card-menu-btn" [matMenuTriggerFor]="cardMenu"
                   (click)="$event.stopPropagation(); $event.preventDefault()"
-                  matTooltip="Collections" aria-label="Collection actions">
+                  [matTooltip]="'ui.collections' | translate" [attr.aria-label]="'ui.collectionActions' | translate">
             <mat-icon>bookmark_add</mat-icon>
           </button>
           <mat-menu #cardMenu="matMenu">
             @for (cookbook of manualCookbooks(); track cookbook.id) {
               <button mat-menu-item (click)="toggleCookbookMembership(recipe, cookbook)"
-                      [attr.aria-label]="(isInCookbook(recipe, cookbook) ? 'Remove from ' : 'Add to ') + cookbook.name">
+                      [attr.aria-label]="(isInCookbook(recipe, cookbook) ? 'ui.removeFromNamedCollection' : 'ui.addToNamedCollection') | translate:{ name: cookbook.name }">
                 <mat-icon>{{ isInCookbook(recipe, cookbook) ? 'bookmark' : 'bookmark_border' }}</mat-icon>
                 {{ cookbook.name }}
               </button>
@@ -146,7 +152,7 @@
             <div class="recipe-image-indicators">
               @if (statsOf(recipe)?.averageRating; as rating) {
                 <span class="recipe-image-indicator recipe-image-indicator--rating"
-                      [attr.aria-label]="'Average rating ' + (rating | number:'1.1-1')">
+                      [attr.aria-label]="'ui.averageRating' | translate:{ rating: (rating | number:'1.1-1') }">
                   <mat-icon>star</mat-icon>{{ rating | number:'1.1-1' }}
                 </span>
               }
@@ -162,7 +168,7 @@
         <mat-card-header>
           <mat-card-title>{{ recipe.title }}</mat-card-title>
           <mat-card-subtitle>
-            {{ recipe.servings }} servings
+            {{ 'ui.valueServings' | translate:{ p0: recipe.servings } }}
             @if (recipe.totalTimeMinutes) {
               · {{ recipe.totalTimeMinutes }} min
             }
@@ -181,4 +187,11 @@
       </mat-card>
     }
   </div>
+  <mat-paginator
+    [length]="totalRecipes()"
+    [pageIndex]="pageIndex()"
+    [pageSize]="pageSize()"
+    [pageSizeOptions]="[12, 24, 48, 96]"
+    (page)="onPage($event)"
+    [attr.aria-label]="'ui.recipePages' | translate" />
 }

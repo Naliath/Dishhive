@@ -104,6 +104,7 @@ public partial class RecipeExchangeService : IRecipeExchangeService
 
     public async Task<RecipeFileImportResultDto> ImportAsync(Stream json, CancellationToken cancellationToken = default)
     {
+        var operationId = $"file-import-{Guid.NewGuid():N}";
         using var document = await JsonDocument.ParseAsync(json, cancellationToken: cancellationToken);
         var nodes = SchemaOrgRecipeExtractor.FindRecipeNodes(document.RootElement);
         if (nodes.Count == 0)
@@ -125,7 +126,7 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             .ToListAsync(cancellationToken);
 
         var result = new RecipeFileImportResultDto();
-        // Recipes the file carried no facts for; queued for AI assessment after save
+        // Stage assessment with the recipe mutation in the same commit.
         var needAssessment = new List<(Recipe Recipe, bool WasUpdate)>();
 
         foreach (var node in nodes)
@@ -155,11 +156,14 @@ public partial class RecipeExchangeService : IRecipeExchangeService
                     .Include(r => r.Steps)
                     .Include(r => r.Tags).ThenInclude(a => a.RecipeTag)
                     .Include(r => r.DietaryFacts)
+                    .Include(r => r.DietaryFactsHistory)
                     .FirstAsync(r => r.Id == existingId, cancellationToken);
                 _context.RecipeIngredients.RemoveRange(recipe.Ingredients);
                 _context.RecipeSteps.RemoveRange(recipe.Steps);
                 recipe.Ingredients.Clear();
                 recipe.Steps.Clear();
+                RecipeFactsStateService.Invalidate(recipe);
+                recipe.Revision++;
                 isUpdate = true;
                 result.Updated++;
             }
@@ -197,7 +201,7 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             var facts = ReadDishhiveFacts(node);
             if (facts != null)
             {
-                ApplyFacts(recipe, facts.Value.Contains, facts.Value.Status);
+                RecipeFactsStateService.Replace(_context, recipe, facts.Value.Contains, facts.Value.Status);
             }
             else
             {
@@ -205,27 +209,15 @@ public partial class RecipeExchangeService : IRecipeExchangeService
             }
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
         foreach (var (recipe, wasUpdate) in needAssessment)
         {
-            _factsQueue.TryEnqueue(recipe.Id, overwriteUserConfirmed: wasUpdate);
+            await _factsQueue.StageAsync(_context, recipe, overwriteUserConfirmed: wasUpdate,
+                operationId: operationId, cancellationToken: cancellationToken);
         }
+        await _context.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Recipe file import: {Created} created, {Updated} updated, {Skipped} skipped",
             result.Created, result.Updated, result.Skipped);
         return result;
-    }
-
-    /// <summary>Replaces the facts rows and stamps the assessment status</summary>
-    private void ApplyFacts(Recipe recipe, List<IngredientClass> classes, DietaryFactsStatus status)
-    {
-        _context.RecipeDietaryFacts.RemoveRange(recipe.DietaryFacts);
-        recipe.DietaryFacts.Clear();
-        foreach (var ingredientClass in classes.Distinct())
-        {
-            recipe.DietaryFacts.Add(new RecipeDietaryFact { Recipe = recipe, IngredientClass = ingredientClass });
-        }
-        recipe.DietaryFactsStatus = status;
-        recipe.DietaryFactsAssessedAt = DateTime.UtcNow;
     }
 
     /// <summary>
@@ -338,7 +330,8 @@ public partial class RecipeExchangeService : IRecipeExchangeService
         // Assessed dietary facts travel with the recipe (status included, so a
         // user-confirmed verdict survives a round trip); unassessed recipes carry
         // nothing and get re-assessed on import
-        if (recipe.DietaryFactsStatus != DietaryFactsStatus.Unassessed)
+        if (recipe.DietaryFactsStatus is DietaryFactsStatus.AiDetected or DietaryFactsStatus.UserConfirmed
+            && recipe.DietaryFactsAssessedRevision == recipe.Revision)
         {
             var contains = new JsonArray();
             foreach (var name in IngredientClasses.ToNames(recipe.DietaryFacts.Select(f => f.IngredientClass)))

@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsService } from './settings.service';
 
 describe('SettingsService languages', () => {
@@ -18,15 +18,15 @@ describe('SettingsService languages', () => {
 
   afterEach(() => httpTesting.verify());
 
-  it('loads language choices independently from database-backed preferences', () => {
-    httpTesting.expectOne('/api/settings/languages').flush([
+  it('loads language choices independently from database-backed preferences', async () => {
+    httpTesting.expectOne('/api/settings/languages').flush(new Blob([JSON.stringify([
       { code: 'en', displayName: 'English' },
       { code: 'nl', displayName: 'Nederlands' }
-    ]);
+    ])], { type: 'application/json' }));
 
-    expect(service.supportedLanguages()).toEqual([
+    await vi.waitFor(() => expect(service.supportedLanguages()).toEqual([
       { code: 'en', displayName: 'English' },
       { code: 'nl', displayName: 'Nederlands' }
-    ]);
+    ]));
   });
 });

@@ -2,6 +2,7 @@ import { ApplicationRef, Injectable, signal } from '@angular/core';
 import { SwUpdate, VersionReadyEvent } from '@angular/service-worker';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { concat, filter, first, interval } from 'rxjs';
+import { LanguageService } from './language.service';
 
 /**
  * PWA lifecycle glue (Freezy's service-worker pattern): notifies on new app
@@ -20,7 +21,8 @@ export class PwaService {
   constructor(
     private swUpdate: SwUpdate,
     private appRef: ApplicationRef,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private language: LanguageService
   ) {
     this.initUpdateChecks();
     this.initOnlineStatus();
@@ -43,32 +45,33 @@ export class PwaService {
       .pipe(filter((evt): evt is VersionReadyEvent => evt.type === 'VERSION_READY'))
       .subscribe(() => {
         this.snackBar
-          .open('A new version of Dishhive is available', 'Update', { duration: 0 })
+          .open(this.language.t('pwa.versionReady'), this.language.t('pwa.update'), { duration: 0 })
           .onAction()
           .subscribe(() => this.reloadToUpdate());
       });
 
     this.swUpdate.unrecoverable.subscribe(() => {
       this.snackBar
-        .open('The app needs to reload to recover', 'Reload', { duration: 0 })
+        .open(this.language.t('pwa.recover'), this.language.t('pwa.reload'), { duration: 0 })
         .onAction()
         .subscribe(() => window.location.reload());
     });
   }
 
   reloadToUpdate(): void {
-    this.swUpdate.activateUpdate().then(() => window.location.reload());
+    // A new navigation adopts the ready worker and its matching hashed chunks.
+    window.location.reload();
   }
 
   private initOnlineStatus(): void {
     window.addEventListener('online', () => {
       this.isOnline.set(true);
-      this.snackBar.open('You are back online', 'Dismiss', { duration: 3000 });
+      this.snackBar.open(this.language.t('pwa.online'), this.language.t('common.dismiss'), { duration: 3000 });
     });
 
     window.addEventListener('offline', () => {
       this.isOnline.set(false);
-      this.snackBar.open('You are offline — showing saved data where possible', 'Dismiss', {
+      this.snackBar.open(this.language.t('pwa.offline'), this.language.t('common.dismiss'), {
         duration: 5000
       });
     });

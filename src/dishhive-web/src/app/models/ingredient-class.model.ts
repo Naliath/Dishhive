@@ -26,36 +26,3 @@ export const INGREDIENT_CLASS_GROUPS: ReadonlyArray<{
     classes: ['Gelatin', 'Alcohol', 'Honey']
   }
 ];
-
-const LABELS: Record<string, string> = {
-  Gluten: 'Gluten',
-  Crustaceans: 'Crustaceans',
-  Eggs: 'Eggs',
-  Fish: 'Fish',
-  Peanuts: 'Peanuts',
-  Soybeans: 'Soy',
-  Milk: 'Milk',
-  TreeNuts: 'Tree nuts',
-  Celery: 'Celery',
-  Mustard: 'Mustard',
-  Sesame: 'Sesame',
-  Sulphites: 'Sulphites',
-  Lupin: 'Lupin',
-  Molluscs: 'Molluscs',
-  RedMeat: 'Red meat',
-  Poultry: 'Poultry',
-  Pork: 'Pork',
-  Gelatin: 'Gelatin',
-  Alcohol: 'Alcohol',
-  Honey: 'Honey'
-};
-
-/** Display label for a class name; falls back to the raw name */
-export function ingredientClassLabel(name: string): string {
-  return LABELS[name] ?? name;
-}
-
-/** Short comma-joined label list, e.g. for tooltips and chips */
-export function ingredientClassLabels(names: string[]): string {
-  return names.map(ingredientClassLabel).join(', ');
-}

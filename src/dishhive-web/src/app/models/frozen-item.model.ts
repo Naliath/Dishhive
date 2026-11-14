@@ -1,15 +1,4 @@
 /** Read model of a Freezy frozen item (see docs/features/freezy-integration.md) */
-export interface FrozenItem {
-  id: string;
-  name: string;
-  quantity: number;
-  unit?: string;
-  expirationDate?: string;
-  notes?: string;
-}
+export type FrozenItem = import('../api/generated/dishhive-api.client').FrozenItem;
 
-export interface FreezerSuggestions {
-  /** False when the Freezy integration is not configured */
-  enabled: boolean;
-  items: FrozenItem[];
-}
+export type FreezerSuggestions = import('../api/generated/dishhive-api.client').FreezerSuggestionsDto;

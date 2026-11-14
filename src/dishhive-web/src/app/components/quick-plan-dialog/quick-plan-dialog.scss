@@ -69,11 +69,11 @@
 .date-label span,
 .nothing-planned {
   color: var(--mat-sys-on-surface-variant);
-  font-size: 13px;
+  font: var(--mat-sys-body-small);
 }
 
 .day-plan {
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -89,8 +89,7 @@
 
 .meal-type {
   color: var(--mat-sys-primary);
-  font-size: 11px;
-  font-weight: 600;
+  font: var(--mat-sys-label-small);
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }

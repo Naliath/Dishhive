@@ -1,5 +1,68 @@
 # Feature: AI-Assisted Week Planning
 
+## November 2026 review followups
+
+Source discovery now preserves engine ranking, verifies the requested host before
+deciding whether fallback is needed, and reports a limited metasearch service when
+upstream engines fail. Sitemap discovery ranks recipe slugs using source vocabulary,
+term rarity and compound segmentation. Known non-recipe source routes are excluded
+before preview; actual structured extraction and ingredient assessment still determine
+eligibility. Titles and URLs do not establish ingredient facts.
+
+Distinct URLs share IDs and resolution tasks. Research allocates waves fairly across
+requirements. The first verified rejections can trigger a bounded `planning.research`
+query refinement; an exhausted search can receive one further refinement while
+capacity remains, with at most four such calls per session. The strict contract,
+shared operation ID, eligibility, settings and outcomes use the central execution gate.
+Refinement receives up to three eligible and three rejected assessed examples, with
+bounded titles and canonical classes. Titles guide retrieval but cannot prove facts.
+When facts reasoning is enabled and only one requirement remains, its remaining
+research uses bounded four-page waves rather than a serial one-page tail.
+
+The inspection ceiling is **28 distinct pages**, raised from 24 after a measured
+mixed-source failure spent its allowance on 20 main candidates and four dessert
+candidates, including a non-recipe page. Research also checks the shared remaining
+provider attempts and reserves the configured generation-attempt allowance. The
+hard **32-provider-attempt / 300-second** operation defaults remain unchanged.
+Transport failures can still consume extra attempts; the gate remains authoritative.
+
+A plan that meets source counts still considers assessed saved alternatives on its
+other dates when the household has canonical allergies. This closes an early-return
+path that retained unverified plain dishes despite available assessed food. Under the
+user's clarified policy, dates without sufficient distinct assessed meals stay empty
+and the plan is partial, with localized dated explanations. New generation omits
+unassessed dishes when an attendee has canonical allergy exclusions. This preserves
+source, count, date, uniqueness and allergy requirements.
+
+Intent v11 retains the date repairs: it reserves explicit dates before assigning undated counts and rejects a
+nonempty date list whose distinct-date count differs from the required meal count.
+Dates represent mandatory selections rather than an optional scheduling window. An incompatible
+interpretation gets a correction within the existing retry allowance; a confirmed
+contradictory request is still reported as impossible. The Friday source scenario
+now expects a partial week and all four eligible saved controls, following the user's
+explicit decision. Its original prompt and hard source/date/allergy assertions remain.
+
+The independently labelled facts corpus and full repeated planning results are
+reported separately in [current verification evidence](../reviews/dish-identity-fix-2026-11-14.md).
+
+Specific-food identity now uses the central `recipe.dish_match` task and strict
+`recipe-dish-match-v1` contract. Bounded titles, ingredients and preparation establish
+the requested food independently of allergy classes. Content-bound approvals are
+checked in final selection and acceptance; changed recipe content requires review.
+Only eligible, identity-matched external candidates receive verified research scope,
+and they cannot leak into other source/count/date clauses. Intent v11 always preserves
+the requested food for source constraints. The separate identity corpus passed 69/69
+on v4.1-flash, while the planning oracle independently checks labelled recipe URLs.
+Rechecking earlier Friday source/date-only successes gives 0/3: those selected unrelated
+food. Finding enough eligible source recipes remains a separate retrieval-quality
+question; a valid identity check does not guarantee a filled Friday or a complete week.
+The user clarified Friday as Belgian/Dutch pancakes only, with an explained empty
+date when none qualify. The original fixture prompt remains verbatim; a separate
+`instructionClarification` supplies that decision. The runner retains strict meal
+completion and separately reports `policyPassed`/`acceptedPartial`, so an approved
+gap is visible without accepting unrelated food. Offline oracle checks reject
+unexplained gaps, wrong regional styles and allergy violations.
+
 **Status legend:** `[ ]` = new · `[~]` = in progress · `[x]` = done
 **Related:** [week-planner.md](week-planner.md), [meal-feedback.md](meal-feedback.md), [freezy-integration.md](freezy-integration.md)
 
@@ -15,14 +78,29 @@ behind the existing `IMealSuggestionService` seam — AI is not bolted on anywhe
 Free-form instructions are interpreted once into a versioned `PlanningIntent`, regardless
 of input language. Each explicit requirement becomes a typed constraint containing its id,
 dates, meal type, course, source host, count, distinctness and canonical ingredient classes.
+The intent also carries stable required collection ids and separately declared soft
+collection preferences. Invalid interpretation returns bounded, structured field errors
+to the corrective attempt; missing source queries and dropped collection references do
+not silently become an unrestricted plan.
 Downstream validation, repair and post-processing do not inspect words in the original
 prompt. Final suggestions claim constraints through `constraintIds`.
+
+The bounded domain selector considers proposed rows, all local recipes, resolved external
+research candidates and available freezer items against the shared final-item validator.
+It checks membership, recipe identity, origin, time, facts, attendees and slot together,
+then searches at most 25,000 assignments for counts, uniqueness and freezer limits.
+It does not cycle one recipe to fabricate distinct coverage. External research retains
+the originating requirement ids, including when one cached query serves multiple courses.
+Unknown facts produce a separate unmet-facts diagnostic; repaired model output alone is
+not a product-level `model-quality` failure. A partial result is bounded candidate evidence,
+not proof that no suitable recipe exists elsewhere.
 
 Source research requests are derived from the typed intent. Search and sitemap results are
 only candidates; they count as recipes after a structured import preview succeeds. Candidate
 ingredients are assessed into canonical facts before satisfying dietary constraints. Page
-classification uses structural URI/import signals, not title words. Unassessed recipes get a
-visible verification warning instead of title or ingredient-substring inference.
+classification uses structural URI/import signals, not title words. Unassessed recipes
+cannot fill meals for attendees with canonical allergies. Unknown facts remain distinct
+from assessed empty classes; no title or ingredient-substring inference is used.
 
 Each persisted planning run includes the normalized intent JSON alongside model, search,
 resolution, parse, fallback, token and timing metrics.
@@ -135,16 +213,19 @@ IMealSuggestionService
   instructions may reference a collection — "On friday something from
   #[Easy Weekday Dishes]". `CollectionMentionResolver` resolves them at suggest time
   (grammar `#\[([^\[\]\r\n]{1,100})\]`, name match case-insensitive, manual + auto
-  collections) into `CollectionConstraints`: per collection ≤15 member titles,
+  collections) into `CollectionConstraints`: stable manual/auto collection id, full member
+  recipe ids, meal/course/date scope, and ≤15 ranked member titles as a prompt sample,
   least-recently-planned first, plus the dates whose instruction referenced it. The
-  prompt lists them in their own "Referenced collections" block (independent of the
-  60-recipe cap) with a rule that day-scoped references MUST pick from the list;
-  enforcement after parsing is soft (off-list picks are logged, kept for review —
-  an empty day would be worse). Dangling references (renamed/deleted collection)
-  resolve to nothing and flow through as plain-text hints. The rules fallback honors
-  day-scoped constraints (least-recently-planned member, variety window respected,
-  after the freezer step) and ignores global ones, consistent with ignoring
-  instructions. The inputs get a `#`-triggered autocomplete
+  prompt lists them in their own "Referenced collections" block. The sample bounds
+  prompt size; the complete recipe-id membership remains authoritative. Intent v4
+  distinguishes mandatory global membership from explicit soft preferences. Dated
+  references apply to the exact meal/course slot, and final validation rejects
+  same-title impostors and off-list rows. Acceptance resolves required collections by
+  stable id and rechecks current membership; removing a member requires another review.
+  Unknown, deleted or disabled references return `collection-unresolved` without calling
+  the provider. References on unselected days do not constrain the selected dates.
+  Renaming a collection still requires updating old raw planning text; a previously
+  normalized review requirement survives the rename by id. The inputs get a `#`-triggered autocomplete
   (`directives/collection-mention.directive.ts`): typing `#ea` suggests matching
   collections and inserts the complete token — brackets are never typed by hand.
 - **@[Source] external recipe discovery** (July 2026): instructions may reference an
@@ -287,7 +368,7 @@ IMealSuggestionService
       (assessed facts ∩ an attending member's allergy exclusions). `KnownRecipes` stays
       complete so titles remain resolvable — the prompt omits excluded recipes from its
       block, the rules fallback skips favorites matching them entirely, `#[Collection]`
-      constraints drop excluded titles, and the count is surfaced to the review dialog
+      constraints drop excluded recipe ids and sampled titles, and the count is surfaced to the review dialog
       (`excludedForAllergies`) so a false-positive AI fact is discoverable. Diets never
       hard-filter — annotation + warning only.
     - **Prompt annotations**: assessed candidates render `[contains: Milk, Gluten]`
@@ -345,12 +426,18 @@ model gets **one real test per process** (`AiModelTester` + `AiModelCapabilitySe
      curry on Thursday" is honored, and ≥2 days are vegetarian. The fixture recipes
      carry Vegetarian/Meat/Fish categories, so this tests instruction-following, not
      world knowledge.
-- **The verdict drives behavior.** `failed` (no attempt produced parseable JSON): the
-  LLM is never called — suggestions go straight to the rules, and the review dialog
-  skips the compose phase exactly like "AI down", so instructions are never collected
-  just to be silently dropped. `warnings` (JSON works but the evaluation or the
-  model-listing check failed): the AI path stays on; the settings page shows what went
-  wrong so expectations are set. `passed`: business as usual.
+- **The verdict drives behavior.** Planning is eligible only when a response format
+  works, the planning example passes, and both English/Dutch intent examples pass.
+  A failed or missing quality result produces `failed`; the gate rejects normal intent
+  and generation calls. Ordinary suggestions use the rules fallback; uninterpreted
+  explicit requirements produce a visible unable result. `warnings` now means the
+  required quality checks passed but the model listing disagrees; that advisory listing
+  does not disable working completions. The settings page shows format support and
+  planning eligibility separately and identifies the checks as finite examples.
+  Facts, translation and extraction remain available without planning eligibility;
+  their task quality is unverified, and every returned response still needs its own
+  contract/domain validation. Failed quality evidence uses the failure cooldown;
+  successful quality evidence has the configured expiry.
 - **Response-format negotiation** rides on stage 2: a blanket format choice is wrong in
   both directions (LM Studio rejects `json_object`, local reasoning models emit their
   answer into the reasoning channel under a schema — while capable cloud models offer
@@ -360,13 +447,73 @@ parse/retry machinery becomes a safety net; otherwise prompted JSON as before.
 
 ## Development evaluation corpus
 
+The final plan is checked after normalization, filtering and duplicate removal.
+Every selected date needs a dinner main; a dessert does not fill that slot. Claimed
+requirements must match the date, meal and course. An exception before instructions
+can be interpreted returns an explicit unmet requirement and an unable result.
+Contradictory ingredient requirements are preserved by the interpretation prompt and
+rejected by the final domain checks. Interpretation quality still depends on the model.
+
+Every provider's suggestions carry resolved attendees and a candidate version.
+Review batches persist recipe/facts, attendee restrictions, claimed requirements,
+and freezer reservation identity. Acceptance checks that snapshot against current
+data and rechecks idempotency inside the stock lock. A changed or legacy candidate
+requires another review. External imports remain saved when planning cannot complete.
+Required collection memberships are resolved again by stable id; manual membership
+rows are locked for the acceptance transaction. Removed membership returns `needsReview`.
+The dialog retains failed items for retry, keeps successful items out of the next
+submission, and links retained imports that require attention. Finishing a review
+with no selected items records rejections without creating meals.
+
+Planning, facts, translation and import extraction share a deadline and total attempt
+budget across chunks and corrections. Nested research extraction/facts calls inherit
+the planning operation's id, deadline and counter, including parallel work. The gate
+claims an attempt immediately before invoking the provider client; a rejected input,
+queue cancellation or exhausted budget does not claim one. Capability probes are a
+separate shared operation with their own limits and host-lifetime cancellation; the
+planning wait still observes the caller's operation deadline.
+
+SDK retries are disabled. The gate retries transient network failures and HTTP
+408/429/500/502/503/504 up to `AI_MAX_TRANSPORT_RETRIES` (default one, range zero to
+three). It observes `Retry-After` and releases model admission during backoff. A retry
+cannot extend the deadline or bypass `AI_MAX_OPERATION_ATTEMPTS`. Semantic corrections
+use each task profile's `MaxRetries`; intent no longer owns a separate fixed retry loop.
+Every admitted provider invocation gets its own task row and operation-wide ordinal.
+`OperationAttempt = 0` means no provider call was admitted; historical rows retain null
+and display “not recorded”. `Attempt` remains the feature's completion/correction index.
+Rate-limited and attempt-limit outcomes are distinct. Cancelling a caller and reaching
+a deadline remain separate terminal outcomes.
+
+The gate uses one conservative input estimate,
+including message and schema overhead; translation also reserves retry and output
+headroom. `AI_MAX_QUEUED_REQUESTS`, `AI_CONTEXT_WINDOW_TOKENS`,
+`AI_OPERATION_TIMEOUT_SECONDS`, and `AI_MAX_OPERATION_ATTEMPTS` configure these
+bounds. `ExecuteValidatedAsync` owns response validation and exactly one semantic
+outcome; validator exceptions, cancellation and deadline expiry cannot leave a normal
+returned response marked as unvalidated. Low-level disposal and durable maintenance
+still recover abandoned/interrupted work. Diagnostic-text retention is described in
+[deployment security](../deployment-security.md).
+
+The task statistics page cancels an older refresh when a newer selection starts.
+Metrics requests omit unset filter parameters, so the initial all-tasks view and
+clearing a selected task both load the full retained cohort. HTTP query tests and
+a query-sensitive browser journey cover all tasks → one task → all tasks.
+Planning metrics record partial/unable outcomes from the final result, and URL import
+extraction and enrichment share one operation id per invocation.
+
 Live-model regressions are stored as data in
 `src/Dishhive.Api.Tests/Fixtures/AiWeekPlanning/scenarios.json`. Each scenario contains
 the prompt, repeat count, advisory performance budget, and hard assertions for distinct
 recipes, source hosts, courses, dates, and attendee behavior. A scenario can provide
 `selectedDayOffsets`; the runner sends those dates through the product API and fails any
-suggestion that escapes the selection. Keep this file as the source of truth so CI,
+suggestion that escapes the selection. Keep this file as the source of truth so local verification,
 developers, and AI-assisted review all evaluate the same cases.
+`requiredCollections` asserts actual recipe-id membership fetched from the API, including
+automatic collections. Requests start at least seven seconds apart by default to respect
+the local ten-per-minute expensive-request limit; `-MinimumRequestIntervalSeconds`
+controls that pacing. Report facts readiness and the dataset alongside results: a seeded
+recipe with unknown facts, an incompatible assessed recipe and an eligible confirmed
+fixture exercise different conditions. Preserve all outcomes instead of weakening assertions.
 
 Run one quick pass against the local Compose app:
 
@@ -386,14 +533,11 @@ without turning the normal development suite into an expected-failure test. They
 by default, remain runnable by explicit `-ScenarioId`, and can all be included with
 `-IncludeKnownLimitations`.
 
-Deterministic sitemap matching currently ranks normalized URL tokens but does not provide
-language-aware stemming, spelling variants, transliteration, or fuzzy matching. A prompt such
-as `pannekoeken` may therefore work when the configured search provider corrects it and fail
-when the source sitemap only contains `pannenkoeken`. This is intentionally recorded as a known
-limitation rather than handled with word-specific branches. A future deterministic solution
-would need a designed multilingual normalization layer: detected locale, versioned lexical
-resources per language, explicit fallback rules, and broad cross-language evaluation. Until
-then, fuzzy matching quality belongs to the configured search provider and is not guaranteed.
+Deterministic sitemap matching ranks normalized URL tokens, source vocabulary and compound
+segments. It does not provide general multilingual spelling correction or transliteration.
+The current Friday case is active: typed model interpretation supplies source-language
+search wording and ingredient assessment verifies the result. No spelling-specific
+production branch was added. Finite corpus success does not guarantee arbitrary wording.
 
 Reports, including raw suggestions and per-iteration failures, are written under the
 git-ignored `artifacts/ai-evals/` directory. Accuracy failures return a non-zero exit code;
@@ -401,6 +545,12 @@ performance budgets are warnings unless `-FailOnPerformance` is supplied. The sc
 corpus has a normal unit test that validates ids and required expectations without calling
 an AI provider. Qualitative AI judging can consume the report later, but it supplements
 rather than replaces these deterministic assertions.
+
+The runner checkpoints after every iteration and records transport failures while
+continuing the remaining scenarios. `-RequestTimeoutSeconds` defaults to 360, leaving
+time for the default 300-second application deadline to return an incomplete result.
+The quick-local case checks the returned total time against its 30-minute ceiling;
+unknown time is not treated as quick.
 
 ## Editable system prompt (July 2026)
 
@@ -507,7 +657,14 @@ to 4000 chars). API: `GET/PUT/DELETE /api/settings/ai-prompt`.
 - [x] Web-search contract health check + actionable settings-page diagnostics for disabled JSON output
 - [x] Bounded research-intent extraction + deterministic batched search/preview orchestration
 - [x] Source-count/date/course and attendee-assignment validation with focused correction
+- [x] Intent v4 collection ids/preferences, bounded field-specific correction errors and unresolved-reference guard
+- [x] Shared-invariant candidate selection, exact membership/slot validation and current-membership acceptance recheck
+- [x] Mandatory manual/automatic collection corpus cases with recipe-id assertions and paced evaluation requests
 - [x] Persisted planning-run metrics + technical settings stats page
+- [x] Shared validated execution for every model-backed feature, with separate format and planning-quality eligibility
+- [x] Operation-wide deadlines/correlation/provider-attempt counters inherited by nested research, including parallel calls
+- [x] Gate-owned observable transport retries, disabled SDK retries, bounded 429 backoff and distinct timeout/cancellation outcomes
+- [x] Omit unset metrics filters; HTTP and browser regressions preserve all-task counts through task selection and clearing
 - [x] Opaque external candidate ids + strict fetched/source/date provenance enforcement
 - [x] Shared bounded public-resource fetcher (redirect validation + public-address connection)
 - [x] Idempotent backend suggestion acceptance workflow with per-item outcomes

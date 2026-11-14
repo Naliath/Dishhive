@@ -126,6 +126,9 @@ export class RecipeFormPage implements OnInit, OnDestroy {
     switch (this.factsStatus()) {
       case DietaryFactsStatus.AiDetected: return 'recipeForm.factsAiDetected';
       case DietaryFactsStatus.UserConfirmed: return 'recipeForm.factsConfirmed';
+      case DietaryFactsStatus.Stale: return 'recipeForm.factsStale';
+      case DietaryFactsStatus.Pending: return 'recipeForm.factsPending';
+      case DietaryFactsStatus.Failed: return 'recipeForm.factsFailed';
       default: return 'recipeForm.factsNotAssessed';
     }
   });
@@ -179,9 +182,9 @@ export class RecipeFormPage implements OnInit, OnDestroy {
       next: recipe => {
         this.title = recipe.title;
         this.description = recipe.description ?? '';
-        this.originalTitle = recipe.originalTitle;
-        this.originalDescription = recipe.originalDescription;
-        this.contentLanguage = recipe.contentLanguage;
+        this.originalTitle = recipe.originalTitle ?? undefined;
+        this.originalDescription = recipe.originalDescription ?? undefined;
+        this.contentLanguage = recipe.contentLanguage ?? undefined;
         this.servings = recipe.servings;
         this.prepTimeMinutes = recipe.prepTimeMinutes ?? null;
         this.cookTimeMinutes = recipe.cookTimeMinutes ?? null;
@@ -199,7 +202,7 @@ export class RecipeFormPage implements OnInit, OnDestroy {
             }))
           : [{ name: '', quantity: null, unit: '' }];
         this.steps = recipe.steps.length > 0
-          ? recipe.steps.map(s => ({ instruction: s.instruction, originalInstruction: s.originalInstruction }))
+          ? recipe.steps.map(s => ({ instruction: s.instruction, originalInstruction: s.originalInstruction ?? undefined }))
           : [{ instruction: '' }];
         this.tags.set([...recipe.tags]);
         this.containsClasses.set([...recipe.dietaryFacts.contains]);

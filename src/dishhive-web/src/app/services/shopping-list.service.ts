@@ -1,22 +1,23 @@
+import { ShoppingListClient } from '../api/generated/dishhive-api.client';
+import { apiResponse } from '../api/api-response';
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { ShoppingList } from '../models/shopping-list.model';
 
 @Injectable({ providedIn: 'root' })
 export class ShoppingListService {
+  private readonly api: ShoppingListClient;
+
   private apiUrl = '/api/shoppinglist';
 
-  constructor(private http: HttpClient) {}
+  constructor(http: HttpClient) {
+    this.api = new ShoppingListClient(http, "");
+  }
 
   getShoppingList(from: string, to: string): Observable<ShoppingList> {
-    return this.http.get<ShoppingList>(this.apiUrl, { params: { from, to } })
-      .pipe(catchError(this.handleError));
+    return apiResponse(this.api.getShoppingList(from, to));
   }
 
-  private handleError(error: HttpErrorResponse): Observable<never> {
-    console.error('ShoppingList API error:', error);
-    return throwError(() => new Error('Could not reach the shopping list API'));
-  }
 }

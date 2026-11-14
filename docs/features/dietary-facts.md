@@ -40,30 +40,35 @@ prompt-only, visibly marked in the family form.
 
 - **`RecipeDietaryFact`** — (RecipeId, IngredientClass) composite-key rows, replaced
   wholesale on each (re)assessment or user edit.
-- **`Recipe.DietaryFactsStatus`** — tri-state, load-bearing: `Unassessed` (an empty
-  fact set means "unknown", NEVER "contains nothing"), `AiDetected`, `UserConfirmed`.
-  Plus `DietaryFactsAssessedAt`.
-- Only assessed recipes participate in exact matching; unassessed ones behave exactly
-  like before this feature (substring net only).
+- **`Recipe.DietaryFactsStatus`** distinguishes `Unassessed`, `AiDetected`,
+  `UserConfirmed`, `Stale`, `Pending`, and `Failed`. An empty unassessed set means
+  unknown. An empty current assessed set means no classified ingredients were found.
+  `Revision`, `DietaryFactsAssessedRevision`, `FactsConfirmationVersion`, and
+  `DietaryFactsAssessedAt` identify the source and confirmation used by an assessment.
+  Previous assessments remain in history after invalidation.
+- Exact matching uses only current assessed facts. Source ingredient changes invalidate
+  facts immediately, including when AI is unavailable. Reconfirming unchanged classes
+  is an explicit user action; human confirmation and source revisions both participate
+  in the database concurrency condition.
 
 ## AI assessment pipeline
 
-- **`LlmRecipeFactsExtractor`** (`Services/Facts/`) — one-shot `IChatClient` call
-  (same posture as `LlmRecipeExtractor`: NoOp when AI unconfigured, does not consult
-  the capability service, failure → null and the recipe stays Unassessed). The prompt
+- **`LlmRecipeFactsExtractor`** (`Services/Facts/`) uses the shared AI execution gate
+  with task settings, a shared operation deadline and an attempt budget. It is a NoOp
+  when AI is unconfigured and does not require the planning capability test. The prompt
   asks for factual containment only — never diet verdicts — and is deliberately biased
   to over-include on uncertain processed products: a false "contains" surfaces visibly
   (warning/exclusion the user can correct), a missed allergen does not. Derived
   ingredients are called out (boter→Milk, sojasaus→Soybeans+Gluten, vissaus→Fish, …).
-- **`RecipeFactsAssessmentService`** — singleton `Channel<Guid>` queue +
-  `BackgroundService` worker, deliberately sequential (a local LM Studio model must
-  not get parallel calls; the settings page gets a meaningful remaining count).
-  Enqueueing is fire-and-forget and never blocks the save that triggered it; with AI
-  unconfigured `TryEnqueue` is a visible no-op. `UserConfirmed` facts are never
-  overwritten **except** on ingredient edits, where the confirmed facts describe
-  ingredients that no longer exist — a fresh AI assessment beats a stale human one.
-  Recipes without ingredients are skipped (title-only classification would be exactly
-  the world-knowledge guessing this feature replaces).
+- **`RecipeFactsAssessmentService`** stores facts and translation jobs separately in
+  PostgreSQL. Recipe mutations and their jobs commit together; a bounded channel only
+  wakes the worker. Pending work coalesces by recipe and task. Claims and completions
+  compare state, lease ownership and captured revisions atomically. Every poll recovers
+  expired leases, including leases that expire after a restart. Results computed from
+  an old source or confirmation are superseded. Translation checks the recipe revision
+  at commit even when only ingredients or steps change. Failed work retries with backoff,
+  then becomes visibly failed. Recipes without
+  ingredients cannot be classified from their title alone.
 - **Hooks:** URL import + re-import (`RecipeImportService`), manual create, update
   with a changed ingredient list (`RecipesController`), file import for recipes
   arriving without facts (`RecipeExchangeService`).
@@ -75,9 +80,10 @@ prompt-only, visibly marked in the family form.
 
 ## API
 
-- `RecipeDto.dietaryFacts` = `{ contains: string[], status, assessedAt }`; create/
-  update DTOs take optional `containsClasses` (null = untouched → AI queue on create,
-  stored facts kept on update; a list = user-set → `UserConfirmed`).
+- `RecipeDto.dietaryFacts` includes `contains`, `status`, `assessedAt`, `recipeRevision`,
+  `assessedRevision`, `isCurrent`, and history. Create/update accept optional
+  `containsClasses`; source edits invalidate the old assessment unless explicitly
+  reconfirmed. A supplied list records user-confirmed facts for the current source.
 - `PUT /api/recipes/{id}/facts` `{ contains: [] }` → `UserConfirmed` (detail-page editor).
 - `GET /api/recipes/facts/status`, `POST /api/recipes/facts/backfill`.
 - `GET /api/dietarytags/preset?name=&kind=` — preset preview for the family form.
@@ -139,19 +145,48 @@ prompt-only, visibly marked in the family form.
   compensations are the review-dialog exclusion notice and the one-click Confirm on
   the recipe page. Diets never hard-filter (mixed households cook variants) — they
   annotate and warn.
-- **Pre-filtering the list is not a safety guarantee.** The model can still invent
-  free-text dishes and external `@[Source]` picks; the prompt rule and the warning
-  net stay. For real anaphylaxis-grade allergies the app is advisory — the human
-  checks the recipe.
+- **Pre-filtering the list is not a safety guarantee.** New generation also rejects
+  unassessed dishes for attendees with canonical allergy exclusions, including
+  free-text and unverified freezer choices. Missing dates stay empty in a partial
+  plan. Ingredient classifications remain fallible; people must check the recipe
+  and actual product declarations.
 - **Demo seed recipes stay Unassessed** (the seeder won't fake AI facts with keyword
   guessing); demo members do get preset exclusion sets.
-- Freezer items remain uncheckable (Freezy has no ingredient data) — pre-existing,
-  documented gap.
+- Freezer items without assessed ingredient data cannot fill a generated meal for
+  attendees with canonical allergies; Freezy does not supply those facts.
 
 ## Implementation Checklist
 
+### November 2026 review followups
+
+- [x] Ingredient changes and reassessment preserve revision-bound prior assessments.
+  Repeated identical class sets retain their assessment times without Pending duplicates.
+- [x] Explicit `POST /api/recipes/facts/backfill?includeAssessed=true` can refresh
+  existing AI assessments; the default skips them and both paths protect human confirmations.
+- [x] The provider facts input contains ingredients only; an untrusted recipe title
+  cannot change the classification. Canonical classes and unknown-result behavior remain strict.
+- [x] Independent 50-case corpus and `scripts/run-ai-facts-evals.ps1` cover all 20
+  public demo recipes, exact declarations/identities and injection-like titles.
+- [x] The unchanged 50-case corpus passes **150/150** over three repeats with retained
+  facts contract v7, `deepseek/deepseek-v4.1-flash`, task-specific low reasoning and an
+  8192-token output allowance. All 150 physical calls succeeded (average 3977ms,
+  P95 14265ms). On this model, 2048 and 4096 allowances scored 135/150 and 149/150;
+  a reasoning-disabled prompt experiment scored 145/150 and was reverted. The
+  older v4-flash model passed 150/150 with 2048; that is a separate comparison.
+  This is finite regression evidence, not complete accuracy. Stored public recipes
+  separately pass **20/20 minimum assertions** after refresh. Neither result proves
+  unspecified product composition, all extra classes or future completions.
+
+`Ai__FactsEnableReasoning` defaults to false; when enabled the central execution gate
+requests low reasoning for facts only and requires at least 1024 output tokens.
+Generic output/concurrency defaults remain 512/1. The measured local DeepSeek profile
+uses reasoning enabled, 8192 output tokens and concurrency four. Benchmark overrides:
+`scripts/run-ai-facts-evals.ps1 -EnableFactsReasoning -MaxOutputTokens 8192 -Iterations 3`.
+
+See [current classification and identity evidence](../reviews/dish-identity-fix-2026-11-14.md).
+
 - [x] `IngredientClass` (EU-14 + meat split + extras) + `RecipeDietaryFact` +
-      tri-state status on Recipe + `FamilyMemberDietaryTag.ExcludedClasses` (CSV) +
+      revisioned assessment status on Recipe + `FamilyMemberDietaryTag.ExcludedClasses` (CSV) +
       migration incl. preset seeding of existing member-tag links
 - [x] `DietaryTagPresets` (Dutch/English synonyms) + unit tests
 - [x] Member DTOs/sync on tag entries with per-link classes; preset endpoint;

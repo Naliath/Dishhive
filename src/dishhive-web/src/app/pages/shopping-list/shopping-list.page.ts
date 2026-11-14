@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../services/language.service';
+import { HouseholdClockService } from '../../services/household-clock.service';
+import { inject, ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
 import { LocalizedDatePipe } from '../../services/language.service';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -28,7 +31,7 @@ function toIso(date: Date): string {
 @Component({
   selector: 'app-shopping-list-page',
   standalone: true,
-  imports: [
+  imports: [TranslatePipe,
     CookingLoaderComponent,
     LocalizedDatePipe,
     FormsModule,
@@ -47,6 +50,8 @@ function toIso(date: Date): string {
   styleUrl: './shopping-list.page.scss'
 })
 export class ShoppingListPage implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
+  readonly clock = inject(HouseholdClockService);
   readonly list = signal<ShoppingList | null>(null);
   readonly loading = signal(true);
 
@@ -57,6 +62,7 @@ export class ShoppingListPage implements OnInit {
 
   private from = '';
   private to = '';
+  private recipeSearchSequence = 0;
 
   constructor(
     private route: ActivatedRoute,
@@ -71,7 +77,7 @@ export class ShoppingListPage implements OnInit {
   ngOnInit(): void {
     // Range from query params (planner entry point) or default to the current week
     const params = this.route.snapshot.queryParamMap;
-    const weekStart = this.settingsService.startOfWeek(new Date());
+    const weekStart = this.settingsService.startOfWeek(this.clock.date());
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
 
@@ -89,7 +95,7 @@ export class ShoppingListPage implements OnInit {
       },
       error: () => {
         this.loading.set(false);
-        this.snackBar.open('Could not generate the shopping list', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotGenerateTheShoppingList'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       }
     });
   }
@@ -99,6 +105,7 @@ export class ShoppingListPage implements OnInit {
     const opening = this.linkingMealId() !== reminder.plannedMealId;
     this.linkingMealId.set(opening ? reminder.plannedMealId : null);
     this.linkRecipeResults.set([]);
+    this.recipeSearchSequence++;
     // The dish text is usually the best starting search
     this.linkSearch = opening ? reminder.text : '';
     if (opening) {
@@ -107,14 +114,22 @@ export class ShoppingListPage implements OnInit {
   }
 
   searchLinkRecipes(): void {
+    const sequence = ++this.recipeSearchSequence;
+    const mealId = this.linkingMealId();
     const term = this.linkSearch.trim();
     if (!term) {
       this.linkRecipeResults.set([]);
       return;
     }
     this.recipesService.getRecipes(term).subscribe({
-      next: recipes => this.linkRecipeResults.set(recipes.slice(0, 5)),
-      error: () => this.linkRecipeResults.set([])
+      next: recipes => {
+        if (sequence === this.recipeSearchSequence && mealId === this.linkingMealId())
+          this.linkRecipeResults.set(recipes.slice(0, 5));
+      },
+      error: () => {
+        if (sequence === this.recipeSearchSequence && mealId === this.linkingMealId())
+          this.linkRecipeResults.set([]);
+      }
     });
   }
 
@@ -122,10 +137,10 @@ export class ShoppingListPage implements OnInit {
     this.plannedMealsService.setRecipe(reminder.plannedMealId, recipe.id).subscribe({
       next: () => {
         this.linkingMealId.set(null);
-        this.snackBar.open(`"${recipe.title}" linked — ingredients added`, 'Dismiss', { duration: 3000 });
+        this.snackBar.open(this.uiLanguage.t('ui.valueLinkedIngredientsAdded', { p0: (recipe.title) }), this.uiLanguage.t('common.dismiss'), { duration: 3000 });
         this.load();
       },
-      error: () => this.snackBar.open('Could not link the recipe', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotLinkTheRecipe'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -140,13 +155,13 @@ export class ShoppingListPage implements OnInit {
       return;
     }
 
-    const lines: string[] = [`Shopping list ${list.from} – ${list.to}`, ''];
+    const lines: string[] = [this.uiLanguage.t('ui.shoppingListValueValue', { p0: (list.from), p1: (list.to) }), ''];
     for (const item of list.items) {
       const quantity = this.measurementService.format(item.quantity, item.unit);
       lines.push(quantity ? `- ${quantity} ${item.name}` : `- ${item.name}`);
     }
     if (list.reminders.length > 0) {
-      lines.push('', 'Still to decide:');
+      lines.push('', this.uiLanguage.t('ui.stillToDecideb8b735'));
       for (const reminder of list.reminders) {
         lines.push(`- ${reminder.date}: ${reminder.text}`);
       }
@@ -154,9 +169,9 @@ export class ShoppingListPage implements OnInit {
 
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
-      this.snackBar.open('Shopping list copied to clipboard', 'Dismiss', { duration: 3000 });
+      this.snackBar.open(this.uiLanguage.t('ui.shoppingListCopiedToClipboard'), this.uiLanguage.t('common.dismiss'), { duration: 3000 });
     } catch {
-      this.snackBar.open('Could not access the clipboard', 'Dismiss', { duration: 4000 });
+      this.snackBar.open(this.uiLanguage.t('ui.couldNotAccessTheClipboard'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
     }
   }
 }

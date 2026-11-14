@@ -1,4 +1,5 @@
 using Dishhive.Api.Services.Freezy;
+using Dishhive.Api.Models.DTOs;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dishhive.Api.Controllers;
@@ -11,6 +12,21 @@ namespace Dishhive.Api.Controllers;
 [Route("api/[controller]")]
 public class FreezerController : ControllerBase
 {
+    [HttpGet("reservations")]
+    [ProducesResponseType(typeof(FreezerReconciliationDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<FreezerReconciliationDto>> GetReservations(
+        [FromServices] FreezerReservationService reservations, CancellationToken token) => Ok(await reservations.CheckAsync(token));
+
+    [HttpPut("reservations/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> ResolveReservation(Guid id, ResolveFreezerReservationDto request,
+        [FromServices] FreezerReservationService reservations, CancellationToken token)
+    {
+        await reservations.ResolveAsync(id, request, token);
+        return NoContent();
+    }
     private readonly FreezerAvailabilityService _availability;
 
     public FreezerController(FreezerAvailabilityService availability)

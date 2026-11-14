@@ -41,12 +41,21 @@ public class AiTaskRun
     public string? Error { get; set; }
 
     public int Attempt { get; set; }
+    /// <summary>Physical provider attempt within its operation; 0 = no call, null = legacy unknown.</summary>
+    public int? OperationAttempt { get; set; }
     public int MaxOutputTokens { get; set; }
     public double Temperature { get; set; }
     public bool ReasoningDisabled { get; set; }
     public bool SchemaRequested { get; set; }
     public bool SchemaApplied { get; set; }
     public long PromptCharacters { get; set; }
+    public int InputBudgetTokens { get; set; }
+    public long QueueWaitMs { get; set; }
+    [MaxLength(64)]
+    public string PromptHash { get; set; } = string.Empty;
+    /// <summary>Source versions/hashes for the enclosing operation; null means not recorded.</summary>
+    public string? InputRevisionsJson { get; set; }
+    [MaxLength(64)] public string? InputFingerprint { get; set; }
     public long OutputCharacters { get; set; }
     public long InputTokens { get; set; }
     public long OutputTokens { get; set; }

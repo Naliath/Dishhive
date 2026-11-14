@@ -1,13 +1,6 @@
-export enum DietaryTagKind {
-  Allergy = 0,
-  Diet = 1
-}
+export { DietaryTagKind } from '../api/generated/dishhive-api.client';
 
-export interface DietaryTag {
-  id: string;
-  name: string;
-  kind: DietaryTagKind;
-}
+export type DietaryTag = import('../api/generated/dishhive-api.client').DietaryTagDto;
 
 /**
  * One dietary tag on one member: the shared tag name plus THIS member's reading
@@ -16,43 +9,14 @@ export interface DietaryTag {
  * seeds a new link from its presets and keeps an existing link's stored set.
  * Responses always carry the resolved set (empty = not machine-checkable).
  */
-export interface DietaryTagEntry {
-  name: string;
-  excludedClasses: string[] | null;
-}
+export type DietaryTagEntry = import('../api/generated/dishhive-api.client').DietaryTagEntryDto;
 
-export interface FamilyMember {
-  id: string;
-  name: string;
-  isGuest: boolean;
-  allergyTags: DietaryTagEntry[];
-  dietTags: DietaryTagEntry[];
-  preferenceNotes?: string;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+export type FamilyMember = import('../api/generated/dishhive-api.client').FamilyMemberDto;
 
-export interface CreateFamilyMember {
-  name: string;
-  isGuest: boolean;
-  allergyTags: DietaryTagEntry[];
-  dietTags: DietaryTagEntry[];
-  preferenceNotes?: string;
-}
+export type CreateFamilyMember = import('../api/generated/dishhive-api.client').CreateFamilyMemberDto;
 
-export interface UpdateFamilyMember extends CreateFamilyMember {
-  isActive: boolean;
-}
+export type UpdateFamilyMember = import('../api/generated/dishhive-api.client').UpdateFamilyMemberDto;
 
-export interface FamilyMemberFavorite {
-  id: string;
-  familyMemberId: string;
-  recipeId?: string;
-  dishName?: string;
-}
+export type FamilyMemberFavorite = import('../api/generated/dishhive-api.client').FamilyMemberFavoriteDto;
 
-export interface CreateFamilyMemberFavorite {
-  recipeId?: string;
-  dishName?: string;
-}
+export type CreateFamilyMemberFavorite = import('../api/generated/dishhive-api.client').CreateFamilyMemberFavoriteDto;

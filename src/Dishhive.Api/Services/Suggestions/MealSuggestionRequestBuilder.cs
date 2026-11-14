@@ -1,3 +1,4 @@
+using Dishhive.Api.Services.Time;
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Services.Freezy;
@@ -12,6 +13,7 @@ namespace Dishhive.Api.Services.Suggestions;
 /// </summary>
 public class MealSuggestionRequestBuilder
 {
+    private readonly IHouseholdClock _clock;
     private const int HistoryDays = 90;
 
     /// <summary>
@@ -25,18 +27,22 @@ public class MealSuggestionRequestBuilder
     private readonly FreezerAvailabilityService _freezerAvailability;
     private readonly CollectionMentionResolver _mentionResolver;
     private readonly SourceMentionResolver _sourceMentionResolver;
+    private readonly AttendancePolicy _attendancePolicy;
     private readonly ILogger<MealSuggestionRequestBuilder> _logger;
 
     public MealSuggestionRequestBuilder(
         DishhiveDbContext context, FreezerAvailabilityService freezerAvailability,
         CollectionMentionResolver mentionResolver, SourceMentionResolver sourceMentionResolver,
-        ILogger<MealSuggestionRequestBuilder> logger)
+        AttendancePolicy attendancePolicy,
+        ILogger<MealSuggestionRequestBuilder> logger, IHouseholdClock clock)
     {
         _context = context;
         _freezerAvailability = freezerAvailability;
         _mentionResolver = mentionResolver;
         _sourceMentionResolver = sourceMentionResolver;
+        _attendancePolicy = attendancePolicy;
         _logger = logger;
+        _clock = clock;
     }
 
     public async Task<MealSuggestionRequest> BuildAsync(
@@ -45,15 +51,14 @@ public class MealSuggestionRequestBuilder
         CancellationToken cancellationToken = default)
     {
         var weekEnd = weekStart.AddDays(6);
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
 
+        var resolvedAttendeeIds = await _attendancePolicy.ResolveValidAsync(attendeeIds, cancellationToken);
         var membersQuery = _context.FamilyMembers
             .AsNoTracking()
             .Include(m => m.DietaryTags).ThenInclude(t => t.DietaryTag)
-            .Where(m => m.IsActive);
-        membersQuery = attendeeIds.Count > 0
-            ? membersQuery.Where(m => attendeeIds.Contains(m.Id))
-            : membersQuery.Where(m => !m.IsGuest);
+            .Where(m => m.IsActive)
+            .Where(m => resolvedAttendeeIds.Contains(m.Id));
         var members = await membersQuery.OrderBy(m => m.Name).ToListAsync(cancellationToken);
         var memberIds = members.Select(m => m.Id).ToList();
 
@@ -110,7 +115,10 @@ public class MealSuggestionRequestBuilder
                 Id = r.Id,
                 Title = r.Title,
                 OriginalTitle = r.OriginalTitle,
-                Category = r.Category
+                Category = r.Category,
+                TotalTimeMinutes = r.TotalTimeMinutes,
+                Revision = r.Revision,
+                FactsConfirmationVersion = r.FactsConfirmationVersion
             })
             .ToListAsync(cancellationToken);
 
@@ -161,9 +169,9 @@ public class MealSuggestionRequestBuilder
         var frozenItems = await _freezerAvailability.GetAvailableAsync(cancellationToken);
 
         // Resolve #[Collection Name] references from the day instructions and the
-        // global instructions into recipe-title constraints
+        // global instructions into stable collection membership constraints.
         var mentionSources = weekPlan
-            .Where(m => !string.IsNullOrWhiteSpace(m.VagueInstruction))
+            .Where(m => daysToFill.Contains(m.Date) && !string.IsNullOrWhiteSpace(m.VagueInstruction))
             .Select(m => ((DateOnly?)m.Date, m.VagueInstruction))
             .Append((null, instructions))
             .ToList();
@@ -171,7 +179,10 @@ public class MealSuggestionRequestBuilder
             .GroupBy(d => d.DishName, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Max(d => d.LastPlanned), StringComparer.OrdinalIgnoreCase);
         var collectionConstraints = await _mentionResolver.ResolveAsync(
-            mentionSources, lastPlannedByTitle, cancellationToken);
+            weekPlan.Where(meal => daysToFill.Contains(meal.Date) && !string.IsNullOrWhiteSpace(meal.VagueInstruction))
+                .Select(meal => ((DateOnly?)meal.Date, meal.MealType, meal.Course, meal.VagueInstruction))
+                .Append((null, MealType.Dinner, Course.Main, instructions)).ToList(),
+            lastPlannedByTitle, cancellationToken);
 
         // Resolve @[Source] references into website-host constraints for the LLM search tool
         var sourceConstraints = await _sourceMentionResolver.ResolveAsync(mentionSources, cancellationToken);
@@ -184,9 +195,7 @@ public class MealSuggestionRequestBuilder
             .Where(favorite => favorite.RecipeId.HasValue)
             .Select(favorite => favorite.RecipeId!.Value)
             .ToHashSet();
-        var constraintTitles = collectionConstraints
-            .SelectMany(c => c.RecipeTitles)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var collectionRecipeIds = collectionConstraints.SelectMany(c => c.RecipeIds).ToHashSet();
         var ratingByTitle = recentDishes
             .Where(d => d.AverageRating.HasValue)
             .GroupBy(d => d.DishName, StringComparer.OrdinalIgnoreCase)
@@ -195,7 +204,7 @@ public class MealSuggestionRequestBuilder
         double Score(RecipeOption recipe)
         {
             double score = 0;
-            if (constraintTitles.Contains(recipe.Title)) score += 1000; // keep referenced titles linkable
+            if (collectionRecipeIds.Contains(recipe.Id)) score += 1000;
             if (favoriteRecipeIds.Contains(recipe.Id)) score += 100;
             if (ratingByTitle.TryGetValue(recipe.Title, out var rating)) score += rating * 20;
             if (lastPlannedByTitle.TryGetValue(recipe.Title, out var last))
@@ -227,7 +236,10 @@ public class MealSuggestionRequestBuilder
             {
                 r.Id,
                 Ingredients = r.Ingredients.Select(i => i.Name).ToList(),
-                Assessed = r.DietaryFactsStatus != DietaryFactsStatus.Unassessed,
+                Assessed = (r.DietaryFactsStatus == DietaryFactsStatus.AiDetected
+                    || r.DietaryFactsStatus == DietaryFactsStatus.UserConfirmed)
+                    && (r.DietaryFactsAssessedRevision == null
+                        || r.DietaryFactsAssessedRevision == r.Revision),
                 Facts = r.DietaryFacts.Select(f => f.IngredientClass).ToList()
             })
             .ToListAsync(cancellationToken);
@@ -277,7 +289,8 @@ public class MealSuggestionRequestBuilder
                             "Dropped {Count} recipe(s) from #[{Collection}] for household allergies",
                             c.RecipeTitles.Count - kept.Count, c.Name);
                     }
-                    return c with { RecipeTitles = kept };
+                    return c with { RecipeTitles = kept,
+                        RecipeIds = c.RecipeIds.Where(id => !allergyExcludedIds.Contains(id)).ToList() };
                 })
                 .ToList();
         }
@@ -301,6 +314,12 @@ public class MealSuggestionRequestBuilder
             AvailableFrozenItems = frozenItems,
             Instructions = string.IsNullOrWhiteSpace(instructions) ? null : instructions.Trim(),
             CollectionConstraints = collectionConstraints,
+            UnresolvedCollectionNames = mentionSources
+                .SelectMany(source => CollectionMentionResolver.ExtractMentions(source.Item2))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(name => !collectionConstraints.Any(collection =>
+                    string.Equals(collection.Name, name, StringComparison.OrdinalIgnoreCase)))
+                .ToList(),
             SourceConstraints = sourceConstraints,
             RecipeAllergens = recipeAllergens,
             AllergyExcludedRecipeIds = allergyExcludedIds

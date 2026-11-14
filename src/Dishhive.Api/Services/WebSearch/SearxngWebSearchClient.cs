@@ -58,9 +58,10 @@ public class SearxngWebSearchClient : IWebSearchClient
                 .Where(r => !string.IsNullOrWhiteSpace(r.Url) && !string.IsNullOrWhiteSpace(r.Title))
                 .Select(r => new WebSearchResult(r.Title!.Trim(), r.Url!.Trim(), r.Content?.Trim()))
                 .Where(IsLikelyRecipePage)
+                .Where(result => string.IsNullOrWhiteSpace(site) || SourceHostMatches(result.Url, site))
                 .Take(Math.Max(1, count))
                 .ToList();
-            if (!string.IsNullOrWhiteSpace(site))
+            if (!string.IsNullOrWhiteSpace(site) && mapped.Count < Math.Max(1, count))
             {
                 var sitemap = await _sitemapSearch.SearchAsync(query, site, count, cancellationToken) ?? [];
                 if (mapped.Count < Math.Max(1, count))
@@ -69,11 +70,9 @@ public class SearxngWebSearchClient : IWebSearchClient
                         "SearXNG returned only {Count}/{Requested} likely recipe pages for {Query}; supplementing from the source sitemap",
                         mapped.Count, count, effectiveQuery);
                 }
-                // A source sitemap is deterministic and generally contains fewer category/
-                // article false positives than metasearch. Prefer it, then use SearXNG to
-                // fill any remaining slots for sites with incomplete sitemaps.
-                mapped = sitemap.Where(IsLikelyRecipePage)
-                    .Concat(mapped)
+                // Preserve the search engine's query relevance. A sitemap fills gaps;
+                // slug matches must not displace already available recipe search results.
+                mapped = mapped.Concat(sitemap.Where(IsLikelyRecipePage))
                     .DistinctBy(result => result.Url, StringComparer.OrdinalIgnoreCase)
                     .Take(Math.Max(1, count))
                     .ToList();
@@ -92,6 +91,14 @@ public class SearxngWebSearchClient : IWebSearchClient
 
     private static bool IsLikelyRecipePage(WebSearchResult result)
         => RecipePageClassifier.IsPotentialRecipeUri(result.Url);
+
+    private static bool SourceHostMatches(string url, string site)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+        var expected = Uri.TryCreate(site, UriKind.Absolute, out var source) ? source.Host : site.Trim();
+        static string WithoutWww(string host) => host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? host[4..] : host;
+        return string.Equals(WithoutWww(uri.Host), WithoutWww(expected), StringComparison.OrdinalIgnoreCase);
+    }
 
     private sealed record SearxngResponse([property: JsonPropertyName("results")] List<SearxngResult>? Results);
 

@@ -17,9 +17,11 @@ public sealed class LlmMealSuggestionService(
     IExternalRecipeSessionFactory externalRecipeSessions,
     MealSuggestionPostProcessor postProcessor,
     ILogger<LlmMealSuggestionService> logger,
-    AiPlanningMetricsStore? metricsStore = null) : IMealSuggestionService
+    AiPlanningMetricsStore? metricsStore = null,
+    IRecipeDishMatcher? dishMatcher = null) : IMealSuggestionService
 {
     public bool IsEnabled => true;
+    public MealSuggestionResult? LastResult { get; private set; }
 
     public async Task<IReadOnlyList<MealSuggestion>> SuggestAsync(
         MealSuggestionRequest request,
@@ -27,10 +29,12 @@ public sealed class LlmMealSuggestionService(
     {
         if (request.DaysToFill.Count == 0)
         {
+            LastResult = new(PlanCompletionStatus.Complete, [], []);
             return [];
         }
 
         var requestId = Guid.NewGuid().ToString("N")[..8];
+        using var inputSnapshot = AiInputSnapshotScope.ForPlanning(request);
         var stopwatch = Stopwatch.StartNew();
         var run = new AiPlanningRun
         {
@@ -38,67 +42,141 @@ public sealed class LlmMealSuggestionService(
             StartedAt = DateTime.UtcNow,
             Provider = options.Provider,
             Model = options.Model,
-            Instructions = request.Instructions,
+            ConfigFingerprint = options.ExecutionFingerprint,
+            Instructions = options.RetainDiagnosticText ? request.Instructions : null,
             RequestedDays = request.DaysToFill.Count
         };
         IExternalRecipeSession? externalRecipeSession = null;
         List<ExternalRecipeTools.RecipeResearchRequest> researchRequirements = [];
         IReadOnlyList<ExternalRecipeTools.GetRecipeResult> verifiedResearchCandidates = [];
-        string? unresolvedQualityIssue = null;
+        var requiresInterpretation = !string.IsNullOrWhiteSpace(request.Instructions)
+            || request.SourceConstraints.Count > 0
+            || request.CollectionConstraints.Count > 0
+            || request.WeekPlan.Any(meal => request.DaysToFill.Contains(meal.Date)
+                && !string.IsNullOrWhiteSpace(meal.VagueInstruction));
 
-        IReadOnlyList<MealSuggestion> Complete(IReadOnlyList<MealSuggestion> result, string outcome)
+        IReadOnlyList<MealSuggestion> Complete(
+            IReadOnlyList<MealSuggestion> result,
+            string outcome,
+            IReadOnlyList<UnmetPlanningRequirement>? additionalUnmet = null)
         {
-            run.Outcome = outcome;
+            var selectionDiagnostics = Array.Empty<UnmetPlanningRequirement>();
+            if (request.Intent is not null)
+            {
+                var candidates = verifiedResearchCandidates.Select(candidate =>
+                    externalRecipeSession?.TryResolveCandidate(candidate.CandidateId, out var resolved) == true ? resolved : null)
+                    .OfType<ExternalRecipeCandidate>().ToList();
+                var selection = PlanningCandidateSelector.Select(Finalize(result, request), request.Intent,
+                    request, candidates, cancellationToken);
+                result = Finalize(selection.Suggestions, request);
+                selectionDiagnostics = selection.Diagnostics.ToArray();
+            }
+            var validation = PlanningIntentValidator.ValidateFinal(
+                result, request.Intent ?? new PlanningIntent(), request);
+            var unmet = validation.UnmetRequirements
+                .Concat(additionalUnmet ?? [])
+                .Concat(selectionDiagnostics)
+                .DistinctBy(issue => (issue.Id, issue.Message))
+                .ToList();
+            result = validation.Suggestions;
+            run.Outcome = unmet.Count == 0 ? outcome : result.Count == 0 ? "unable" : "partial";
             run.SuggestedItems = result.Count;
             run.ExternalSuggestions = result.Count(item => item.SourceUrl != null);
             run.FallbackSuggestions = result.Count(item => item.Source == MealSuggestionSource.RulesFallback);
+            LastResult = new(
+                unmet.Count == 0 ? PlanCompletionStatus.Complete
+                    : result.Count == 0 ? PlanCompletionStatus.Unable
+                    : PlanCompletionStatus.Partial,
+                result,
+                unmet) { Intent = request.Intent, OperationId = requestId };
             return result;
         }
 
         try
         {
+            if (request.UnresolvedCollectionNames.Count > 0)
+                return Complete([], "unable", request.UnresolvedCollectionNames.Select(name =>
+                    new UnmetPlanningRequirement("collection-unresolved", $"Referenced collection #[{name}] could not be found").WithText("planningIssue.collectionUnresolved", ("name", name)))
+                    .ToList());
+
+            // Nested research extraction/facts calls inherit this deadline, id and provider-attempt counter.
+            using var operation = executionGate.BeginOperation(cancellationToken, requestId);
             var gateDecision = await executionGate.EnsureAvailableAsync(
-                AiTaskKind.WeekPlanning, capability, cancellationToken);
+                AiTaskKind.WeekPlanning, capability, operation.Token);
             run.CapabilityWaitMs = gateDecision.WaitMs;
             if (!gateDecision.Allowed)
             {
                 logger.LogWarning(
                     "[{RequestId}] Model {Provider}/{Model} failed its capability test (verdict={Verdict}); using rules fallback without calling it",
                     requestId, options.Provider, options.Model, gateDecision.Reason);
+                if (requiresInterpretation)
+                    return Complete([], "capabilityFallback",
+                        [new UnmetPlanningRequirement("intent-unavailable", "Explicit planning requirements could not be interpreted").WithText("planningIssue.intentUnavailable")]);
                 return Complete(Finalize(await fallback.SuggestAsync(request, cancellationToken), request), "capabilityFallback");
             }
 
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(executionGate.Profile(
-                AiTaskKind.WeekPlanning, request.SourceConstraints.Count > 0).TimeoutSeconds));
-
-            var intent = new PlanningIntent();
-            if (!string.IsNullOrWhiteSpace(request.Instructions) || request.SourceConstraints.Count > 0)
+            PlanningIntent? intent = requiresInterpretation ? null : new PlanningIntent();
+            if (requiresInterpretation)
             {
                 var intentStopwatch = Stopwatch.StartNew();
-                var intentExecution = await executionGate.ExecuteAsync(new AiExecutionRequest(
-                    AiTaskKind.PlanningIntent,
-                    [
-                        new ChatMessage(ChatRole.System, PlanningIntentContract.SystemPrompt),
-                        new ChatMessage(ChatRole.User, BuildPlanningIntentPrompt(request))
-                    ],
-                    "planning-intent-v2",
-                    requestId,
-                    ResponseFormat: PlanningIntentContract.JsonSchemaFormat), timeout.Token);
-                var intentResponse = intentExecution.Response;
+                var intentMessages = new List<ChatMessage>
+                {
+                    new(ChatRole.System, PlanningIntentContract.SystemPrompt),
+                    new(ChatRole.User, BuildPlanningIntentPrompt(request))
+                };
+                ChatResponse? intentResponse = null;
+                var maxIntentAttempts = executionGate.Profile(AiTaskKind.PlanningIntent).MaxRetries + 1;
+                for (var intentAttempt = 1; intentAttempt <= maxIntentAttempts && intent is null; intentAttempt++)
+                {
+                    var intentExecution = await executionGate.ExecuteValidatedAsync(new AiExecutionRequest(
+                        AiTaskKind.PlanningIntent, intentMessages, PlanningIntentContract.ContractVersion,
+                        requestId, intentAttempt, PlanningIntentContract.JsonSchemaFormat), response =>
+                        {
+                            var parsed = PlanningIntentContract.ParseWithErrors(response.Text, request);
+                            // A counted, undated clause can accidentally be assigned to an
+                            // incompatible explicitly dated meal. Recheck that interpretation
+                            // within the existing attempt allowance before declaring it impossible.
+                            // The final valid interpretation still preserves genuine contradictions.
+                            if (parsed.Intent is { } candidate && intentAttempt < maxIntentAttempts)
+                            {
+                                var conflicts = PlanningIntentValidator.Contradictions(candidate);
+                                if (conflicts.Count > 0)
+                                {
+                                    var conflictIds = conflicts.Select(issue => issue.Id).ToHashSet();
+                                    var context = AiJsonContract.Serialize(candidate.Constraints
+                                        .Where(constraint => conflictIds.Contains(constraint.Id)).Take(6)
+                                        .Select(constraint => new { constraint.Id, constraint.Dates,
+                                            constraint.MealType, constraint.Course, constraint.RequiredClasses,
+                                            constraint.ExcludedClasses, constraint.AllowedOrigins }));
+                                    parsed = new(null, [new("date-allocation",
+                                        "Recheck these incompatible interpreted constraints against the original instructions. "
+                                        + "Reserve explicit dates before allocating undated counts. Keep every requirement and every explicitly requested date; "
+                                        + "if the original request itself is contradictory, preserve that contradiction. Interpreted constraints: " + context)]);
+                                }
+                            }
+                            return new AiValidation<PlanningIntentContract.ParseResult>(parsed,
+                                parsed.Intent is not null ? AiTaskOutcome.Success : AiTaskOutcome.ValidationFailure,
+                                parsed.Intent is null ? string.Join("; ", parsed.Errors.Select(error => error.Id + ": " + error.Message)) : null);
+                        }, cancellationToken);
+                    intentResponse = intentExecution.Response;
+                    RecordCompletion(run, intentResponse, intentStopwatch.ElapsedMilliseconds);
+                    var interpretation = intentExecution.Value!;
+                    intent = interpretation.Intent;
+                    if (intent is not null) break;
+                    run.ParseFailures++;
+                    intentMessages.Add(new ChatMessage(ChatRole.User,
+                        "Correct these planning-intent validation errors. Preserve every original requirement; return only corrected intent JSON.\n"
+                        + AiJsonContract.Serialize(interpretation.Errors.Take(6))));
+                }
                 intentStopwatch.Stop();
-                RecordCompletion(run, intentResponse, intentStopwatch.ElapsedMilliseconds);
-                intent = PlanningIntentContract.Parse(intentResponse.Text, request)!;
                 if (intent == null)
                 {
-                    await intentExecution.ReportOutcomeAsync("parseFailure", "Invalid planning intent");
-                    run.ParseFailures++;
                     logger.LogWarning(
-                        "[{RequestId}] AI planning intent was invalid; visible={Visible}. Using rules fallback instead of guessing at language-specific meaning",
-                        requestId, FormatForLog(intentResponse.Text, 2000));
-                    return Complete(Finalize(await fallback.SuggestAsync(request, cancellationToken), request), "intentFallback");
+                        "[{RequestId}] AI planning intent remained invalid after correction; visible={Visible}",
+                        requestId, FormatForLog(intentResponse?.Text, 2000));
+                    return Complete([], "intentFallback",
+                        [new UnmetPlanningRequirement("intent-invalid", "Explicit planning requirements could not be normalized safely").WithText("planningIssue.intentInvalid")]);
                 }
-                await intentExecution.ReportOutcomeAsync("success");
                 logger.LogInformation(
                     "[{RequestId}] AI planning intent completed in {ElapsedMs}ms with {ConstraintCount} constraint(s)",
                     requestId, intentStopwatch.ElapsedMilliseconds, intent.Constraints.Count);
@@ -107,33 +185,42 @@ public sealed class LlmMealSuggestionService(
                     requestId, PlanningIntentContract.FormatForModel(intent));
             }
             request = request with { Intent = intent };
-            run.NormalizedIntentJson = PlanningIntentContract.FormatForModel(intent);
+            var contradictions = PlanningIntentValidator.Contradictions(intent!);
+            if (contradictions.Count > 0) return Complete([], "unable", contradictions);
+            run.NormalizedIntentJson = options.RetainDiagnosticText
+                ? PlanningIntentContract.FormatForModel(intent!) : null;
+
+            intent = await PlanningDishIdentity.ApproveAsync(intent!, request,
+                request.KnownRecipes.Select(recipe => new MealSuggestion
+                {
+                    RecipeId = recipe.Id, DishName = recipe.Title,
+                    ExternalIngredients = request.RecipeAllergens.GetValueOrDefault(recipe.Id)?.Ingredients ?? [],
+                    CandidateVersion = SuggestionCandidateVersion.ForLocal(recipe)
+                }).Concat(request.AvailableFrozenItems.Select(item => new MealSuggestion
+                { DishName = item.Name, FreezyItemRef = item.Id })).ToList(), dishMatcher, requestId,
+                executionGate.Profile(AiTaskKind.WeekPlanning).MaxRetries + 1, operation.Token);
+            request = request with { Intent = intent };
 
             var useExternalResearch = externalRecipeSessions.IsConfigured
-                && intent.Constraints.Any(item => item.SourceHost != null);
+                && intent!.Constraints.Any(item => item.SourceHost != null);
             run.UsedExternalResearch = useExternalResearch;
 
             logger.LogInformation(
                 "[{RequestId}] AI suggestion request starting: {DayCount} day(s) to fill, externalResearch={UseExternalResearch}, {Provider}/{Model}",
                 requestId, request.DaysToFill.Count, useExternalResearch, options.Provider, options.Model);
 
-            var effectivePrompt = await promptProvider.GetEffectiveSystemPromptAsync(cancellationToken);
-            var userPrompt = MealSuggestionPromptBuilder.BuildUserPrompt(request, options.MaxPromptTokens);
+            var effectivePrompt = await promptProvider.GetEffectiveSystemPromptAsync(operation.Token);
             var constraintIdsField = AiJsonContract.PropertyName<DaySuggestionPayload>(
                 nameof(DaySuggestionPayload.ConstraintIds));
-            var messages = new List<ChatMessage>
-            {
-                new(ChatRole.System, effectivePrompt),
-                new(ChatRole.User, userPrompt),
-                new(ChatRole.User,
-                    $"Authoritative normalized planning intent follows. Satisfy every constraint and copy each satisfied constraint id into {constraintIdsField} on the corresponding suggestion.\n"
-                    + PlanningIntentContract.FormatForModel(intent))
-            };
+            var intentPrompt =
+                $"Authoritative normalized planning intent follows. Satisfy every constraint and copy each satisfied constraint id into {constraintIdsField} on the corresponding suggestion.\n"
+                + PlanningIntentContract.FormatForModel(intent!);
+            string? researchPrompt = null;
 
             if (useExternalResearch)
             {
                 externalRecipeSession = externalRecipeSessions.Create(request.SourceConstraints, requestId, logger);
-                var researchRequests = intent.Constraints
+                var researchRequests = intent!.Constraints
                     .Where(item => item.SourceHost != null)
                     .Select(item => new ExternalRecipeTools.RecipeResearchRequest(
                         item.Id,
@@ -143,46 +230,73 @@ public sealed class LlmMealSuggestionService(
                         item.Dates.Select(date => date.ToString("yyyy-MM-dd")).ToList(),
                         AiJsonContract.EnumName(item.Course),
                         item.RequiredClasses,
-                        item.ExcludedClasses))
+                        item.ExcludedClasses.Concat(request.Members.SelectMany(member => member.Allergies)
+                            .SelectMany(allergy => allergy.ExcludedClasses)).Distinct().ToList(),
+                        item.SearchQueries, item.DishRequest ?? item.SearchQuery))
                     .ToList();
 
-                var verifiedCandidates = await externalRecipeSession.ResearchAsync(researchRequests, timeout.Token);
+                var verifiedCandidates = await externalRecipeSession.ResearchAsync(researchRequests, operation.Token);
                 verifiedResearchCandidates = verifiedCandidates;
                 researchRequirements = researchRequests;
+                intent = PlanningDishIdentity.WithExternalMatches(intent!, verifiedCandidates
+                    .Select(candidate => externalRecipeSession.TryResolveCandidate(candidate.CandidateId, out var resolved) ? resolved : null)
+                    .OfType<ExternalRecipeCandidate>().ToList());
+                request = request with { Intent = intent };
                 var sourceSiteField = AiJsonContract.PropertyName<CandidatePromptPayload>(
                     nameof(CandidatePromptPayload.SourceSite));
                 var candidateIdField = AiJsonContract.PropertyName<CandidatePromptPayload>(
                     nameof(CandidatePromptPayload.CandidateId));
                 var externalCandidateIdField = AiJsonContract.PropertyName<DaySuggestionPayload>(
                     nameof(DaySuggestionPayload.ExternalCandidateId));
-                messages.Add(new ChatMessage(
-                    ChatRole.User,
+                researchPrompt =
                     "Dishhive deterministically completed the required source research. "
                     + $"Use these verified candidates for every source-backed dish, matching {sourceSiteField}, and copy {candidateIdField} into {externalCandidateIdField}. "
                     + "Do not invent candidate ids or replace requested source dishes with local recipes.\n"
-                    + FormatCandidates(verifiedCandidates)));
+                    + FormatCandidates(verifiedCandidates);
+            }
+
+            var fixedPrompts = researchPrompt is null
+                ? new[] { effectivePrompt, intentPrompt }
+                : new[] { effectivePrompt, intentPrompt, researchPrompt };
+            var userPromptBudget = MealSuggestionPromptBuilder.FitUserPromptTokenBudget(
+                options.MaxPromptTokens, options.MaxInputTokens, fixedPrompts);
+            var userPrompt = MealSuggestionPromptBuilder.BuildUserPrompt(request, userPromptBudget);
+            var messages = new List<ChatMessage>
+            {
+                new(ChatRole.System, effectivePrompt),
+                new(ChatRole.User, userPrompt),
+                new(ChatRole.User, intentPrompt)
+            };
+            if (researchPrompt is not null)
+            {
+                messages.Add(new ChatMessage(ChatRole.User, researchPrompt));
             }
 
             WeekSuggestionsPayload? payload = null;
-            // Source-backed plans get one additional quality-repair opportunity. A first
-            // correction may fix attendee allocation while accidentally dropping a source
-            // candidate; correctness is worth one short no-reasoning pass here.
             var maxCompletionRetries = executionGate.Profile(
-                AiTaskKind.WeekPlanning, useExternalResearch).MaxRetries + (useExternalResearch ? 1 : 0);
+                AiTaskKind.WeekPlanning, useExternalResearch).MaxRetries;
             var useStructuredOutput = true;
             for (var attempt = 0; attempt <= maxCompletionRetries; attempt++)
             {
                 var attemptStopwatch = Stopwatch.StartNew();
-                var completion = await executionGate.ExecuteAsync(new AiExecutionRequest(
+                var completion = await executionGate.ExecuteValidatedAsync(new AiExecutionRequest(
                     AiTaskKind.WeekPlanning,
                     messages,
-                    "week-suggestions-v4",
+                    MealSuggestionResponseContract.ContractVersion,
                     requestId,
                     attempt + 1,
                     MealSuggestionResponseContract.JsonSchemaFormat,
                     useStructuredOutput ? AiResponseFormatPolicy.WhenSupported : AiResponseFormatPolicy.None,
-                    UseExtendedTimeout: useExternalResearch),
-                    timeout.Token);
+                    UseExtendedTimeout: useExternalResearch), response =>
+                    {
+                        var parsed = MealSuggestionResponseContract.Parse(response.Text);
+                        if (parsed?.Suggestions is null) return AiValidation<WeekSuggestionsPayload>.Invalid(
+                            AiTaskOutcome.ParseFailure, "Unparseable week-suggestions payload");
+                        var issues = PlanningIntentValidator.Validate(parsed, intent!, request, externalRecipeSession);
+                        return issues.Count == 0 ? AiValidation<WeekSuggestionsPayload>.Valid(parsed)
+                            : AiValidation<WeekSuggestionsPayload>.Invalid(AiTaskOutcome.ValidationFailure,
+                                string.Join("; ", issues), parsed);
+                    }, cancellationToken);
                 var response = completion.Response;
                 attemptStopwatch.Stop();
                 RecordCompletion(run, response, attemptStopwatch.ElapsedMilliseconds);
@@ -199,16 +313,12 @@ public sealed class LlmMealSuggestionService(
                         reasoning.Length, FormatForLog(reasoning, 4000), GetContentTypes(response));
                 }
 
-                payload = MealSuggestionResponseContract.Parse(response.Text);
+                payload = completion.Value;
                 if (payload?.Suggestions is not null)
                 {
-                    var qualityIssues = PlanningIntentValidator.Validate(
-                        payload, intent, request, externalRecipeSession).ToList();
-
-                    if (qualityIssues.Count > 0)
+                    if (!completion.Succeeded)
                     {
-                        var qualityIssue = string.Join("; ", qualityIssues);
-                        unresolvedQualityIssue = qualityIssue;
+                        var qualityIssue = completion.Error;
                         logger.LogWarning(
                             "[{RequestId}] AI reply was valid JSON but missed explicit planning requirements: {Issue}",
                             requestId, qualityIssue);
@@ -218,28 +328,21 @@ public sealed class LlmMealSuggestionService(
                             // while becoming oddly rigid about the previous field values.
                             // The focused repair already has valid JSON to imitate, so let
                             // prompted JSON prioritize semantic corrections.
-                            await completion.ReportOutcomeAsync("validationFailure", qualityIssue);
                             useStructuredOutput = false;
-                            messages.Add(new ChatMessage(ChatRole.Assistant, response.Text));
+                            messages.Add(new ChatMessage(ChatRole.Assistant,
+                                MealSuggestionResponseContract.BuildRepromptQuote(response.Text ?? string.Empty)));
                             messages.Add(new ChatMessage(
                                 ChatRole.User,
                                 $"Correct the plan: {qualityIssue}. Re-read the original instructions and authoritative weekday/date mapping. Use the verified candidate ids already supplied, preserve all other requirements, and reply with ONLY the corrected JSON object."));
                             payload = null;
                             continue;
                         }
-                        await completion.ReportOutcomeAsync("validationFailure", qualityIssue);
-                    }
-                    else
-                    {
-                        unresolvedQualityIssue = null;
-                        await completion.ReportOutcomeAsync("success");
                     }
                     break;
                 }
 
                 var text = response.Text ?? "";
                 run.ParseFailures++;
-                await completion.ReportOutcomeAsync("parseFailure", "Unparseable week-suggestions payload");
                 var truncated = response.FinishReason == ChatFinishReason.Length;
                 var diagnosis = truncated && string.IsNullOrWhiteSpace(text)
                     ? "The model reached its output limit before producing visible JSON; reasoning likely consumed the output budget."
@@ -272,17 +375,6 @@ public sealed class LlmMealSuggestionService(
                 return Complete(Finalize(await fallback.SuggestAsync(request, cancellationToken), request), "parseFallback");
             }
 
-            if (unresolvedQualityIssue != null)
-            {
-                payload = PlanningIntentValidator.Repair(
-                    payload, intent, request, verifiedResearchCandidates);
-                var repairedIssues = PlanningIntentValidator.Validate(
-                    payload, intent, request, externalRecipeSession).ToList();
-                unresolvedQualityIssue = repairedIssues.Count == 0
-                    ? null
-                    : string.Join("; ", repairedIssues);
-            }
-
             var suggestions = postProcessor.Process(payload, request, externalRecipeSession);
             suggestions = await BackfillMissingDaysAsync(
                 requestId,
@@ -293,11 +385,14 @@ public sealed class LlmMealSuggestionService(
                 "[{RequestId}] AI proposed {Count} meal suggestions via {Provider}/{Model} in {ElapsedMs}ms",
                 requestId, suggestions.Count, options.Provider, options.Model, stopwatch.ElapsedMilliseconds);
             var finalized = Finalize(suggestions, request);
-            return Complete(finalized, unresolvedQualityIssue != null
-                ? "qualityFallback"
-                : finalized.Any(item => item.Source == MealSuggestionSource.RulesFallback)
-                    ? "partialFallback"
-                    : "success");
+            intent = await PlanningDishIdentity.ApproveAsync(intent!, request, finalized, dishMatcher,
+                requestId, 0, operation.Token);
+            request = request with { Intent = intent };
+            // Model-call validation remains in task telemetry. Product completeness
+            // is determined by the resolved domain result after candidate selection.
+            return Complete(finalized, finalized.Any(item => item.Source == MealSuggestionSource.RulesFallback)
+                        ? "partialFallback"
+                        : "success");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -314,6 +409,9 @@ public sealed class LlmMealSuggestionService(
                 "[{RequestId}] AI suggestion call failed ({Provider}/{Model}) after {ElapsedMs}ms; using rules fallback",
                 requestId, options.Provider, options.Model, stopwatch.ElapsedMilliseconds);
             run.Error = ex.Message;
+            if (requiresInterpretation && request.Intent is null)
+                return Complete([], "errorFallback",
+                    [new UnmetPlanningRequirement("intent-unavailable", "Explicit planning requirements could not be interpreted").WithText("planningIssue.intentUnavailable")]);
             return Complete(Finalize(await fallback.SuggestAsync(request, cancellationToken), request), "errorFallback");
         }
         finally
@@ -356,7 +454,19 @@ public sealed class LlmMealSuggestionService(
                 .Select(request.WeekStart.AddDays)
                 .Select(date => new PlanningIntentDate(date.DayOfWeek.ToString(), date))
                 .ToList(),
-            request.Instructions));
+            request.Instructions,
+            request.WeekPlan
+                .Where(meal => request.DaysToFill.Contains(meal.Date) && !string.IsNullOrWhiteSpace(meal.VagueInstruction))
+                .Select(meal => new PlanningIntentDayInstruction(
+                    meal.Date, meal.MealType, meal.Course, meal.VagueInstruction!))
+                .ToList(),
+            request.CollectionConstraints.Select(constraint => new PlanningIntentCollection(
+                constraint.Id, constraint.Name, constraint.IsGlobal, constraint.Slots,
+                constraint.Dates, constraint.RecipeIds.Count, constraint.RecipeTitles)).ToList(),
+            request.KnownRecipes.Select(recipe => new PlanningIntentLocalRecipe(
+                recipe.Id, recipe.Title, recipe.OriginalTitle, recipe.TotalTimeMinutes)).ToList(),
+            request.Members.SelectMany(member => member.Allergies).SelectMany(allergy => allergy.ExcludedClasses)
+                .Distinct().Order().ToList()));
     }
 
     private static string FormatCandidates(
@@ -369,6 +479,7 @@ public sealed class LlmMealSuggestionService(
                 candidate.Title,
                 candidate.TotalTimeMinutes,
                 candidate.Servings,
+                candidate.ResearchConstraintIds,
                 candidate.Ingredients?.Take(30).ToList(),
                 candidate.Instructions?.Take(10).ToList())));
 
@@ -376,16 +487,28 @@ public sealed class LlmMealSuggestionService(
         IReadOnlyList<PlanningIntentSource> ReferencedSources,
         IReadOnlyList<DateOnly> SelectedDates,
         IReadOnlyList<PlanningIntentDate> WeekdayMapping,
-        string? PlannerInstructions);
+        string? PlannerInstructions,
+        IReadOnlyList<PlanningIntentDayInstruction> DayInstructions,
+        IReadOnlyList<PlanningIntentCollection> ReferencedCollections,
+        IReadOnlyList<PlanningIntentLocalRecipe> LocalRecipes,
+        IReadOnlyList<IngredientClass> HouseholdAllergyExclusions);
 
     private sealed record PlanningIntentSource(string Name, string Host);
     private sealed record PlanningIntentDate(string Weekday, DateOnly Date);
+    private sealed record PlanningIntentDayInstruction(
+        DateOnly Date, MealType MealType, Course Course, string Instruction);
+    private sealed record PlanningIntentCollection(
+        string Id, string Name, bool IsGlobal, IReadOnlyList<PlanningSlot> Slots,
+        IReadOnlyList<DateOnly> Dates, int RecipeCount, IReadOnlyList<string> RecipeTitles);
+    private sealed record PlanningIntentLocalRecipe(
+        Guid Id, string Title, string? OriginalTitle, int? TotalTimeMinutes);
     private sealed record CandidatePromptPayload(
         string CandidateId,
         string? SourceSite,
         string? Title,
         int? TotalTimeMinutes,
         int? Servings,
+        IReadOnlyList<string> ResearchConstraintIds,
         IReadOnlyList<string>? Ingredients,
         IReadOnlyList<string>? Instructions);
 
@@ -459,7 +582,7 @@ public sealed class LlmMealSuggestionService(
 
         var half = Math.Max(1, maxChars / 2);
         var omitted = value.Length - (half * 2);
-        var excerpt = value[..half] + $"\n… {omitted} character(s) omitted …\n" + value[^half..];
+        var excerpt = value[..half] + $"\nâ€¦ {omitted} character(s) omitted â€¦\n" + value[^half..];
         return JsonSerializer.Serialize(excerpt);
     }
 

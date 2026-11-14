@@ -1,28 +1,28 @@
-<h2 mat-dialog-title>Plan {{ data.recipe.title }}</h2>
+<h2 mat-dialog-title>{{ 'ui.planValue' | translate:{ p0: (data.recipe.title) } }}</h2>
 
 <mat-dialog-content>
   <p class="dialog-intro">
-    Choose a course, then pick a date in the next seven days.
+    {{ 'ui.chooseACourseThenPickADateInTheNextSevenDays' | translate }}
   </p>
 
   <div class="course-row">
-    <span class="course-label">Course</span>
+    <span class="course-label">{{ 'ui.course' | translate }}</span>
     <mat-button-toggle-group
       [value]="course()"
       (change)="course.set($event.value)"
-      aria-label="Course">
-      <mat-button-toggle [value]="Course.Appetizer">Starter</mat-button-toggle>
-      <mat-button-toggle [value]="Course.Main">Main</mat-button-toggle>
-      <mat-button-toggle [value]="Course.Side">Side</mat-button-toggle>
-      <mat-button-toggle [value]="Course.Dessert">Dessert</mat-button-toggle>
+      [attr.aria-label]="'ui.course' | translate">
+      <mat-button-toggle [value]="Course.Appetizer">{{ 'ui.starter' | translate }}</mat-button-toggle>
+      <mat-button-toggle [value]="Course.Main">{{ 'ui.main' | translate }}</mat-button-toggle>
+      <mat-button-toggle [value]="Course.Side">{{ 'ui.side' | translate }}</mat-button-toggle>
+      <mat-button-toggle [value]="Course.Dessert">{{ 'ui.dessert' | translate }}</mat-button-toggle>
     </mat-button-toggle-group>
   </div>
 
-  <div class="date-options" aria-label="Choose a planning date">
+  <div class="date-options" [attr.aria-label]="'ui.chooseAPlanningDate' | translate">
     @for (day of days; track day.iso) {
       <button class="date-option" type="button" (click)="plan(day)">
         <span class="date-label">
-          <strong>{{ day.isToday ? 'Today' : (day.date | localizedDate:'weekday') }}</strong>
+          <strong>{{ day.isToday ? ('ui.today' | translate) : (day.date | localizedDate:'weekday') }}</strong>
           <span>{{ day.date | localizedDate:'dayMonth' }}</span>
         </span>
         <span class="day-plan">
@@ -34,7 +34,7 @@
               </span>
             }
           } @else {
-            <span class="nothing-planned">Nothing planned yet</span>
+            <span class="nothing-planned">{{ 'ui.nothingPlannedYet' | translate }}</span>
           }
         </span>
         <mat-icon>chevron_right</mat-icon>
@@ -44,5 +44,5 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-button mat-dialog-close>{{ 'family.cancel' | translate }}</button>
 </mat-dialog-actions>

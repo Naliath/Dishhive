@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, Inject, computed, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../services/language.service';
+import { HouseholdClockService } from '../../services/household-clock.service';
+import { inject, ChangeDetectionStrategy, Component, Inject, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -21,10 +24,8 @@ import { FamilyMember } from '../../models/family-member.model';
 import { FrozenItem } from '../../models/frozen-item.model';
 import { AutoCollectionNamePipe } from '../../services/language.service';
 import {
-  COURSE_LABELS,
   Course,
   CreatePlannedMeal,
-  MEAL_TYPE_LABELS,
   MealType,
   PlannedMeal
 } from '../../models/planned-meal.model';
@@ -46,7 +47,7 @@ type PlanMode = 'recipe' | 'dish' | 'idea';
 @Component({
   selector: 'app-meal-slot-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslatePipe,
     FormsModule,
     RouterLink,
     CollectionMentionDirective,
@@ -67,6 +68,8 @@ type PlanMode = 'recipe' | 'dish' | 'idea';
   styleUrl: './meal-slot-dialog.scss'
 })
 export class MealSlotDialog {
+  readonly uiLanguage = inject(UiLanguageService);
+  readonly clock = inject(HouseholdClockService);
   readonly mode = signal<PlanMode>('dish');
   readonly selectedRecipe = signal<RecipeListItem | null>(null);
   readonly recipeResults = signal<RecipeListItem[]>([]);
@@ -79,10 +82,8 @@ export class MealSlotDialog {
   readonly currentDishName = signal('');
 
   /** Meal/course options for the compact "when & what course" selects */
-  readonly mealTypeOptions = Object.entries(MEAL_TYPE_LABELS)
-    .map(([value, label]) => ({ value: Number(value) as MealType, label }));
-  readonly courseOptions = Object.entries(COURSE_LABELS)
-    .map(([value, label]) => ({ value: Number(value) as Course, label }));
+  readonly mealTypeOptions = [MealType.Breakfast, MealType.Lunch, MealType.Dinner, MealType.Snack];
+  readonly courseOptions = [Course.Main, Course.Appetizer, Course.Side, Course.Dessert];
 
   mealType: MealType = MealType.Dinner;
   course: Course = Course.Main;
@@ -244,7 +245,7 @@ export class MealSlotDialog {
     if (!item.expirationDate) {
       return false;
     }
-    const days = (new Date(item.expirationDate).getTime() - Date.now()) / 86_400_000;
+    const days = (Date.parse(item.expirationDate.slice(0, 10)) - Date.parse(this.clock.today())) / 86_400_000;
     return days <= 7;
   }
 

@@ -1,44 +1,16 @@
-export interface RecipeListItem {
-  id: string;
-  title: string;
-  servings: number;
-  totalTimeMinutes?: number;
-  category?: string;
-  /** Local Dishhive image endpoint; absent when no local image is stored */
-  imageUrl?: string;
-  /** True when the image bytes are stored locally in Dishhive */
-  hasLocalImage: boolean;
-  sourceProvider?: string;
-  /** Organization tag names (user-curated) */
-  tags: string[];
-  /** Ids of the manual collections this recipe belongs to */
-  cookbookIds: string[];
-}
+export type RecipeListItem = import('../api/generated/dishhive-api.client').RecipeListItemDto;
 
-export interface RecipeTag {
-  id: string;
-  name: string;
-}
+export type RecipeTag = import('../api/generated/dishhive-api.client').RecipeTagDto;
 
 /**
  * A collection: a named set of explicitly curated recipes. Manual collections are
  * user-managed; auto collections are computed read-only sets with slug ids
  * (e.g. "auto-quick") instead of a Guid.
  */
-export interface Cookbook {
-  id: string;
-  name: string;
-  kind: 'manual' | 'auto';
-  recipeCount: number;
-}
+export type Cookbook = import('../api/generated/dishhive-api.client').CookbookDto;
 
 /** A computed auto collection with its enabled state (settings management) */
-export interface AutoCollectionInfo {
-  id: string;
-  name: string;
-  recipeCount: number;
-  enabled: boolean;
-}
+export type AutoCollectionInfo = import('../api/generated/dishhive-api.client').AutoCollectionDto;
 
 /** Recipe library filter */
 export interface RecipeFilter {
@@ -48,126 +20,30 @@ export interface RecipeFilter {
   cookbookId?: string;
 }
 
-export interface RecipeIngredient {
-  id: string;
-  sortOrder: number;
-  name: string;
-  quantity?: number;
-  unit?: string;
-  originalText: string;
-  originalQuantity?: number;
-  originalUnit?: string;
-}
+export type RecipeIngredient = import('../api/generated/dishhive-api.client').RecipeIngredientDto;
 
-export interface RecipeStep {
-  id: string;
-  stepNumber: number;
-  instruction: string;
-  originalInstruction?: string;
-}
+export type RecipeStep = import('../api/generated/dishhive-api.client').RecipeStepDto;
 
-export interface CreateRecipeIngredient {
-  name: string;
-  quantity?: number;
-  unit?: string;
-  originalText?: string;
-}
+export type CreateRecipeIngredient = import('../api/generated/dishhive-api.client').CreateRecipeIngredientDto;
 
-export interface CreateRecipe {
-  title: string;
-  originalTitle?: string;
-  description?: string;
-  originalDescription?: string;
-  contentLanguage?: string;
-  servings: number;
-  prepTimeMinutes?: number;
-  cookTimeMinutes?: number;
-  totalTimeMinutes?: number;
-  category?: string;
-  keywords?: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  ingredients: CreateRecipeIngredient[];
-  steps: { instruction: string; originalInstruction?: string }[];
-  /** Organization tag names; tags are created when new, synced on update */
-  tags: string[];
-  /**
-   * Contained ingredient-class names (see ingredient-class.model.ts). Null/absent
-   * = untouched (a create queues an AI assessment, an update keeps stored facts
-   * unless the ingredients changed); a list = the user set them → UserConfirmed.
-   */
-  containsClasses?: string[] | null;
-}
+export type CreateRecipe = import('../api/generated/dishhive-api.client').CreateRecipeDto;
 
 /** Assessment state of a recipe's dietary facts (mirrors the API enum) */
-export enum DietaryFactsStatus {
-  Unassessed = 0,
-  AiDetected = 1,
-  UserConfirmed = 2
-}
+export { DietaryFactsStatus } from '../api/generated/dishhive-api.client';
+
+export type RecipeDietaryFactsHistory = import('../api/generated/dishhive-api.client').RecipeDietaryFactsHistoryDto;
 
 /**
  * A recipe's dietary facts: the ingredient classes it contains plus how that was
  * established. On an Unassessed recipe the empty contains list means "unknown",
  * never "contains nothing".
  */
-export interface RecipeDietaryFacts {
-  contains: string[];
-  status: DietaryFactsStatus;
-  assessedAt?: string;
-}
+export type RecipeDietaryFacts = import('../api/generated/dishhive-api.client').RecipeDietaryFactsDto;
 
 /** Library-wide facts progress (settings page, polled while a backfill runs) */
-export interface RecipeFactsStatus {
-  unassessed: number;
-  aiDetected: number;
-  userConfirmed: number;
-  queueDepth: number;
-  running: boolean;
-  /** Whether AI is configured, i.e. whether assessment can run at all */
-  available: boolean;
-  lastError?: string;
-}
+export type RecipeFactsStatus = import('../api/generated/dishhive-api.client').RecipeFactsStatusDto;
 
 /** Outcome of importing a recipe file (schema.org Recipe JSON) */
-export interface RecipeFileImportResult {
-  created: number;
-  updated: number;
-  skipped: number;
-  total: number;
-  skippedRecipes: { title: string; reason: string }[];
-}
+export type RecipeFileImportResult = import('../api/generated/dishhive-api.client').RecipeFileImportResultDto;
 
-export interface Recipe {
-  id: string;
-  title: string;
-  originalTitle?: string;
-  description?: string;
-  originalDescription?: string;
-  contentLanguage?: string;
-  servings: number;
-  prepTimeMinutes?: number;
-  cookTimeMinutes?: number;
-  totalTimeMinutes?: number;
-  category?: string;
-  keywords?: string;
-  /** Local Dishhive image endpoint; absent when no local image is stored */
-  imageUrl?: string;
-  /** True when the image bytes are stored locally in Dishhive */
-  hasLocalImage: boolean;
-  /** Original remote image URL retained as a reference; never used as the local display URL */
-  imageSourceUrl?: string;
-  videoUrl?: string;
-  sourceUrl?: string;
-  sourceProvider?: string;
-  createdAt: string;
-  updatedAt: string;
-  ingredients: RecipeIngredient[];
-  steps: RecipeStep[];
-  /** Organization tag names (user-curated) */
-  tags: string[];
-  /** Ids of the manual collections this recipe belongs to */
-  cookbookIds: string[];
-  /** Dietary facts (contained ingredient classes + assessment status) */
-  dietaryFacts: RecipeDietaryFacts;
-}
+export type Recipe = import('../api/generated/dishhive-api.client').RecipeDto;

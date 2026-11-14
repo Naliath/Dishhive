@@ -20,7 +20,7 @@ public class FamilyMemberFavorite
     public Recipe? Recipe { get; set; }
 
     /// <summary>Free-text favorite dish; also denormalized from the recipe title when linked</summary>
-    [MaxLength(200)]
+    [MaxLength(DomainLimits.DishName)]
     public string? DishName { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

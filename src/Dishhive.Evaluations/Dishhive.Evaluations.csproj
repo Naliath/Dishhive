@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Dishhive.Api/Dishhive.Api.csproj" />
+    <Content Include="../Dishhive.Api.Tests/Fixtures/RecipeFacts/scenarios.json" Link="facts-scenarios.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../Dishhive.Api.Tests/Fixtures/RecipeDishMatching/scenarios.json" Link="dish-matching-scenarios.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

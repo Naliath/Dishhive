@@ -50,7 +50,7 @@ public class FreezerAvailabilityServiceTests
             context.PlannedMeals.AddRange(meals);
             await context.SaveChangesAsync();
         }
-        var service = new FreezerAvailabilityService(new StubFreezyClient(stock), context);
+        var service = new FreezerAvailabilityService(new StubFreezyClient(stock), context, TestHouseholdClock.System);
         return await service.GetAvailableAsync();
     }
 

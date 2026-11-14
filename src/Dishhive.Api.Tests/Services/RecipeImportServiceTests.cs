@@ -217,7 +217,8 @@ public class RecipeImportServiceTests : IDisposable
         public bool WasCalled { get; private set; }
         public bool IsAvailable => true;
 
-        public Task<ImportedRecipe?> ExtractAsync(string html, Uri sourceUrl, CancellationToken cancellationToken = default)
+        public Task<ImportedRecipe?> ExtractAsync(string html, Uri sourceUrl, CancellationToken cancellationToken = default,
+            string? operationId = null)
         {
             WasCalled = true;
             return Task.FromResult(result);

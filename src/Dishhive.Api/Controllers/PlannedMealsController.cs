@@ -1,7 +1,10 @@
+using Dishhive.Api.Services.Time;
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Suggestions;
+using Dishhive.Api.Services.Freezy;
+using Microsoft.AspNetCore.RateLimiting;
 using Dishhive.Api.Services.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,27 +21,35 @@ namespace Dishhive.Api.Controllers;
 [Route("api/[controller]")]
 public class PlannedMealsController : ControllerBase
 {
+    private readonly IHouseholdClock _clock;
     private readonly DishhiveDbContext _context;
     private readonly IMealSuggestionService _suggestionService;
     private readonly MealSuggestionRequestBuilder _suggestionRequestBuilder;
     private readonly MealSuggestionAcceptanceService _suggestionAcceptance;
     private readonly ILogger<PlannedMealsController> _logger;
     private readonly UserMessageLocalizer _messages;
+    private readonly AttendancePolicy _attendancePolicy;
+    private readonly FreezerReservationService _freezerReservations;
 
     public PlannedMealsController(
         DishhiveDbContext context,
         IMealSuggestionService suggestionService,
         MealSuggestionRequestBuilder suggestionRequestBuilder,
         MealSuggestionAcceptanceService suggestionAcceptance,
+        AttendancePolicy attendancePolicy,
+        FreezerReservationService freezerReservations,
         UserMessageLocalizer messages,
-        ILogger<PlannedMealsController> logger)
+        ILogger<PlannedMealsController> logger, IHouseholdClock clock)
     {
         _context = context;
         _suggestionService = suggestionService;
         _suggestionRequestBuilder = suggestionRequestBuilder;
         _suggestionAcceptance = suggestionAcceptance;
+        _attendancePolicy = attendancePolicy;
+        _freezerReservations = freezerReservations;
         _messages = messages;
         _logger = logger;
+        _clock = clock;
     }
 
     /// <summary>
@@ -112,6 +123,7 @@ public class PlannedMealsController : ControllerBase
 
         var meal = new PlannedMeal { Date = dto.Date, MealType = dto.MealType, Course = dto.Course };
         await ApplyDtoAsync(meal, dto);
+        await _freezerReservations.CaptureAsync(meal, null, HttpContext.RequestAborted);
 
         _context.PlannedMeals.Add(meal);
         await _context.SaveChangesAsync();
@@ -146,11 +158,13 @@ public class PlannedMealsController : ControllerBase
             return BadRequest(validationError);
         }
 
+        var previousFreezyItemRef = meal.FreezyItemRef;
         meal.Date = dto.Date;
         meal.MealType = dto.MealType;
         meal.Course = dto.Course;
         meal.Attendees.Clear();
         await ApplyDtoAsync(meal, dto);
+        await _freezerReservations.CaptureAsync(meal, previousFreezyItemRef, HttpContext.RequestAborted);
 
         await _context.SaveChangesAsync();
 
@@ -241,6 +255,7 @@ public class PlannedMealsController : ControllerBase
     /// Returns enabled=false with an empty list when AI is not configured.
     /// </summary>
     [HttpPost("suggestions")]
+    [EnableRateLimiting("expensive")]
     [ProducesResponseType(typeof(MealSuggestionsDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<MealSuggestionsDto>> SuggestWeek(
         SuggestWeekRequestDto dto, CancellationToken cancellationToken)
@@ -250,22 +265,46 @@ public class PlannedMealsController : ControllerBase
             return Ok(new MealSuggestionsDto { Enabled = false });
         }
 
-        var request = await _suggestionRequestBuilder.BuildAsync(
-            dto.WeekStart, dto.AttendeeIds, dto.SelectedDates, dto.Instructions, cancellationToken);
-        var suggestions = await _suggestionService.SuggestAsync(request, cancellationToken);
+        MealSuggestionRequest request;
+        try
+        {
+            request = await _suggestionRequestBuilder.BuildAsync(
+                dto.WeekStart, dto.AttendeeIds, dto.SelectedDates, dto.Instructions, cancellationToken);
+        }
+        catch (InvalidAttendanceSelectionException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = await _messages.GetAsync("plannedMeal.unknownMemberTitle", cancellationToken),
+                Detail = $"Inactive or unknown attendee ids: {string.Join(", ", ex.InvalidIds)}"
+            });
+        }
+        IReadOnlyList<MealSuggestion> suggestions;
+        MealSuggestionResult? planningResult;
+        if (request.UnresolvedCollectionNames.Count > 0)
+        {
+            suggestions = [];
+            planningResult = new(PlanCompletionStatus.Unable, [], request.UnresolvedCollectionNames.Select(name =>
+                new UnmetPlanningRequirement("collection-unresolved", $"Referenced collection #[{name}] could not be found").WithText("planningIssue.collectionUnresolved", ("name", name)))
+                .ToList());
+        }
+        else
+        {
+            suggestions = await _suggestionService.SuggestAsync(request, cancellationToken);
+            planningResult = _suggestionService.LastResult;
+        }
 
         var recipeTitles = request.KnownRecipes.ToDictionary(r => r.Id, r => r.Title);
         var memberNames = request.Members
             .Where(member => member.Id != Guid.Empty)
             .ToDictionary(member => member.Id, member => member.Name);
 
-        return Ok(new MealSuggestionsDto
+        var batchId = Guid.NewGuid();
+        var suggestionDtos = new List<MealSuggestionDto>();
+        foreach (var s in suggestions)
         {
-            BatchId = Guid.NewGuid(),
-            Enabled = true,
-            ExcludedForAllergies = request.AllergyExcludedRecipeIds.Count,
-            Suggestions = suggestions.Select(s => new MealSuggestionDto
-            {
+            var suggestionDto = new MealSuggestionDto
+        {
                 Id = Guid.NewGuid(),
                 Date = s.Date,
                 MealType = s.MealType,
@@ -291,8 +330,32 @@ public class PlannedMealsController : ControllerBase
                 SourceName = s.SourceName,
                 ConstraintIds = s.ConstraintIds.ToList(),
                 ContainsClasses = IngredientClasses.ToNames(s.ResolvedContainsClasses).ToList(),
-                FactsAssessed = s.ResolvedFactsAssessed
-            }).ToList()
+                FactsAssessed = s.ResolvedFactsAssessed,
+                TotalTimeMinutes = s.ResolvedTotalTimeMinutes,
+                CandidateVersion = s.CandidateVersion
+            };
+            if (s.ReasonText is { } reason) suggestionDto.Reason = await _messages.GetAsync(reason, cancellationToken);
+            if (s.AllergyWarningText is { } allergy) suggestionDto.AllergyWarning = await _messages.GetAsync(allergy, cancellationToken);
+            if (s.DietWarningText is { } diet) suggestionDto.DietWarning = await _messages.GetAsync(diet, cancellationToken);
+            suggestionDtos.Add(suggestionDto);
+        }
+        var resultStatus = planningResult?.Status ?? PlanCompletionStatus.Complete;
+        await _suggestionAcceptance.StoreBatchAsync(batchId, resultStatus, suggestionDtos, cancellationToken,
+            planningResult?.Intent, request.AvailableFrozenItems, planningResult?.OperationId);
+
+        var unmetRequirements = new List<UnmetPlanningRequirementDto>();
+        foreach (var issue in planningResult?.UnmetRequirements ?? [])
+            unmetRequirements.Add(new(issue.Id, issue.DisplayText is { } text
+                ? await _messages.GetAsync(text, cancellationToken) : issue.Message));
+
+        return Ok(new MealSuggestionsDto
+        {
+            BatchId = batchId,
+            Enabled = true,
+            Status = resultStatus.ToString().ToLowerInvariant(),
+            UnmetRequirements = unmetRequirements,
+            ExcludedForAllergies = request.AllergyExcludedRecipeIds.Count,
+            Suggestions = suggestionDtos
         });
     }
 
@@ -309,7 +372,7 @@ public class PlannedMealsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (dto.BatchId == Guid.Empty
-            || dto.Suggestions.Count == 0
+            || (dto.Suggestions.Count == 0 && dto.RejectedSuggestionIds.Count == 0)
             || dto.Suggestions.Any(item => item.Id == Guid.Empty))
         {
             return BadRequest(new ProblemDetails
@@ -342,7 +405,7 @@ public class PlannedMealsController : ControllerBase
             return NotFound();
         }
 
-        if (meal.Date > DateOnly.FromDateTime(DateTime.Today))
+        if (meal.Date > _clock.Today)
         {
             return BadRequest(new ProblemDetails
             {
@@ -377,7 +440,7 @@ public class PlannedMealsController : ControllerBase
             return NotFound();
         }
 
-        if (meal.Date > DateOnly.FromDateTime(DateTime.Today))
+        if (meal.Date > _clock.Today)
         {
             return BadRequest(new ProblemDetails
             {
@@ -462,6 +525,17 @@ public class PlannedMealsController : ControllerBase
             };
         }
 
+        var attendance = await _attendancePolicy.ResolveAsync(
+            dto.FamilyMemberIds, HttpContext.RequestAborted);
+        if (attendance.InvalidIds.Count > 0)
+        {
+            return new ProblemDetails
+            {
+                Title = await _messages.GetAsync("plannedMeal.unknownMemberTitle", HttpContext.RequestAborted),
+                Detail = $"Inactive or unknown attendee ids: {string.Join(", ", attendance.InvalidIds)}"
+            };
+        }
+
         return null;
     }
 
@@ -486,7 +560,7 @@ public class PlannedMealsController : ControllerBase
         }
         meal.DishName = dishName;
 
-        var memberIds = dto.FamilyMemberIds.Distinct().ToList();
+        var memberIds = (await _attendancePolicy.ResolveValidAsync(dto.FamilyMemberIds)).ToList();
         if (memberIds.Count > 0)
         {
             var existingIds = await _context.FamilyMembers

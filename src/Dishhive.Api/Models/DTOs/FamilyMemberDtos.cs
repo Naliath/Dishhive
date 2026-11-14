@@ -73,7 +73,7 @@ public class CreateFamilyMemberFavoriteDto
     /// <summary>Favorite known recipe; at least one of RecipeId/DishName is required</summary>
     public Guid? RecipeId { get; set; }
 
-    [MaxLength(200)]
+    [MaxLength(DomainLimits.DishName)]
     public string? DishName { get; set; }
 }
 

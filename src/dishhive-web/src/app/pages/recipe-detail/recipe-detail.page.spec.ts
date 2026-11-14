@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { of } from 'rxjs';
+import { TestBed } from '@angular/core/testing';
 import { Course, CreatePlannedMeal, MealType, PlannedMeal } from '../../models/planned-meal.model';
 import { Recipe } from '../../models/recipe.model';
 import { RecipeDetailPage } from './recipe-detail.page';
@@ -15,7 +16,7 @@ describe('RecipeDetailPage serving scaling', () => {
     const statisticsService = { getDishStatistics: vi.fn(() => of({ dishes: [] })) };
     const dialog = { open: vi.fn() };
     const snackBar = { open: vi.fn() };
-    const page = new RecipeDetailPage(
+    const page = TestBed.runInInjectionContext(() => new RecipeDetailPage(
       null as never,
       null as never,
       null as never,
@@ -26,7 +27,7 @@ describe('RecipeDetailPage serving scaling', () => {
       statisticsService as never,
       dialog as never,
       snackBar as never
-    );
+    ));
     page.recipe.set({ servings: 4 } as Recipe);
     page.selectedServings.set(4);
     return {
@@ -121,6 +122,7 @@ describe('RecipeDetailPage serving scaling', () => {
       familyMemberIds: ['member-1']
     };
     page.recipe.set({ id: 'recipe-1', title: 'Tiramisu', servings: 4 } as Recipe);
+    const translate = vi.spyOn(page.uiLanguage, 't');
     familyMembersService.getMembers.mockReturnValue(of([{ id: 'member-1', isGuest: false }]));
     plannedMealsService.getMeals.mockReturnValue(of([existingMeal]));
     plannedMealsService.createMeal.mockReturnValue(of({ id: 'new-meal', ...result }));
@@ -138,10 +140,11 @@ describe('RecipeDetailPage serving scaling', () => {
     });
     expect(plannedMealsService.createMeal).toHaveBeenCalledWith(result);
     expect(snackBar.open).toHaveBeenCalledWith(
-      expect.stringContaining('Planned Tiramisu'),
-      'Dismiss',
+      expect.any(String),
+      expect.any(String),
       { duration: 3500 }
     );
+    expect(translate).toHaveBeenCalledWith('ui.plannedValueForValue', { p0: 'Tiramisu', p1: expect.any(String) });
     expect(page.quickPlanLoading()).toBe(false);
   });
 });

@@ -14,6 +14,43 @@ namespace Dishhive.Api.Tests.Services;
 
 public class MealSuggestionAcceptanceServiceTests : IDisposable
 {
+    [Theory]
+    [InlineData(false, "created")]
+    [InlineData(true, "needsReview")]
+    public async Task SemanticDishApprovalSurvivesReviewButCannotApproveChangedRecipeContent(bool changeContent, string expected)
+    {
+        var date = new DateOnly(2026, 7, 13);
+        var recipe = new Recipe { Title = "Crepes", DietaryFactsStatus = DietaryFactsStatus.AiDetected,
+            TotalTimeMinutes = 15 };
+        _context.Recipes.Add(recipe);
+        await _context.SaveChangesAsync();
+        var version = SuggestionCandidateVersion.ForLocal(recipe);
+        var original = new MealSuggestion { RecipeId = recipe.Id, DishName = recipe.Title, CandidateVersion = version };
+        var id = Guid.NewGuid();
+        var batch = Guid.NewGuid();
+        var intent = new PlanningIntent { Constraints = [new()
+        {
+            Id = "food", Dates = [date], DishRequest = "pannekoeken", RequiresDishMatch = true,
+            VerifiedDishVersions = [PlanningDishIdentity.Key(original)]
+        }] };
+        await _service.StoreBatchAsync(batch, PlanCompletionStatus.Partial, [new()
+        {
+            Id = id, Date = date, RecipeId = recipe.Id, DishName = recipe.Title,
+            CandidateVersion = version, ConstraintIds = ["food"], FactsAssessed = true, TotalTimeMinutes = 15
+        }], intent: intent);
+        if (changeContent)
+        {
+            recipe.Title = "Meatballs"; // Even a mutation that forgot to advance Revision must invalidate the proof.
+            await _context.SaveChangesAsync();
+        }
+        var response = await _service.AcceptAsync(new()
+        {
+            BatchId = batch, Suggestions = [new() { Id = id, Date = date, RecipeId = recipe.Id, DishName = "Crepes", CandidateVersion = version }]
+        });
+        Assert.Equal(expected, Assert.Single(response.Results).Status);
+        Assert.Equal(changeContent ? 0 : 1, await _context.PlannedMeals.CountAsync());
+    }
+
     private readonly DishhiveDbContext _context;
     private readonly IRecipeImportService _importService = Substitute.For<IRecipeImportService>();
     private readonly MealSuggestionAcceptanceService _service;
@@ -29,7 +66,8 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
         _service = new MealSuggestionAcceptanceService(
             _context,
             _importService,
-            new FreezerAvailabilityService(freezy, _context),
+            new FreezerAvailabilityService(freezy, _context, TestHouseholdClock.System),
+            new AttendancePolicy(_context),
             new UserMessageLocalizer(_context),
             NullLogger<MealSuggestionAcceptanceService>.Instance);
     }
@@ -48,7 +86,7 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
             VagueInstruction = "something Italian"
         });
         await _context.SaveChangesAsync();
-        var request = Request(new AcceptMealSuggestionDto
+        var request = await RequestAsync(new AcceptMealSuggestionDto
         {
             Id = Guid.NewGuid(),
             Date = date,
@@ -82,7 +120,7 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
         _importService.ImportAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns<Task<Recipe>>(_ => throw new RecipeExtractionFailedException("No recipe found"));
 
-        var response = await _service.AcceptAsync(Request(new AcceptMealSuggestionDto
+        var response = await _service.AcceptAsync(await RequestAsync(new AcceptMealSuggestionDto
         {
             Id = Guid.NewGuid(),
             Date = date,
@@ -114,11 +152,13 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
         _importService.ImportAsync(failed.SourceUrl, Arg.Any<CancellationToken>())
             .Returns<Task<Recipe>>(_ => throw new InvalidOperationException("Unexpected importer failure"));
 
-        var response = await _service.AcceptAsync(new AcceptMealSuggestionsRequestDto
+        var request = new AcceptMealSuggestionsRequestDto
         {
             BatchId = Guid.NewGuid(),
             Suggestions = [failed, valid]
-        });
+        };
+        await StoreRequestAsync(request);
+        var response = await _service.AcceptAsync(request);
 
         response.Results.Should().Contain(result =>
             result.SuggestionId == failed.Id && result.Status == "importFailed");
@@ -141,6 +181,7 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
             BatchId = Guid.NewGuid(),
             Suggestions = [item, item]
         };
+        await StoreRequestAsync(request);
 
         var response = await _service.AcceptAsync(request);
 
@@ -151,7 +192,7 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
     [Fact]
     public async Task Accept_FreezerStockNoLongerAvailable_DoesNotCreateMeal()
     {
-        var response = await _service.AcceptAsync(Request(new AcceptMealSuggestionDto
+        var response = await _service.AcceptAsync(await RequestAsync(new AcceptMealSuggestionDto
         {
             Id = Guid.NewGuid(),
             Date = new DateOnly(2026, 7, 13),
@@ -171,7 +212,7 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
         _context.Recipes.Add(recipe);
         await _context.SaveChangesAsync();
         _importService.ImportAsync(recipe.SourceUrl, Arg.Any<CancellationToken>()).Returns(recipe);
-        var request = Request(new AcceptMealSuggestionDto
+        var request = await RequestAsync(new AcceptMealSuggestionDto
         {
             Id = Guid.NewGuid(),
             Date = new DateOnly(2026, 7, 13),
@@ -196,7 +237,7 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
         _context.FamilyMembers.AddRange(selected, other);
         await _context.SaveChangesAsync();
 
-        var response = await _service.AcceptAsync(Request(new AcceptMealSuggestionDto
+        var response = await _service.AcceptAsync(await RequestAsync(new AcceptMealSuggestionDto
         {
             Id = Guid.NewGuid(),
             Date = new DateOnly(2026, 7, 17),
@@ -213,11 +254,115 @@ public class MealSuggestionAcceptanceServiceTests : IDisposable
         meal.Attendees.Select(attendee => attendee.FamilyMemberId).Should().Equal(selected.Id);
     }
 
-    private static AcceptMealSuggestionsRequestDto Request(AcceptMealSuggestionDto item) => new()
+    [Fact]
+    public async Task Accept_ExplicitGuest_PreservesGuestAttendance()
     {
-        BatchId = Guid.NewGuid(),
-        Suggestions = [item]
-    };
+        var household = new FamilyMember { Name = "Alex", IsActive = true };
+        var guest = new FamilyMember { Name = "Guest", IsActive = true, IsGuest = true };
+        _context.FamilyMembers.AddRange(household, guest);
+        await _context.SaveChangesAsync();
+
+        var response = await _service.AcceptAsync(await RequestAsync(new AcceptMealSuggestionDto
+        {
+            Id = Guid.NewGuid(), Date = new DateOnly(2026, 7, 17), DishName = "Shared dinner",
+            AttendeeIds = [household.Id, guest.Id]
+        }));
+
+        response.Results.Single().Status.Should().Be("created");
+        var meal = await _context.PlannedMeals.Include(item => item.Attendees).SingleAsync();
+        meal.Attendees.Select(item => item.FamilyMemberId)
+            .Should().BeEquivalentTo([household.Id, guest.Id]);
+    }
+
+    [Fact]
+    public async Task Accept_GuestOnly_PreservesGuestAttendance()
+    {
+        var guest = new FamilyMember { Name = "Guest", IsActive = true, IsGuest = true };
+        _context.FamilyMembers.Add(guest);
+        await _context.SaveChangesAsync();
+
+        var response = await _service.AcceptAsync(await RequestAsync(new AcceptMealSuggestionDto
+        {
+            Id = Guid.NewGuid(), Date = new DateOnly(2026, 7, 17), DishName = "Guest dinner",
+            AttendeeIds = [guest.Id]
+        }));
+
+        response.Results.Single().Status.Should().Be("created");
+        (await _context.PlannedMealAttendees.SingleAsync()).FamilyMemberId.Should().Be(guest.Id);
+    }
+
+    [Fact]
+    public async Task Accept_InactiveExplicitMember_FailsWithoutSubstitution()
+    {
+        var inactive = new FamilyMember { Name = "Inactive", IsActive = false };
+        _context.FamilyMembers.Add(inactive);
+        await _context.SaveChangesAsync();
+
+        var response = await _service.AcceptAsync(await RequestAsync(new AcceptMealSuggestionDto
+        {
+            Id = Guid.NewGuid(), Date = new DateOnly(2026, 7, 17), DishName = "Dinner",
+            AttendeeIds = [inactive.Id]
+        }));
+
+        response.Results.Single().Status.Should().Be("planningFailed");
+        (await _context.PlannedMeals.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Accept_RecordsAcceptedRejectedAndModifiedReviewSignals()
+    {
+        var batchId = Guid.NewGuid();
+        var accepted = new MealSuggestionDto
+        {
+            Id = Guid.NewGuid(), Date = new DateOnly(2026, 7, 17), DishName = "Soup"
+        };
+        var rejected = new MealSuggestionDto
+        {
+            Id = Guid.NewGuid(), Date = new DateOnly(2026, 7, 18), DishName = "Stew"
+        };
+        await _service.StoreBatchAsync(batchId, PlanCompletionStatus.Complete, [accepted, rejected]);
+
+        await _service.AcceptAsync(new AcceptMealSuggestionsRequestDto
+        {
+            BatchId = batchId,
+            RejectedSuggestionIds = [rejected.Id],
+            Suggestions =
+            [
+                new AcceptMealSuggestionDto
+                {
+                    Id = accepted.Id, Date = accepted.Date, DishName = accepted.DishName
+                }
+            ]
+        });
+
+        var outcomes = await _context.MealSuggestionCandidates.AsNoTracking()
+            .ToDictionaryAsync(candidate => candidate.Id);
+        outcomes[accepted.Id].ReviewOutcome.Should().Be("accepted");
+        outcomes[rejected.Id].ReviewOutcome.Should().Be("rejected");
+        outcomes.Values.Should().OnlyContain(candidate => candidate.ResolvedAt != null);
+    }
+
+    private async Task<AcceptMealSuggestionsRequestDto> RequestAsync(AcceptMealSuggestionDto item)
+    {
+        var request = new AcceptMealSuggestionsRequestDto { BatchId = Guid.NewGuid(), Suggestions = [item] };
+        await StoreRequestAsync(request);
+        return request;
+    }
+
+    private async Task StoreRequestAsync(AcceptMealSuggestionsRequestDto request)
+    {
+        foreach (var item in request.Suggestions.Where(item => item.RecipeId.HasValue))
+            item.CandidateVersion = SuggestionCandidateVersion.ForLocal(
+                (await _context.Recipes.FindAsync(item.RecipeId!.Value))!.Revision);
+        await _service.StoreBatchAsync(request.BatchId, PlanCompletionStatus.Complete,
+            request.Suggestions.DistinctBy(item => item.Id).Select(item => new MealSuggestionDto
+            {
+                Id = item.Id, Date = item.Date, MealType = item.MealType, Course = item.Course,
+                RecipeId = item.RecipeId, DishName = item.DishName, SourceUrl = item.SourceUrl,
+                AttendeeIds = item.AttendeeIds, CandidateVersion = item.CandidateVersion,
+                FreezyItemRef = item.FreezyItemRef, FreezyItemQuantity = item.FreezyItemQuantity
+            }).ToList());
+    }
 
     public void Dispose()
     {

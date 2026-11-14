@@ -1,0 +1,20 @@
+.issues {
+  display: grid;
+  gap: 16px;
+}
+
+mat-card, .meal {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.meal + .meal {
+  border-block-start: 1px solid var(--mat-sys-outline-variant);
+  margin-block-start: 16px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}

@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { inject, ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
@@ -24,6 +25,7 @@ import { TranslatePipe } from '../../services/language.service';
   styleUrl: './recipe-facts-settings.scss'
 })
 export class RecipeFactsSettingsComponent implements OnInit, OnDestroy {
+  readonly uiLanguage = inject(UiLanguageService);
   private static readonly pollIntervalMs = 2000;
 
   readonly status = signal<RecipeFactsStatus | null>(null);
@@ -50,15 +52,15 @@ export class RecipeFactsSettingsComponent implements OnInit, OnDestroy {
       next: result => {
         this.starting.set(false);
         if (result.enqueued === 0) {
-          this.snackBar.open('Nothing to assess — every recipe already has facts', 'Dismiss', { duration: 4000 });
+          this.snackBar.open(this.uiLanguage.t('ui.nothingToAssessEveryRecipeAlreadyHasFacts'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
           return;
         }
-        this.snackBar.open(`Assessing ${result.enqueued} recipes in the background`, 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.assessingValueRecipesInTheBackground', { p0: (result.enqueued) }), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
         this.refresh();
       },
       error: () => {
         this.starting.set(false);
-        this.snackBar.open('Could not start the assessment', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotStartTheAssessment'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       }
     });
   }

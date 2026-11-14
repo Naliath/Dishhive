@@ -1,3 +1,4 @@
+using Dishhive.Api.Services.Time;
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -19,13 +20,15 @@ namespace Dishhive.Api.Mcp;
 [McpServerToolType]
 public class DishhiveMcpTools
 {
+    private readonly IHouseholdClock _clock;
     private const int SearchResultCap = 25;
 
     private readonly DishhiveDbContext _context;
 
-    public DishhiveMcpTools(DishhiveDbContext context)
+    public DishhiveMcpTools(DishhiveDbContext context, IHouseholdClock clock)
     {
         _context = context;
+        _clock = clock;
     }
 
     [McpServerTool(Name = "get_week_plan", ReadOnly = true, Idempotent = true)]
@@ -39,7 +42,7 @@ public class DishhiveMcpTools
         DateOnly reference;
         if (date is null)
         {
-            reference = DateOnly.FromDateTime(DateTime.Today);
+            reference = _clock.Today;
         }
         else if (!TryParseDate(date, out reference))
         {
@@ -167,7 +170,10 @@ public class DishhiveMcpTools
                 totalTimeMinutes = r.TotalTimeMinutes,
                 tags = r.Tags.Where(a => a.RecipeTag != null).Select(a => a.RecipeTag!.Name).ToList(),
                 // Dietary facts make allergy questions answerable from search hits
-                factsAssessed = r.DietaryFactsStatus != DietaryFactsStatus.Unassessed,
+                factsAssessed = (r.DietaryFactsStatus == DietaryFactsStatus.AiDetected
+                    || r.DietaryFactsStatus == DietaryFactsStatus.UserConfirmed)
+                    && (r.DietaryFactsAssessedRevision == null
+                        || r.DietaryFactsAssessedRevision == r.Revision),
                 contains = r.DietaryFacts.Select(f => f.IngredientClass.ToString()).ToList()
             })
             .ToListAsync(cancellationToken);
@@ -229,7 +235,10 @@ public class DishhiveMcpTools
             steps = recipe.Steps.OrderBy(s => s.StepNumber).Select(s => s.Instruction).ToList(),
             dietaryFacts = new
             {
-                assessed = recipe.DietaryFactsStatus != DietaryFactsStatus.Unassessed,
+                assessed = (recipe.DietaryFactsStatus == DietaryFactsStatus.AiDetected
+                    || recipe.DietaryFactsStatus == DietaryFactsStatus.UserConfirmed)
+                    && (recipe.DietaryFactsAssessedRevision == null
+                        || recipe.DietaryFactsAssessedRevision == recipe.Revision),
                 status = recipe.DietaryFactsStatus.ToString(),
                 contains = IngredientClasses.ToNames(recipe.DietaryFacts.Select(f => f.IngredientClass))
             },

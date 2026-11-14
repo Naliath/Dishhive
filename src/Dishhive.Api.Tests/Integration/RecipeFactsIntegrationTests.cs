@@ -113,7 +113,7 @@ public class RecipeFactsIntegrationTests : TestBase
     }
 
     [Fact]
-    public async Task UpdateRecipe_ChangedIngredients_ResetsNothingWhenAiUnavailable()
+    public async Task UpdateRecipe_ChangedIngredients_MarksConfirmationStaleWhenAiUnavailable()
     {
         // With AI unconfigured the re-assessment enqueue no-ops; the stale-but-
         // confirmed facts stay (better than dropping data with no way to recompute)
@@ -128,7 +128,7 @@ public class RecipeFactsIntegrationTests : TestBase
         var updated = await response.Content.ReadFromJsonAsync<RecipeDto>();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        updated!.DietaryFacts.Status.Should().Be(DietaryFactsStatus.UserConfirmed);
+        updated!.DietaryFacts.Status.Should().Be(DietaryFactsStatus.Stale);
         updated.DietaryFacts.Contains.Should().BeEquivalentTo("Milk");
     }
 

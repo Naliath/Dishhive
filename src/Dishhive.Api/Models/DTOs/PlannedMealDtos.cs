@@ -59,7 +59,7 @@ public class CreatePlannedMealDto
 
     public Guid? RecipeId { get; set; }
 
-    [MaxLength(200)]
+    [MaxLength(DomainLimits.DishName)]
     public string? DishName { get; set; }
 
     [MaxLength(500)]

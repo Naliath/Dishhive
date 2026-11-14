@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../services/language.service';
+import { HouseholdClockService } from '../../services/household-clock.service';
+import { inject, ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
@@ -32,7 +35,6 @@ import {
   RecipeStep
 } from '../../models/recipe.model';
 import { CreatePlannedMeal } from '../../models/planned-meal.model';
-import { ingredientClassLabel } from '../../models/ingredient-class.model';
 import { DishStatistic } from '../../models/statistics.model';
 import { FamilyMember, FamilyMemberFavorite } from '../../models/family-member.model';
 
@@ -46,7 +48,7 @@ function toIso(date: Date): string {
 @Component({
   selector: 'app-recipe-detail-page',
   standalone: true,
-  imports: [
+  imports: [TranslatePipe,
     ClassPickerComponent,
     CookingLoaderComponent,
     DatePipe,
@@ -67,6 +69,8 @@ function toIso(date: Date): string {
   styleUrl: './recipe-detail.page.scss'
 })
 export class RecipeDetailPage implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
+  readonly clock = inject(HouseholdClockService);
   readonly recipe = signal<Recipe | null>(null);
   readonly loading = signal(true);
   readonly quickPlanLoading = signal(false);
@@ -115,10 +119,30 @@ export class RecipeDetailPage implements OnInit {
 
   // Dietary facts review/edit (AI-detected facts become user-confirmed here)
   readonly FactsStatus = DietaryFactsStatus;
-  readonly classLabel = ingredientClassLabel;
+  readonly classLabel = (name: string) => this.uiLanguage.classLabel(name);
   readonly factsEditing = signal(false);
   readonly factsDraft = signal<string[]>([]);
   readonly savingFacts = signal(false);
+
+  factsIcon(status: DietaryFactsStatus): string {
+    return ({
+      [DietaryFactsStatus.UserConfirmed]: 'verified',
+      [DietaryFactsStatus.AiDetected]: 'smart_toy',
+      [DietaryFactsStatus.Stale]: 'history',
+      [DietaryFactsStatus.Pending]: 'hourglass_top',
+      [DietaryFactsStatus.Failed]: 'error_outline'
+    } as Partial<Record<DietaryFactsStatus, string>>)[status] ?? 'help_outline';
+  }
+
+  factsLabel(status: DietaryFactsStatus): string {
+    return ({
+      [DietaryFactsStatus.UserConfirmed]: this.uiLanguage.t('ui.containsConfirmed'),
+      [DietaryFactsStatus.AiDetected]: this.uiLanguage.t('ui.containsAIDetected'),
+      [DietaryFactsStatus.Stale]: this.uiLanguage.t('ui.containsNeedsReview'),
+      [DietaryFactsStatus.Pending]: this.uiLanguage.t('ui.containsAssessmentQueued'),
+      [DietaryFactsStatus.Failed]: this.uiLanguage.t('ui.containsAssessmentFailed')
+    } as Partial<Record<DietaryFactsStatus, string>>)[status] ?? this.uiLanguage.t('ui.containsNotAssessedYet');
+  }
 
   constructor(
     private route: ActivatedRoute,
@@ -148,7 +172,7 @@ export class RecipeDetailPage implements OnInit {
       },
       error: () => {
         this.loading.set(false);
-        this.snackBar.open('Could not load the recipe', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('recipeForm.loadError'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
         this.router.navigate(['/recipes']);
       }
     });
@@ -169,7 +193,7 @@ export class RecipeDetailPage implements OnInit {
   confirmFacts(): void {
     const recipe = this.recipe();
     if (recipe) {
-      this.saveFactsInternal(recipe, recipe.dietaryFacts.contains, 'Facts confirmed');
+      this.saveFactsInternal(recipe, recipe.dietaryFacts.contains, this.uiLanguage.t('aiStats.reviewKinds.factsConfirmed'));
     }
   }
 
@@ -181,7 +205,7 @@ export class RecipeDetailPage implements OnInit {
   saveFactsEdit(): void {
     const recipe = this.recipe();
     if (recipe) {
-      this.saveFactsInternal(recipe, this.factsDraft(), 'Facts saved');
+      this.saveFactsInternal(recipe, this.factsDraft(), this.uiLanguage.t('ui.factsSaved'));
     }
   }
 
@@ -192,11 +216,11 @@ export class RecipeDetailPage implements OnInit {
         this.savingFacts.set(false);
         this.factsEditing.set(false);
         this.recipe.set({ ...recipe, dietaryFacts: facts });
-        this.snackBar.open(successMessage, 'Dismiss', { duration: 3000 });
+        this.snackBar.open(successMessage, this.uiLanguage.t('common.dismiss'), { duration: 3000 });
       },
       error: () => {
         this.savingFacts.set(false);
-        this.snackBar.open('Could not save the facts', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotSaveTheFacts'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       }
     });
   }
@@ -220,7 +244,7 @@ export class RecipeDetailPage implements OnInit {
           : [...recipe.cookbookIds, cookbook.id];
         this.recipe.set({ ...recipe, cookbookIds });
       },
-      error: () => this.snackBar.open('Could not update the collection', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotUpdateTheCollection'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -264,7 +288,7 @@ export class RecipeDetailPage implements OnInit {
 
     request.subscribe({
       next: () => this.loadFavorites(),
-      error: () => this.snackBar.open('Could not update the favorite', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotUpdateTheFavorite'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -279,7 +303,7 @@ export class RecipeDetailPage implements OnInit {
       return;
     }
 
-    const to = new Date();
+    const to = this.clock.date();
     to.setDate(to.getDate() - 1);
     const from = new Date(to);
     from.setDate(from.getDate() - 90);
@@ -294,8 +318,8 @@ export class RecipeDetailPage implements OnInit {
 
         if (!occurrence) {
           this.snackBar.open(
-            'This dish was not planned in the last 90 days — rate it from Past Dishes',
-            'Dismiss', { duration: 5000 });
+            this.uiLanguage.t('ui.thisDishWasNotPlannedInTheLast90DaysRateItFromPastDishes'),
+            this.uiLanguage.t('common.dismiss'), { duration: 5000 });
           return;
         }
 
@@ -304,7 +328,7 @@ export class RecipeDetailPage implements OnInit {
           .afterClosed()
           .subscribe(() => this.refreshStatistics());
       },
-      error: () => this.snackBar.open('Could not load the meal history', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotLoadTheMealHistory'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -315,13 +339,13 @@ export class RecipeDetailPage implements OnInit {
     });
   }
 
-  openQuickPlan(): void {
+  openQuickPlan(origin?: { focus(): void }): void {
     const recipe = this.recipe();
     if (!recipe || this.quickPlanLoading()) {
       return;
     }
 
-    const start = new Date();
+    const start = this.clock.date();
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
     this.quickPlanLoading.set(true);
@@ -342,6 +366,8 @@ export class RecipeDetailPage implements OnInit {
           QuickPlanDialog,
           { data }
         ).afterClosed().subscribe(result => {
+          // Loading disabled the trigger before Material captured the opening focus.
+          origin?.focus();
           if (!result) {
             return;
           }
@@ -351,29 +377,29 @@ export class RecipeDetailPage implements OnInit {
             next: () => {
               this.quickPlanLoading.set(false);
               this.snackBar.open(
-                `Planned ${recipe.title} for ${this.planDateLabel(result.date)}`,
-                'Dismiss',
+                this.uiLanguage.t('ui.plannedValueForValue', { p0: (recipe.title), p1: (this.planDateLabel(result.date)) }),
+                this.uiLanguage.t('common.dismiss'),
                 { duration: 3500 }
               );
               this.refreshStatistics();
             },
             error: () => {
               this.quickPlanLoading.set(false);
-              this.snackBar.open('Could not plan the recipe', 'Dismiss', { duration: 4000 });
+              this.snackBar.open(this.uiLanguage.t('ui.couldNotPlanTheRecipe'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
             }
           });
         });
       },
       error: () => {
         this.quickPlanLoading.set(false);
-        this.snackBar.open('Could not load the upcoming plan', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotLoadTheUpcomingPlan'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       }
     });
   }
 
   private planDateLabel(iso: string): string {
     const date = new Date(`${iso}T00:00:00`);
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(this.uiLanguage.language(), {
       weekday: 'long',
       day: 'numeric',
       month: 'long'
@@ -388,10 +414,10 @@ export class RecipeDetailPage implements OnInit {
 
     this.recipesService.deleteRecipe(recipe.id).subscribe({
       next: () => {
-        this.snackBar.open('Recipe deleted', 'Dismiss', { duration: 3000 });
+        this.snackBar.open(this.uiLanguage.t('ui.recipeDeleted'), this.uiLanguage.t('common.dismiss'), { duration: 3000 });
         this.router.navigate(['/recipes']);
       },
-      error: () => this.snackBar.open('Could not delete the recipe', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotDeleteTheRecipe'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -417,7 +443,7 @@ export class RecipeDetailPage implements OnInit {
     return this.comparisonOriginal(step.originalInstruction, step.instruction);
   }
 
-  private comparisonOriginal(original: string | undefined, current: string): string | null {
+  private comparisonOriginal(original: string | null | undefined, current: string): string | null {
     const originalValue = original?.trim();
     if (!originalValue) {
       return null;
@@ -426,7 +452,7 @@ export class RecipeDetailPage implements OnInit {
     return normalize(originalValue) === normalize(current) ? null : originalValue;
   }
 
-  formatQuantity(quantity?: number, unit?: string): string {
+  formatQuantity(quantity?: number | null, unit?: string | null): string {
     // Honors the household measurement preference (metric default)
     const baseServings = this.recipe()?.servings ?? 0;
     const scaledQuantity = quantity == null || baseServings < 1

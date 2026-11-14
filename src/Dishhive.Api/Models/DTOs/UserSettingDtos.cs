@@ -9,7 +9,10 @@ public record UserPreferencesDto(
     FirstDayOfWeek FirstDayOfWeek,
     string PreferredLanguage,
     bool TranslateImportedRecipes,
-    IReadOnlyList<SupportedLanguageDto> SupportedLanguages);
+    IReadOnlyList<SupportedLanguageDto> SupportedLanguages)
+{
+    public string HouseholdTimeZone { get; init; } = "Europe/Brussels";
+}
 
 public record UpdateUserPreferencesDto(
     MeasurementSystem? MeasurementSystem = null,

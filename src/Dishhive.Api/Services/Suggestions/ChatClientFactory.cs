@@ -12,7 +12,7 @@ namespace Dishhive.Api.Services.Suggestions;
 /// </summary>
 public static class ChatClientFactory
 {
-    public static IChatClient Create(AiOptions options)
+    public static IChatClient Create(AiOptions options, HttpClient? httpClient = null)
     {
         if (!options.IsConfigured)
         {
@@ -23,7 +23,7 @@ public static class ChatClientFactory
         return provider switch
         {
             "openai" or "mistral" or "ollama" or "lmstudio" or "openai-compatible"
-                => CreateOpenAiCompatible(options),
+                => CreateOpenAiCompatible(options, httpClient),
             _ => throw new InvalidOperationException(
                 $"Unknown AI provider '{options.Provider}'. " +
                 "Supported (all OpenAI-compatible): openai, mistral, ollama, lmstudio, openai-compatible.")
@@ -64,7 +64,7 @@ public static class ChatClientFactory
         };
     }
 
-    private static IChatClient CreateOpenAiCompatible(AiOptions options)
+    private static IChatClient CreateOpenAiCompatible(AiOptions options, HttpClient? httpClient)
     {
         var endpoint = !string.IsNullOrWhiteSpace(options.BaseUrl)
             ? new Uri(options.BaseUrl.TrimEnd('/'))
@@ -78,13 +78,10 @@ public static class ChatClientFactory
         var clientOptions = new OpenAIClientOptions
         {
             NetworkTimeout = networkTimeout,
-            // The SDK's default retry policy (3 attempts, exponential backoff) can burn
-            // most of that per-call timeout retrying a single doomed request before our
-            // own cancellation budget or corrective-reprompt logic ever gets a turn.
-            // One retry is enough for a genuine transient blip; a dead endpoint should
-            // fail in seconds, not minutes.
-            RetryPolicy = new ClientRetryPolicy(maxRetries: 1)
+            // Every physical retry is owned, budgeted and recorded by AiExecutionGate.
+            RetryPolicy = new ClientRetryPolicy(maxRetries: 0)
         };
+        if (httpClient is not null) clientOptions.Transport = new HttpClientPipelineTransport(httpClient);
         if (endpoint != null)
         {
             clientOptions.Endpoint = endpoint;

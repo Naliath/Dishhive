@@ -22,6 +22,7 @@ public static class RecipeListMapping
             // Remote URLs are references only. Rendering never reaches outside
             // Dishhive, even when an older import failed to download its image.
             ImageUrl = null,
+            ImageUpdatedAt = r.UpdatedAt,
             HasLocalImage = r.ImageData != null,
             SourceProvider = r.SourceProvider,
             Tags = r.Tags.Select(a => a.RecipeTag!.Name).OrderBy(n => n).ToList(),
@@ -37,7 +38,7 @@ public static class RecipeListMapping
     {
         foreach (var recipe in recipes.Where(r => r.HasLocalImage))
         {
-            recipe.ImageUrl = $"/api/recipes/{recipe.Id}/image";
+            recipe.ImageUrl = $"/api/recipes/{recipe.Id}/image?v={recipe.ImageUpdatedAt.Ticks}";
         }
     }
 }

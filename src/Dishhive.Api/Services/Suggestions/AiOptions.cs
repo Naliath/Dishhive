@@ -76,9 +76,22 @@ public class AiOptions
     /// ~4 chars/token; the actual usage is logged for tuning.
     /// </summary>
     public int MaxPromptTokens { get; set; } = 6000;
+    public int MaxInputTokens { get; set; } = 20000;
+    public int MaxConcurrentRequests { get; set; } = 1;
+    public int MaxQueuedRequests { get; set; } = 32;
+    public int ContextWindowTokens { get; set; } = 65536;
+    public int OperationTimeoutSeconds { get; set; } = 300;
+    public int MaxOperationAttempts { get; set; } = 32;
+    public int MaxTransportRetries { get; set; } = 1;
+    public int CapabilitySuccessHours { get; set; } = 168;
+    public int CapabilityFailureCooldownSeconds { get; set; } = 60;
+    public bool RetainDiagnosticText { get; set; }
 
     /// <summary>Small deterministic classification response budget.</summary>
     public int FactsMaxOutputTokens { get; set; } = 512;
+    public int FactsMaxPromptTokens { get; set; } = 4000;
+    /// <summary>Use low provider-level reasoning for classification only.</summary>
+    public bool FactsEnableReasoning { get; set; }
 
     /// <summary>Translation output budget; large recipes need more room than classifiers.</summary>
     public int TranslationMaxOutputTokens { get; set; } = 8000;
@@ -105,12 +118,15 @@ public class AiOptions
     /// are deliberately excluded: tuning them doesn't change what the model can do.
     /// </summary>
     public string CapabilityFingerprint => string.Join("|",
+        "capability-v3",
+        PlanningIntentContract.ContractVersion,
         NormalizedProvider,
         Model.Trim(),
         BaseUrl.Trim().TrimEnd('/'),
         MaxOutputTokens,
         Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture),
         MaxPromptTokens,
+        MaxInputTokens,
         DisableThinking);
 
     /// <summary>
@@ -122,7 +138,19 @@ public class AiOptions
         TimeoutSeconds,
         AgentTimeoutSeconds,
         MaxRetries,
+        MaxInputTokens,
+        MaxConcurrentRequests,
+        MaxQueuedRequests,
+        ContextWindowTokens,
+        OperationTimeoutSeconds,
+        MaxOperationAttempts,
+        MaxTransportRetries,
+        CapabilitySuccessHours,
+        CapabilityFailureCooldownSeconds,
+        RetainDiagnosticText,
         FactsMaxOutputTokens,
+        FactsMaxPromptTokens,
+        FactsEnableReasoning,
         TranslationMaxOutputTokens,
         TranslationMaxPromptTokens,
         ImportExtractionMaxOutputTokens,
@@ -176,5 +204,24 @@ public class AiOptions
             return LocalProviders.Contains(provider)
                 || !string.IsNullOrWhiteSpace(ResolveApiKey());
         }
+    }
+
+    public void Validate()
+    {
+        if (FactsEnableReasoning && Math.Min(FactsMaxOutputTokens, MaxOutputTokens) < 1024)
+            throw new InvalidOperationException("AI facts reasoning requires at least 1024 output tokens.");
+        if (MaxInputTokens < 1024) throw new InvalidOperationException("Ai:MaxInputTokens must be at least 1024.");
+        if (MaxConcurrentRequests is < 1 or > 32)
+            throw new InvalidOperationException("Ai:MaxConcurrentRequests must be between 1 and 32.");
+        if (TimeoutSeconds < 1 || AgentTimeoutSeconds < TimeoutSeconds)
+            throw new InvalidOperationException("AI timeouts must be positive and the agent timeout may not be shorter.");
+        if (MaxRetries is < 0 or > 10) throw new InvalidOperationException("Ai:MaxRetries must be between 0 and 10.");
+        if (MaxTransportRetries is < 0 or > 3)
+            throw new InvalidOperationException("Ai:MaxTransportRetries must be between 0 and 3");
+        if (MaxQueuedRequests is < 1 or > 256 || MaxOperationAttempts is < 1 or > 128
+            || OperationTimeoutSeconds < TimeoutSeconds)
+            throw new InvalidOperationException("AI queue, operation attempts and operation timeout must be bounded and positive.");
+        if (ContextWindowTokens < MaxInputTokens + MaxOutputTokens)
+            throw new InvalidOperationException("Ai:ContextWindowTokens must leave room for both input and output budgets.");
     }
 }

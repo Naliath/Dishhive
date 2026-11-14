@@ -149,4 +149,11 @@ feature. See [ai-week-planning.md](ai-week-planning.md).
 - [x] Suggestion-day picker: all seven days visible, sensible current-week and planned-meal defaults
 - [x] Backend suggestion acceptance batch: per-item outcomes, idempotency, transactional
       idea replacement, import deduplication and freezer revalidation
+- [x] HTTP attendance matrix: omitted/empty household defaults, guest-only, household plus
+      guest, inactive/unknown rejection and duplicate-id normalization across generation,
+      create/update and acceptance; rejected updates leave the saved meal unchanged
+- [x] Local PostgreSQL import/edit/generate/accept workflows verify guests, shopping scaling,
+      idea replacement, stale-review rejection and idempotent retries
+- [x] Chrome workflow against the real disposable local API verifies URL import, editing,
+      quick-plan household attendance, generation/review/acceptance and retry deduplication
 - [x] Eaten checkmark on past day cards (see meal-feedback.md)

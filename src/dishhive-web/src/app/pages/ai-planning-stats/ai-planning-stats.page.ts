@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -16,15 +17,12 @@ import { TranslatePipe } from '../../services/language.service';
   styleUrl: './ai-planning-stats.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AiPlanningStatsPage implements OnInit {
+export class AiPlanningStatsPage implements OnInit, OnDestroy {
   readonly metrics = signal<AiPlanningMetricsResponse | null>(null);
   readonly failed = signal(false);
   readonly selectedTask = signal<string | null>(null);
-  readonly visibleCalls = computed(() => {
-    const data = this.metrics();
-    const task = this.selectedTask();
-    return data?.calls.filter(call => task === null || call.task === task) ?? [];
-  });
+  readonly taskOptions = signal<AiPlanningMetricsResponse['taskMetrics']['tasks']>([]);
+  private refreshSubscription?: Subscription;
 
   constructor(private integrationsService: IntegrationsService) {}
 
@@ -33,12 +31,22 @@ export class AiPlanningStatsPage implements OnInit {
   }
 
   refresh(): void {
+    this.refreshSubscription?.unsubscribe();
     this.failed.set(false);
     this.metrics.set(null);
-    this.integrationsService.getAiPlanningMetrics().subscribe({
-      next: result => this.metrics.set(result),
+    this.refreshSubscription = this.integrationsService.getAiPlanningMetrics(30, {
+      task: this.selectedTask() ?? undefined
+    }).subscribe({
+      next: result => {
+        this.metrics.set(result);
+        if (this.selectedTask() === null) this.taskOptions.set(result.taskMetrics.tasks);
+      },
       error: () => this.failed.set(true)
     });
+  }
+
+  ngOnDestroy(): void {
+    this.refreshSubscription?.unsubscribe();
   }
 
   seconds(milliseconds: number): string {
@@ -51,18 +59,23 @@ export class AiPlanningStatsPage implements OnInit {
 
   selectTask(task: string | null): void {
     this.selectedTask.set(task);
+    this.refresh();
   }
 
   isFailure(outcome: string): boolean {
-    return outcome !== 'success' && outcome !== 'noResult';
+    return !['success', 'noResult', 'cancelled', 'responseReceived', 'abandoned', 'completed']
+      .includes(outcome);
   }
 
   taskLabel(task: string): string {
     return ({
       'capability.planning': 'aiStats.tasks.capabilityPlanning',
       'planning.intent': 'aiStats.tasks.planningIntent',
+      'planning.research': 'aiStats.tasks.planningResearch',
       'planning.generate': 'aiStats.tasks.weekPlanning',
       'recipe.facts': 'aiStats.tasks.recipeFacts',
+      'recipe.dish_match': 'aiStats.tasks.recipeDishMatch',
+      'recipe.edit': 'aiStats.tasks.recipeEdit',
       'recipe.translate': 'aiStats.tasks.recipeTranslation',
       'recipe.import_extract': 'aiStats.tasks.recipeImportExtraction'
     } as Record<string, string>)[task] ?? task;
@@ -70,6 +83,12 @@ export class AiPlanningStatsPage implements OnInit {
 
   outcomeLabel(outcome: string): string {
     return ({
+      accepted: 'aiStats.reviewOutcomes.accepted',
+      rejected: 'aiStats.reviewOutcomes.rejected',
+      needsReview: 'aiStats.reviewOutcomes.needsReview',
+      stockUnavailable: 'aiStats.reviewOutcomes.stockUnavailable',
+      importFailed: 'aiStats.reviewOutcomes.importFailed',
+      planningFailed: 'aiStats.reviewOutcomes.planningFailed',
       success: 'aiStats.outcomes.success',
       noResult: 'aiStats.outcomes.noResult',
       parseFailure: 'aiStats.outcomes.parseFailure',
@@ -77,6 +96,11 @@ export class AiPlanningStatsPage implements OnInit {
       timeout: 'aiStats.outcomes.timeout',
       cancelled: 'aiStats.outcomes.cancelled',
       error: 'aiStats.outcomes.error',
+      inputLimit: 'aiStats.outcomes.inputLimit',
+      rateLimited: 'aiStats.outcomes.rateLimited',
+      budgetExceeded: 'aiStats.outcomes.budgetExceeded',
+      responseReceived: 'aiStats.outcomes.incomplete',
+      abandoned: 'aiStats.outcomes.abandoned',
       completed: 'aiStats.outcomes.incomplete'
     } as Record<string, string>)[outcome] ?? outcome;
   }

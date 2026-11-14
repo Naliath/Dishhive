@@ -1,6 +1,7 @@
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.WebSearch;
 using Dishhive.Api.Services.Facts;
+using Dishhive.Api.Services.Ai;
 
 namespace Dishhive.Api.Services.Suggestions;
 
@@ -37,7 +38,10 @@ public sealed class ExternalRecipeSessionFactory(
     IWebSearchClient webSearch,
     IRecipeImportService importService,
     IRecipeFactsExtractor factsExtractor,
-    WebSearchOptions options) : IExternalRecipeSessionFactory
+    WebSearchOptions options,
+    IRecipeResearchQueryRefiner? queryRefiner = null,
+    IAiExecutionGate? executionGate = null,
+    IRecipeDishMatcher? dishMatcher = null) : IExternalRecipeSessionFactory
 {
     public ExternalRecipeSessionFactory(
         IWebSearchClient webSearch,
@@ -63,6 +67,10 @@ public sealed class ExternalRecipeSessionFactory(
             hosts,
             requestId,
             logger,
-            factsExtractor);
+            factsExtractor,
+            queryRefiner,
+            (executionGate?.Profile(AiTaskKind.WeekPlanning).MaxRetries ?? 1) + 1,
+            executionGate?.Profile(AiTaskKind.RecipeFacts).EnableReasoning == true,
+            dishMatcher);
     }
 }

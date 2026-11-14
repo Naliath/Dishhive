@@ -20,8 +20,19 @@
       <mat-icon>shopping_cart</mat-icon>
       {{ 'weekPlanner.shoppingList' | translate }}
     </a>
+    @if (freezer().enabled) {
+      <button mat-stroked-button (click)="reviewFreezerReservations()">
+        <mat-icon>ac_unit</mat-icon>{{ 'freezerReview.title' | translate }}
+      </button>
+    }
   </div>
 </div>
+
+@if (freezerReservations(); as reservations) {
+  @if (reservations.issues.length > 0 || reservations.state === 'unavailable') {
+    <p role="status">{{ (reservations.state === 'unavailable' ? 'freezerReview.unavailable' : 'freezerReview.attention') | translate }}</p>
+  }
+}
 
 @if (loading()) {
   <div class="empty-state">
@@ -45,17 +56,17 @@
                   }
                   <div class="meal-title">
                     @if (meal.freezyItemRef) {
-                      <mat-icon class="meal-icon" aria-label="From the freezer">ac_unit</mat-icon>
+                      <mat-icon class="meal-icon" [attr.aria-label]="'weekPlanner.fromFreezer' | translate">ac_unit</mat-icon>
                     } @else if (meal.recipeId) {
-                      <mat-icon class="meal-icon" aria-label="Recipe">menu_book</mat-icon>
+                      <mat-icon class="meal-icon" [attr.aria-label]="'ui.recipe' | translate">menu_book</mat-icon>
                     } @else if (!meal.dishName) {
-                      <mat-icon class="meal-icon" aria-label="Idea">lightbulb</mat-icon>
+                      <mat-icon class="meal-icon" [attr.aria-label]="'ui.idea' | translate">lightbulb</mat-icon>
                     }
                     @if (meal.recipeId) {
                       <!-- No matTooltip here: its touch handling can swallow the tap
                            on mobile, leaving the link only openable in a new tab -->
                       <a class="meal-name meal-name--link" [routerLink]="['/recipes', meal.recipeId]"
-                         [attr.aria-label]="'Open recipe ' + mealSummary(meal)">{{ mealSummary(meal) }}</a>
+                         [attr.aria-label]="'ui.openRecipeName' | translate:{ name: mealSummary(meal) }">{{ mealSummary(meal) }}</a>
                     } @else {
                       <span class="meal-name">{{ mealSummary(meal) }}</span>
                     }
@@ -64,16 +75,16 @@
                         <button mat-icon-button class="meal-action eaten-toggle"
                                 [class.eaten]="isEaten(meal)"
                                 (click)="toggleEaten(meal)"
-                                [attr.aria-label]="isEaten(meal) ? 'Eaten — tap to clear' : 'Mark as eaten'">
+                                [attr.aria-label]="(isEaten(meal) ? 'ui.eatenClear' : 'ui.markEaten') | translate">
                           <mat-icon>{{ isEaten(meal) ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
                         </button>
                       }
                       <button mat-icon-button class="meal-action" (click)="openSlot(day, meal)"
-                              aria-label="Edit dish">
+                              [attr.aria-label]="'ui.editDish' | translate">
                         <mat-icon>edit</mat-icon>
                       </button>
                       <button mat-icon-button class="meal-action" (click)="clearSlot(meal)"
-                              aria-label="Remove dish">
+                              [attr.aria-label]="'ui.removeDish' | translate">
                         <mat-icon>close</mat-icon>
                       </button>
                     </span>

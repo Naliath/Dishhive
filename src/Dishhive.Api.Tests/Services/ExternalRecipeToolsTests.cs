@@ -9,6 +9,26 @@ namespace Dishhive.Api.Tests.Services;
 
 public class ExternalRecipeToolsTests
 {
+    [Fact]
+    public async Task Research_SharedSearchRetainsEveryRequirementScopeWithoutRepeatingTheSearch()
+    {
+        const string url = "https://example.com/dish";
+        var search = SearchReturning(new WebSearchResult("Dish", url, null));
+        var importer = Substitute.For<IRecipeImportService>();
+        importer.PreviewAsync(url, Arg.Any<CancellationToken>()).Returns(Task.FromResult(new RecipePreview(
+            true, new ImportedRecipe { Title = "Dish", SourceUrl = url, IngredientLines = ["1 onion"], Steps = ["Cook"] }, null, null)));
+        var tools = CreateTools(search, importer, ["example.com"]);
+
+        var results = await tools.ResearchRecipesAsync([
+            new("main", "dish", "example.com", Course: "main"),
+            new("dessert", "dish", "example.com", Course: "dessert")
+        ]);
+
+        results.Should().ContainSingle().Which.ResearchConstraintIds.Should().BeEquivalentTo("main", "dessert");
+        tools.TryResolveCandidate(results.Single().CandidateId, out var candidate).Should().BeTrue();
+        candidate!.ResearchConstraintIds.Should().BeEquivalentTo("main", "dessert");
+        await search.Received(1).SearchAsync("dish", "example.com", Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
     private static ExternalRecipeTools CreateTools(
         IWebSearchClient webSearch,
         IRecipeImportService importService,

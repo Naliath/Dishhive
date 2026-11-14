@@ -1,3 +1,4 @@
+import { TranslatePipe } from '../../services/language.service';
 import { ChangeDetectionStrategy, Component, input, numberAttribute } from '@angular/core';
 
 /**
@@ -7,6 +8,7 @@ import { ChangeDetectionStrategy, Component, input, numberAttribute } from '@ang
 @Component({
   selector: 'app-cooking-loader',
   standalone: true,
+  imports: [TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cooking-loader.html',
   styleUrl: './cooking-loader.scss'

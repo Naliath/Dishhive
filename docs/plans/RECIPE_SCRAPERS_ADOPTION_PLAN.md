@@ -48,7 +48,7 @@ referenced from C# — adopting it means running Python somewhere:
   thing that can be down. Import must degrade gracefully (clear 503-style error) when the
   sidecar is unavailable.
 - **A cross-language contract to test.** Today's tests are pure in-process fixture tests.
-  We'd add contract tests: stored HTML fixtures through the real sidecar in CI (compose-based),
+  We'd add contract tests: stored HTML fixtures through the real local sidecar (Compose-based),
   plus mocked-sidecar tests on the .NET side.
 - **Dependency/supply-chain surface.** Python deps (bs4, etc.) need the same lockfile
   discipline as npm/NuGet; pin the library version, upgrade deliberately (a scraper "fix"

@@ -1,21 +1,21 @@
-@if (checkingOnboarding()) {
-  <main class="onboarding-loading" aria-label="Checking setup">
+@if (checkingOnboarding() || checkingPreferences()) {
+  <main class="onboarding-loading" [attr.aria-label]="'ui.checkingSetup' | translate">
     <mat-spinner diameter="48" />
   </main>
 } @else if (showOnboarding()) {
   @defer {
     <app-onboarding (finished)="finishOnboarding()" />
   } @placeholder {
-    <main class="onboarding-loading" aria-label="Loading setup">
+    <main class="onboarding-loading" [attr.aria-label]="'ui.loadingSetup' | translate">
       <mat-spinner diameter="48" />
     </main>
   }
 } @else {
 <mat-toolbar class="app-toolbar">
-  <button mat-icon-button (click)="sidenav.toggle()" aria-label="Toggle menu">
+  <button mat-icon-button (click)="sidenav.toggle()" [attr.aria-label]="'ui.toggleMenu' | translate">
     <mat-icon>menu</mat-icon>
   </button>
-  <a class="app-title" routerLink="/" aria-label="Week planner">{{ title }}</a>
+  <a class="app-title" routerLink="/" [attr.aria-label]="'ui.weekPlanner' | translate">{{ title }}</a>
 </mat-toolbar>
 
 <mat-sidenav-container class="app-container">
@@ -63,6 +63,12 @@
 
   <mat-sidenav-content class="app-content">
     <div class="router-content">
+      @if (offlineReads.oldestSavedAt(); as savedAt) {
+        <aside class="saved-data-notice" role="status">
+          <mat-icon aria-hidden="true">cloud_off</mat-icon>
+          <span>{{ 'pwa.savedData' | translate:{ date: (savedAt | localizedDate:'dateTime') } }}</span>
+        </aside>
+      }
       <router-outlet />
     </div>
   </mat-sidenav-content>

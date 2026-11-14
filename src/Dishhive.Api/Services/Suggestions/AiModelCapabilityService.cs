@@ -59,19 +59,22 @@ public class AiModelCapabilityService : IAiModelCapabilityService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AiModelCapabilityService> _logger;
     private readonly IAiExecutionGate? _executionGate;
+    private readonly IHostApplicationLifetime? _lifetime;
     private readonly object _gate = new();
     private Task<AiModelTestResult>? _run;
 
     public AiModelCapabilityService(
         AiModelTester tester, AiOptions options,
         IServiceScopeFactory scopeFactory, ILogger<AiModelCapabilityService> logger,
-        IAiExecutionGate? executionGate = null)
+        IAiExecutionGate? executionGate = null,
+        IHostApplicationLifetime? lifetime = null)
     {
         _tester = tester;
         _options = options;
         _scopeFactory = scopeFactory;
         _logger = logger;
         _executionGate = executionGate;
+        _lifetime = lifetime;
     }
 
     public AiModelTestState State
@@ -93,6 +96,9 @@ public class AiModelCapabilityService : IAiModelCapabilityService
         Task<AiModelTestResult> run;
         lock (_gate)
         {
+            if (_run is { IsCompletedSuccessfully: true } completed
+                && !IsReusable(completed.Result))
+                _run = null;
             run = _run ??= LoadOrRunDetachedAsync();
         }
         // The run itself is shared and never cancelled; each caller only abandons its wait
@@ -125,7 +131,7 @@ public class AiModelCapabilityService : IAiModelCapabilityService
             var db = scope.ServiceProvider.GetRequiredService<DishhiveDbContext>();
             var record = await db.AiModelTestRecords.AsNoTracking()
                 .FirstOrDefaultAsync(r => r.ConfigKey == key);
-            if (record is not null && ToResult(record) is { } stored)
+            if (record is not null && ToResult(record) is { } stored && IsReusable(stored))
             {
                 _executionGate?.UpdateCapability(stored);
                 _logger.LogInformation(
@@ -162,7 +168,8 @@ public class AiModelCapabilityService : IAiModelCapabilityService
             var (prompt, key) = await ResolvePromptAndKeyAsync();
             // RunAsync never throws (it converts failures into a failed result), so the
             // shared task always completes successfully and Result above stays simple
-            var result = await _tester.RunAsync(prompt, CancellationToken.None);
+            var result = await _tester.RunAsync(prompt,
+                _lifetime?.ApplicationStopping ?? CancellationToken.None);
             _executionGate?.UpdateCapability(result);
             try
             {
@@ -231,6 +238,15 @@ public class AiModelCapabilityService : IAiModelCapabilityService
         record.ChecksJson = JsonSerializer.Serialize(result.Checks);
         record.TokensPerSecond = result.TokensPerSecond;
         record.ElapsedMs = result.ElapsedMs;
+    }
+
+    private bool IsReusable(AiModelTestResult result)
+    {
+        var age = DateTimeOffset.UtcNow - result.TestedAt;
+        var lifetime = result.PlanningEligible
+            ? TimeSpan.FromHours(Math.Max(1, _options.CapabilitySuccessHours))
+            : TimeSpan.FromSeconds(Math.Max(1, _options.CapabilityFailureCooldownSeconds));
+        return age <= lifetime;
     }
 
     /// <summary>Maps a stored record back to a result; null when it can't be read

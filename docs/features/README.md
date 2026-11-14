@@ -1,5 +1,8 @@
 # Dishhive Feature Documents
 
+Deployment trust boundaries and remote-access requirements are documented in
+[Deployment security](../deployment-security.md).
+
 One living document per functional feature. Each contains the feature goal, scope, user
 stories, domain model, backend/frontend/integration requirements, risks, a phased plan, and an
 implementation checklist that is updated as work progresses.

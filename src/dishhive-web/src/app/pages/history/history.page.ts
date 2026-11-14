@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../services/language.service';
+import { HouseholdClockService } from '../../services/household-clock.service';
+import { inject, ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
 import { LocalizedDatePipe } from '../../services/language.service';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -33,7 +36,7 @@ function toIso(date: Date): string {
 @Component({
   selector: 'app-history-page',
   standalone: true,
-  imports: [
+  imports: [TranslatePipe,
     CookingLoaderComponent,
     LocalizedDatePipe,
     MatButtonModule,
@@ -49,6 +52,8 @@ function toIso(date: Date): string {
   styleUrl: './history.page.scss'
 })
 export class HistoryPage implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
+  readonly clock = inject(HouseholdClockService);
   /** Number of past days shown; grows with "Load more" */
   readonly daysBack = signal(28);
   readonly meals = signal<PlannedMeal[]>([]);
@@ -86,7 +91,7 @@ export class HistoryPage implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    const yesterday = new Date();
+    const yesterday = this.clock.date();
     yesterday.setDate(yesterday.getDate() - 1);
     const from = new Date(yesterday);
     from.setDate(from.getDate() - this.daysBack());
@@ -98,7 +103,7 @@ export class HistoryPage implements OnInit {
       },
       error: () => {
         this.loading.set(false);
-        this.snackBar.open('Could not load the history', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotLoadTheHistory'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       }
     });
   }
@@ -120,7 +125,7 @@ export class HistoryPage implements OnInit {
 
     this.plannedMealsService.setEaten(meal.id, next).subscribe({
       next: updated => this.replaceMeal(updated),
-      error: () => this.snackBar.open('Could not update the meal', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotUpdateTheMeal'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -134,9 +139,9 @@ export class HistoryPage implements OnInit {
 
   eatenTooltip(meal: PlannedMeal): string {
     switch (meal.eaten) {
-      case EatenStatus.Eaten: return 'Eaten — tap to mark skipped';
-      case EatenStatus.Skipped: return 'Skipped — tap to clear';
-      default: return 'Tap to mark as eaten';
+      case EatenStatus.Eaten: return this.uiLanguage.t('ui.eatenTapToMarkSkipped');
+      case EatenStatus.Skipped: return this.uiLanguage.t('ui.skippedTapToClear');
+      default: return this.uiLanguage.t('ui.tapToMarkAsEaten');
     }
   }
 

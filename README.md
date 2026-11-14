@@ -198,13 +198,71 @@ Migrations are applied automatically at application startup (with retry).
 
 ### Running Tests
 
+Run the complete local verification from the repository root in PowerShell:
+
+```powershell
+./scripts/verify-local.ps1
+```
+
+It checks API contract reproducibility, localization, frontend tests/build, the complete backend
+suite with disposable PostgreSQL databases, a Chrome import/edit/quick-plan/generate/
+accept workflow against the real local API, browser fixtures, the production service-worker
+lifecycle, the independent facts corpus structure, and Linux scraper
+tests in a network-disabled Docker container. Logs and screenshots go to
+`artifacts/local-verification`. The development database and Freezy data are retained.
+
+Prerequisites are the .NET 10 SDK and restored packages, installed frontend dependencies,
+Chrome, and Docker Desktop with Linux containers. PostgreSQL uses the local Compose service
+and `.env` credentials by default; set `DISHHIVE_TEST_POSTGRES` or pass
+`-PostgresConnection` to use another local test server. The test host controls model and
+external page-fetch responses, so the workflow requires no model key or external search.
+Live model evaluations remain a separate explicit command.
+
+```powershell
+# Complete local backup/restore and application-startup rehearsal (disposable clone)
+./scripts/rehearse-local-restore.ps1
+
+# Independently labelled public ingredient facts; sends corpus text to configured AI
+./scripts/run-ai-facts-evals.ps1 -Iterations 3
+
+# Independently labelled requested-food identity (separate from ingredient facts)
+./scripts/run-ai-facts-evals.ps1 -DishMatching -Iterations 3
+
+# Live week-planning regression corpus; sends local recipe/household context to AI
+./scripts/run-ai-week-planning-evals.ps1 -Iterations 3 -IncludeKnownLimitations
+```
+
+The facts runner can validate the checked-in corpus without contacting AI using
+`-ValidateOnly`. It inherits the local app's AI settings; use
+`-EnableFactsReasoning -MaxOutputTokens 8192` to explicitly evaluate task-specific
+low reasoning. Checked-in defaults keep facts reasoning disabled. The measured
+local v4.1-flash profile enables it with an 8192-token facts allowance and concurrency
+four; see the [current dish/facts review evidence](docs/reviews/dish-identity-fix-2026-11-14.md).
+`-DishMatching -ValidateOnly` validates the separate identity corpus. The planning
+runner's `-ReplayReport <report.json> -ScenarioId <id>` rechecks recorded responses
+against today's assertions without calling AI; select scenarios without collection
+lookups. The Friday oracle now checks independently labelled food identity as well
+as source/date and assessed ingredients.
+`-ValidateOracle` runs offline acceptance/rejection checks. Reports retain strict
+completion in `passed` and separately expose `policyPassed`/`acceptedPartial` for
+an explicitly permitted empty date with an explanation. The legacy strict exit
+status is unchanged. Scenario `instructionClarification` preserves the original
+prompt while adding an explicit user decision to the actual evaluated instructions.
+`run-public-planning-evals.ps1 -Image <image>` instead creates a
+disposable, checked-in synthetic planning household without copying development rows.
+Full restore evidence includes all database-backed images, plans, settings and metrics;
+environment credentials and external-service data are managed separately. Household
+calendar dates use `HOUSEHOLD_TIME_ZONE` (default `Europe/Brussels`).
+
+For focused checks:
+
 ```bash
 # Backend (xUnit) - from repo root
 dotnet test
 
 # Frontend (Vitest)
 cd src/dishhive-web
-npm test -- --no-watch
+npm test -- --watch=false
 ```
 
 The recipe import extraction is covered by offline fixture tests
@@ -288,6 +346,8 @@ unconfigured, external research is skipped and suggestions behave as before.
 | `Ai__BaseUrl` | per-provider default | Endpoint override (required for `openai-compatible`) |
 | `Ai__Model` | empty | Model name, e.g. `llama3.1`, `gpt-4o-mini`, `mistral-small-latest` |
 | `Ai__Temperature` / `Ai__MaxRetries` / `Ai__MaxPromptTokens` | `0.3` / `1` / `6000` | Robustness/context tuning: sampling temperature, corrective reprompts, prompt token budget |
+| `Ai__OperationTimeoutSeconds` / `Ai__MaxOperationAttempts` | `300` / `32` | Shared AI deadline and provider-call allowance, including nested research, chunks, corrections and transport retries |
+| `Ai__MaxTransportRetries` | `1` | Gate-owned transient transport retries (0–3); SDK retries are disabled; rate-limit backoff observes the operation deadline |
 | `WebSearch__Provider` | empty (`searxng` in docker-compose) | Web-search backend for external-recipe discovery: `searxng` |
 | `WebSearch__BaseUrl` | `http://searxng:8080` in docker-compose | Search backend URL (JSON output must be enabled on the SearXNG instance) |
 

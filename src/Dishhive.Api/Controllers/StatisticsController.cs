@@ -1,3 +1,4 @@
+using Dishhive.Api.Services.Time;
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
@@ -14,11 +15,13 @@ namespace Dishhive.Api.Controllers;
 [Route("api/[controller]")]
 public class StatisticsController : ControllerBase
 {
+    private readonly IHouseholdClock _clock;
     private readonly DishhiveDbContext _context;
 
-    public StatisticsController(DishhiveDbContext context)
+    public StatisticsController(DishhiveDbContext context, IHouseholdClock clock)
     {
         _context = context;
+        _clock = clock;
     }
 
     /// <summary>
@@ -30,7 +33,7 @@ public class StatisticsController : ControllerBase
     public async Task<ActionResult<DishStatisticsDto>> GetDishStatistics(
         [FromQuery] DateOnly? from = null, [FromQuery] DateOnly? to = null)
     {
-        var rangeEnd = to ?? DateOnly.FromDateTime(DateTime.Today);
+        var rangeEnd = to ?? _clock.Today;
 
         var query = _context.PlannedMeals
             .AsNoTracking()
@@ -79,7 +82,7 @@ public class StatisticsController : ControllerBase
             return NotFound();
         }
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
 
         var attendedMeals = _context.PlannedMealAttendees
             .AsNoTracking()

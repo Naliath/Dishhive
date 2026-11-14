@@ -1,3 +1,5 @@
+import { OnboardingClient } from '../api/generated/dishhive-api.client';
+import { apiResponse } from '../api/api-response';
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, of } from 'rxjs';
@@ -9,9 +11,10 @@ export const ONBOARDING_RESOLVED_CACHE_KEY = 'dishhive.onboarding.resolved.v1';
 
 @Injectable({ providedIn: 'root' })
 export class OnboardingService {
+  private readonly api: OnboardingClient;
   private readonly apiUrl = '/api/onboarding';
 
-  constructor(private http: HttpClient) {}
+  constructor(http: HttpClient) { this.api = new OnboardingClient(http, ""); }
 
   /**
    * Resolves synchronously from the browser cache after onboarding has been handled.
@@ -23,7 +26,7 @@ export class OnboardingService {
       return of({ shouldShow: false });
     }
 
-    return this.http.post<OnboardingStatus>(`${this.apiUrl}/start`, null).pipe(
+    return apiResponse(this.api.start()).pipe(
       tap(status => {
         if (!status.shouldShow) {
           this.markResolvedLocally();
@@ -33,7 +36,7 @@ export class OnboardingService {
   }
 
   complete(skipped: boolean): Observable<OnboardingStatus> {
-    return this.http.post<OnboardingStatus>(`${this.apiUrl}/complete`, { skipped }).pipe(
+    return apiResponse(this.api.complete({ skipped })).pipe(
       tap(() => this.markResolvedLocally())
     );
   }

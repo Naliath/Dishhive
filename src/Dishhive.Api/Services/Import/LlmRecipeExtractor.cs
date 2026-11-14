@@ -10,7 +10,7 @@ namespace Dishhive.Api.Services.Import;
 /// <summary>
 /// Last-resort recipe extraction: when the dedicated providers and the recipe-scrapers
 /// sidecar can't parse a page, the configured LLM reads the page text and produces the
-/// structured recipe. Best-effort and model-dependent — the structured scrapers always
+/// structured recipe. Best-effort and model-dependent â€” the structured scrapers always
 /// win when they succeed. Only available when AI is configured (see Program.cs).
 /// </summary>
 public interface ILlmRecipeExtractor
@@ -19,7 +19,8 @@ public interface ILlmRecipeExtractor
     bool IsAvailable { get; }
 
     /// <summary>Extracts a recipe from page HTML, or null when the page holds no recipe</summary>
-    Task<ImportedRecipe?> ExtractAsync(string html, Uri sourceUrl, CancellationToken cancellationToken = default);
+    Task<ImportedRecipe?> ExtractAsync(string html, Uri sourceUrl, CancellationToken cancellationToken = default,
+        string? operationId = null);
 }
 
 /// <summary>Default when AI is not configured: extraction unavailable</summary>
@@ -27,7 +28,8 @@ public class NoOpLlmRecipeExtractor : ILlmRecipeExtractor
 {
     public bool IsAvailable => false;
 
-    public Task<ImportedRecipe?> ExtractAsync(string html, Uri sourceUrl, CancellationToken cancellationToken = default)
+    public Task<ImportedRecipe?> ExtractAsync(string html, Uri sourceUrl, CancellationToken cancellationToken = default,
+        string? operationId = null)
         => Task.FromResult<ImportedRecipe?>(null);
 }
 
@@ -69,9 +71,13 @@ public partial class LlmRecipeExtractor : ILlmRecipeExtractor
 
     public bool IsAvailable => true;
 
-    public async Task<ImportedRecipe?> ExtractAsync(string html, Uri sourceUrl, CancellationToken cancellationToken = default)
+    public async Task<ImportedRecipe?> ExtractAsync(string html, Uri sourceUrl, CancellationToken cancellationToken = default,
+        string? operationId = null)
     {
-        var text = TrimToPromptBudget(HtmlText.ToPlainText(html), _options.ImportExtractionMaxPromptTokens);
+        using var inputSnapshot = AiInputSnapshotScope.ForContent("sourceDocument", AiInputSnapshotScope.Hash(sourceUrl.AbsoluteUri), html);
+        var profile = _executionGate.Profile(AiTaskKind.RecipeImportExtraction);
+        var inputTokens = Math.Min(profile.MaxInputTokens, _options.ContextWindowTokens - profile.MaxOutputTokens);
+        var text = TrimToPromptBudget(HtmlText.ToPlainText(html), inputTokens);
         if (text.Length < 40)
         {
             return null;
@@ -83,19 +89,34 @@ public partial class LlmRecipeExtractor : ILlmRecipeExtractor
             new(ChatRole.User, AiJsonContract.Serialize(
                 new ExtractionInput(sourceUrl.AbsoluteUri, text)))
         };
-        var operationId = $"import-{Guid.NewGuid():N}"[..19];
+        var contentBudget = AiTokenBudget.ContentCharacters(inputTokens, SystemPrompt, JsonSchemaFormat, profile.MaxRetries);
+        // JSON escaping and the source URL also consume input. Shrink before
+        // admission, retaining both ends of the page on each bounded reduction.
+        while (messages[1].Text.Length > contentBudget && text.Length > 40)
+        {
+            text = TrimCharacters(text, Math.Max(0, text.Length * 3 / 4));
+            messages[1] = new ChatMessage(ChatRole.User, AiJsonContract.Serialize(new ExtractionInput(sourceUrl.AbsoluteUri, text)));
+        }
+        operationId ??= $"import-{Guid.NewGuid():N}"[..19];
+        using var operation = _executionGate.BeginOperation(cancellationToken, operationId);
         try
         {
-            var profile = _executionGate.Profile(AiTaskKind.RecipeImportExtraction);
             for (var attempt = 1; attempt <= profile.MaxRetries + 1; attempt++)
             {
-                var execution = await _executionGate.ExecuteAsync(new AiExecutionRequest(
+                var execution = await _executionGate.ExecuteValidatedAsync(new AiExecutionRequest(
                     AiTaskKind.RecipeImportExtraction, messages, ContractVersion, operationId, attempt,
-                    JsonSchemaFormat), cancellationToken);
-                var payload = ParsePayload(execution.Response.Text);
-                if (payload is null)
+                    JsonSchemaFormat, DeadlineUtc: operation.DeadlineUtc), response =>
+                    {
+                        var parsed = ParsePayload(response.Text);
+                        if (parsed is null) return AiValidation<ExtractionPayload>.Invalid(AiTaskOutcome.ParseFailure, "The response was not valid extraction JSON");
+                        if (string.IsNullOrWhiteSpace(parsed.Title)) return AiValidation<ExtractionPayload>.NoResult();
+                        var error = Validate(parsed);
+                        return error is null ? AiValidation<ExtractionPayload>.Valid(parsed)
+                            : AiValidation<ExtractionPayload>.Invalid(AiTaskOutcome.ValidationFailure, error);
+                    }, cancellationToken);
+                var payload = execution.Value;
+                if (execution.Outcome == AiTaskOutcome.ParseFailure)
                 {
-                    await execution.ReportOutcomeAsync("parseFailure", "The response was not valid extraction JSON");
                     if (attempt <= profile.MaxRetries)
                     {
                         messages.Add(new ChatMessage(ChatRole.User,
@@ -103,20 +124,17 @@ public partial class LlmRecipeExtractor : ILlmRecipeExtractor
                     }
                     continue;
                 }
-                if (string.IsNullOrWhiteSpace(payload.Title))
+                if (execution.Outcome == AiTaskOutcome.NoResult)
                 {
-                    await execution.ReportOutcomeAsync("noResult");
                     _logger.LogInformation("LLM found no recipe on {Url}", sourceUrl);
                     return null;
                 }
-                var validationError = Validate(payload);
-                if (validationError is null)
+                if (execution.Succeeded)
                 {
-                    await execution.ReportOutcomeAsync("success");
                     return ToImportedRecipe(payload!, sourceUrl);
                 }
 
-                await execution.ReportOutcomeAsync("validationFailure", validationError);
+                var validationError = execution.Error;
                 if (attempt <= profile.MaxRetries)
                 {
                     messages.Add(new ChatMessage(ChatRole.User,
@@ -165,11 +183,19 @@ public partial class LlmRecipeExtractor : ILlmRecipeExtractor
 
     internal static string TrimToPromptBudget(string text, int maxPromptTokens)
     {
-        var maxChars = Math.Clamp(maxPromptTokens, 250, 100_000) * 4;
+        var maxChars = Math.Clamp(maxPromptTokens, 250, 100_000) * AiTokenBudget.ConservativeCharactersPerToken;
+        return TrimCharacters(text, maxChars);
+    }
+
+    private static string TrimCharacters(string text, int maxChars)
+    {
         if (text.Length <= maxChars) return text;
-        var headLength = (int)(maxChars * 0.75);
-        var tailLength = maxChars - headLength;
-        return text[..headLength] + "\n\n[page text trimmed]\n\n" + text[^tailLength..];
+        const string marker = "\n\n[page text trimmed]\n\n";
+        if (maxChars <= marker.Length) return text[..maxChars];
+        var available = maxChars - marker.Length;
+        var headLength = available * 3 / 4;
+        var tailLength = available - headLength;
+        return text[..headLength] + marker + text[^tailLength..];
     }
 
     private static string? Clean(string? value)

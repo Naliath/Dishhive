@@ -11,10 +11,10 @@
 
   <main class="onboarding-content">
     <div class="welcome-copy">
-      <p class="eyebrow mat-label-large">A fresh kitchen</p>
-      <h1 id="onboarding-title" class="mat-display-small">Let’s make Dishhive yours</h1>
+      <p class="eyebrow mat-label-large">{{ 'ui.aFreshKitchen' | translate }}</p>
+      <h1 id="onboarding-title" class="mat-display-small">{{ 'ui.letSMakeDishhiveYours' | translate }}</h1>
       <p class="mat-body-large">
-        Two quick choices and your household are all we need to get meal planning.
+        {{ 'ui.twoQuickChoicesAndYourHouseholdAreAllWeNeedToGetMealPlanning' | translate }}
       </p>
     </div>
 
@@ -52,7 +52,7 @@
 
             <fieldset class="choice-group">
               <legend class="mat-title-medium">{{ 'onboarding.firstDayOfTheWeek' | translate }}</legend>
-              <mat-radio-group formControlName="firstDayOfWeek" aria-label="onboarding.firstDayOfTheWeek">
+              <mat-radio-group formControlName="firstDayOfWeek" [attr.aria-label]="'onboarding.firstDayOfTheWeek' | translate">
                 <mat-radio-button [value]="FirstDayOfWeek.Monday">{{ 'common.monday' | translate }}</mat-radio-button>
                 <mat-radio-button [value]="FirstDayOfWeek.Sunday">{{ 'common.sunday' | translate }}</mat-radio-button>
               </mat-radio-group>
@@ -60,15 +60,15 @@
 
             <fieldset class="choice-group">
               <legend class="mat-title-medium">{{ 'onboarding.measurements' | translate }}</legend>
-              <mat-radio-group formControlName="measurementSystem" aria-label="onboarding.measurementSystem">
-                <mat-radio-button [value]="MeasurementSystem.Metric">Metric (g, ml, °C)</mat-radio-button>
-                <mat-radio-button [value]="MeasurementSystem.Imperial">Imperial (oz, cups, °F)</mat-radio-button>
+              <mat-radio-group formControlName="measurementSystem" [attr.aria-label]="'onboarding.measurements' | translate">
+                <mat-radio-button [value]="MeasurementSystem.Metric">{{ 'ui.metricGMlC' | translate }}</mat-radio-button>
+                <mat-radio-button [value]="MeasurementSystem.Imperial">{{ 'ui.imperialOzCupsF' | translate }}</mat-radio-button>
               </mat-radio-group>
             </fieldset>
 
             <div class="step-actions">
               @if (savingPreferences()) {
-                <button mat-flat-button type="button" disabled aria-label="Saving preferences">
+                <button mat-flat-button type="button" disabled [attr.aria-label]="'ui.savingPreferences' | translate">
                   <mat-spinner diameter="20" />
                 </button>
               } @else {
@@ -82,46 +82,46 @@
         </mat-step>
 
         <mat-step>
-          <ng-template matStepLabel>Your household</ng-template>
+          <ng-template matStepLabel>{{ 'ui.yourHousehold' | translate }}</ng-template>
           <div class="step-content">
             <div>
-              <h2 class="mat-title-large">Who are we cooking for?</h2>
+              <h2 class="mat-title-large">{{ 'ui.whoAreWeCookingFor' | translate }}</h2>
               <p class="mat-body-medium secondary-copy">
-                Add as many people as you like, or continue without adding anyone.
+                {{ 'ui.addAsManyPeopleAsYouLikeOrContinueWithoutAddingAnyone' | translate }}
               </p>
             </div>
 
             <form #memberFormDirective="ngForm" [formGroup]="memberForm" class="member-form"
                   (ngSubmit)="addMember(memberFormDirective)">
               <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                <mat-label>Name</mat-label>
+                <mat-label>{{ 'family.name' | translate }}</mat-label>
                 <input matInput formControlName="name" maxlength="100" autocomplete="name"
                        [errorStateMatcher]="memberErrorStateMatcher">
                 @if (memberSubmissionAttempted() && memberForm.controls.name.hasError('required')) {
-                  <mat-error>Enter a name</mat-error>
+                  <mat-error>{{ 'ui.enterAName' | translate }}</mat-error>
                 }
               </mat-form-field>
-              <mat-slide-toggle formControlName="isGuest">Guest</mat-slide-toggle>
+              <mat-slide-toggle formControlName="isGuest">{{ 'family.guest' | translate }}</mat-slide-toggle>
               @if (addingMember()) {
-                <button mat-stroked-button type="button" disabled aria-label="Adding household member">
+                <button mat-stroked-button type="button" disabled [attr.aria-label]="'ui.addingHouseholdMember' | translate">
                   <mat-spinner diameter="20" />
                 </button>
               } @else {
                 <button mat-stroked-button type="submit">
                   <mat-icon>person_add</mat-icon>
-                  Add person
+                  {{ 'ui.addPerson' | translate }}
                 </button>
               }
             </form>
 
             @if (members().length > 0) {
-              <mat-list class="member-list" aria-label="Added household members">
+              <mat-list class="member-list" [attr.aria-label]="'ui.addedHouseholdMembers' | translate">
                 @for (member of members(); track member.id) {
                   <mat-list-item>
                     <mat-icon matListItemIcon>{{ member.isGuest ? 'badge' : 'person' }}</mat-icon>
                     <span matListItemTitle>{{ member.name }}</span>
                     @if (member.isGuest) {
-                      <span matListItemLine>Guest</span>
+                      <span matListItemLine>{{ 'family.guest' | translate }}</span>
                     }
                   </mat-list-item>
                 }
@@ -129,9 +129,9 @@
             }
 
             <div class="step-actions split-actions">
-              <button mat-button type="button" matStepperPrevious>Back</button>
+              <button mat-button type="button" matStepperPrevious>{{ 'ui.back' | translate }}</button>
               <button mat-flat-button type="button" matStepperNext>
-                Continue
+                {{ 'common.continue' | translate }}
                 <mat-icon iconPositionEnd>arrow_forward</mat-icon>
               </button>
             </div>
@@ -139,29 +139,28 @@
         </mat-step>
 
         <mat-step>
-          <ng-template matStepLabel>Ready</ng-template>
+          <ng-template matStepLabel>{{ 'ui.ready' | translate }}</ng-template>
           <div class="step-content ready-step">
             <div class="ready-icon" aria-hidden="true"><mat-icon>restaurant_menu</mat-icon></div>
             <div>
-              <h2 class="mat-headline-small">Your table is ready</h2>
+              <h2 class="mat-headline-small">{{ 'ui.yourTableIsReady' | translate }}</h2>
               <p class="mat-body-large secondary-copy">
                 @if (members().length === 0) {
-                  Start planning now and add household members whenever you’re ready.
+                  {{ 'ui.startPlanningNowAndAddHouseholdMembersWheneverYouReReady' | translate }}
                 } @else {
-                  Dishhive is set up for {{ members().length }}
-                  {{ members().length === 1 ? 'person' : 'people' }}.
+                  {{ 'ui.householdReady' | translatePlural:members().length }}
                 }
               </p>
             </div>
             <div class="step-actions split-actions">
-              <button mat-button type="button" matStepperPrevious>Back</button>
+              <button mat-button type="button" matStepperPrevious>{{ 'ui.back' | translate }}</button>
               @if (finishing()) {
-                <button mat-flat-button type="button" disabled aria-label="Finishing setup">
+                <button mat-flat-button type="button" disabled [attr.aria-label]="'ui.finishingSetup' | translate">
                   <mat-spinner diameter="20" />
                 </button>
               } @else {
                 <button mat-flat-button type="button" (click)="finish()">
-                  Open Dishhive
+                  {{ 'ui.openDishhive' | translate }}
                   <mat-icon iconPositionEnd>celebration</mat-icon>
                 </button>
               }

@@ -36,11 +36,18 @@ public record AiModelTestResultDto(
     DateTimeOffset TestedAt,
     string Verdict,
     string ResponseMode,
+    bool EndpointReachable,
+    bool? ModelListed,
+    bool FormatCompatible,
     bool? EvaluationPassed,
+    bool? PlanningQualityPassed,
     double? TokensPerSecond,
     long ElapsedMs,
     IReadOnlyList<AiModelTestCheckDto> Checks
-);
+)
+{
+    public bool PlanningEligible { get; init; }
+}
 
 public record AiModelTestCheckDto(string Name, bool Passed, string Detail);
 
@@ -65,6 +72,8 @@ public record AiTaskMetricsDto(
     int RunCount,
     int SuccessfulRuns,
     int FailedRuns,
+    int CancelledRuns,
+    int IncompleteRuns,
     double AverageDurationMs,
     double P95DurationMs,
     long TotalInputTokens,
@@ -74,6 +83,9 @@ public record AiTaskMetricsDto(
 
 public record AiTaskSummaryDto(
     string Task,
+    string Provider,
+    string Model,
+    string ConfigFingerprint,
     int RunCount,
     int SuccessfulRuns,
     int FailedRuns,
@@ -101,12 +113,20 @@ public record AiTaskRunDto(
     bool SchemaRequested,
     bool SchemaApplied,
     long PromptCharacters,
+    int InputBudgetTokens,
+    long QueueWaitMs,
+    string PromptHash,
     long OutputCharacters,
     long InputTokens,
     long OutputTokens,
     long ReasoningTokens,
     long TotalTokens,
-    long DurationMs);
+    long DurationMs)
+{
+    public int? OperationAttempt { get; init; }
+    public string? InputFingerprint { get; init; }
+    public IReadOnlyList<AiInputRevisionDto>? InputRevisions { get; init; }
+}
 
 public record AiPlanningRunDto(
     Guid Id,
@@ -115,6 +135,7 @@ public record AiPlanningRunDto(
     string Outcome,
     string Provider,
     string Model,
+    string ConfigFingerprint,
     string? Instructions,
     string? NormalizedIntentJson,
     string? Error,
@@ -146,7 +167,10 @@ public record AiPlanningMetricsResponseDto(
     AiPlanningMetricsDto Summary,
     IReadOnlyList<AiPlanningRunDto> Runs,
     AiTaskMetricsDto TaskMetrics,
-    IReadOnlyList<AiTaskRunDto> Calls);
+    IReadOnlyList<AiTaskRunDto> Calls)
+{
+    public AiReviewMetricsDto? Reviews { get; init; }
+}
 
 public record FreezyIntegrationStatusDto(
     bool Configured,
@@ -168,5 +192,11 @@ public record ScraperVersionCheckDto(
 );
 
 public record ScraperUpdateRequestDto(string? Version);
+
+public record ScraperUpdateStatusDto(
+    string Status,
+    string? ActiveVersion,
+    DateTimeOffset? UpdatedAt,
+    string? Error);
 
 public record ScraperUpdateResponseDto(string? TargetVersion);

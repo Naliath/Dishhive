@@ -1,0 +1,13 @@
+# Use behind an authenticated TLS reverse proxy on the same host:
+# docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set a unique database password}"
+  app:
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=dishhive;Username=dishhive;Password=${POSTGRES_PASSWORD:?Set a unique database password}"
+      ApiSecurity__RemoteMode: "true"
+      ApiSecurity__ApiKey: "${DISHHIVE_API_KEY:?Set a REST credential for the authenticated proxy}"
+      ApiSecurity__McpReadApiKey: "${DISHHIVE_MCP_READ_API_KEY:?Set a distinct read credential for MCP clients}"
+      Demo__Enabled: "false"

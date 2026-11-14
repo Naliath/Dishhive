@@ -14,6 +14,88 @@ namespace Dishhive.Api.Tests.Services;
 
 public class LlmMealSuggestionServiceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConflictingIntentDatesAreRecheckedWithinTheExistingAllowance(bool explicitConflict)
+    {
+        FakeChatClient? client = null;
+        string? correction = null;
+        client = new FakeChatClient(() =>
+        {
+            if (client!.Calls > 2)
+                return new(new ChatMessage(ChatRole.Assistant, "{\"suggestions\":[]}"));
+            if (client.Calls == 2)
+                correction = client.LastMessages.Last().Text;
+            var vegetarianDate = client.Calls == 1 || explicitConflict ? WeekStart.AddDays(1) : WeekStart;
+            return new(new ChatMessage(ChatRole.Assistant, PlanningIntentContract.FormatForModel(new()
+            {
+                Constraints =
+                [
+                    new() { Id = "vegetarian", Dates = [vegetarianDate], ExcludedClasses = [IngredientClass.Poultry] },
+                    new() { Id = "chicken", Dates = [WeekStart.AddDays(1)], RequiredClasses = [IngredientClass.Poultry] }
+                ]
+            })));
+        });
+        var service = CreateService(client, executionOptions: new AiOptions
+            { Provider = "ollama", Model = "test", MaxRetries = 1, MaxOperationAttempts = 3 });
+
+        await service.SuggestAsync(Request(instructions: explicitConflict
+            ? "Vegetarian dinner and chicken for the same Tuesday dinner"
+            : "One vegetarian dinner and chicken on Tuesday"));
+
+        correction.Should().Contain("Reserve explicit dates").And.Contain("preserve that contradiction");
+        service.LastResult!.Intent!.Constraints.Single(item => item.Id == "chicken")
+            .Dates.Should().Equal(WeekStart.AddDays(1));
+        if (explicitConflict)
+        {
+            client.Calls.Should().Be(2, "a confirmed contradiction must stop before generation");
+            service.LastResult.UnmetRequirements.Should().Contain(issue => issue.Id == "vegetarian");
+        }
+        else
+        {
+            client.Calls.Should().Be(3, "one correction and one generation must share the operation allowance");
+            service.LastResult.Intent.Constraints.Single(item => item.Id == "vegetarian")
+                .Dates.Should().Equal(WeekStart);
+        }
+    }
+
+    [Fact]
+    public async Task ResearchReceivesHardAllergyClassesAndTheIntentReceivesNoProfileNames()
+    {
+        FakeChatClient? client = null;
+        string? intentInput = null;
+        client = new FakeChatClient(() =>
+        {
+            if (client!.Calls != 1) return new(new ChatMessage(ChatRole.Assistant, "{\"suggestions\":[]}"));
+            intentInput = client.LastMessages.Single(message => message.Role == ChatRole.User).Text;
+            var json = System.Text.Json.JsonSerializer.Serialize(new { version = PlanningIntent.CurrentVersion,
+                constraints = new[] { new { id = "source", dates = new[] { "2026-06-15" }, sourceHost = "example.com",
+                    searchQuery = "plant dishes", searchQueries = new[] { "different plant dishes" } } } });
+            return new(new ChatMessage(ChatRole.Assistant, json));
+        });
+        List<ExternalRecipeTools.RecipeResearchRequest>? captured = null;
+        var session = Substitute.For<IExternalRecipeSession>();
+        session.ResearchAsync(Arg.Any<List<ExternalRecipeTools.RecipeResearchRequest>>(), Arg.Any<CancellationToken>())
+            .Returns(call => { captured = call.ArgAt<List<ExternalRecipeTools.RecipeResearchRequest>>(0); return Task.FromResult<IReadOnlyList<ExternalRecipeTools.GetRecipeResult>>([]); });
+        session.GetMetrics().Returns(new ExternalRecipeSessionMetrics(0, 0, 0, 0, 0, 0, 0, 0));
+        var sessions = Substitute.For<IExternalRecipeSessionFactory>();
+        sessions.IsConfigured.Returns(true);
+        sessions.Create(Arg.Any<IReadOnlyList<SourceConstraint>>(), Arg.Any<string>(), Arg.Any<ILogger>()).Returns(session);
+        await CreateService(client, researchFactory: sessions).SuggestAsync(new MealSuggestionRequest
+        {
+            WeekStart = WeekStart, DaysToFill = [WeekStart], Instructions = "One source meal",
+            SourceConstraints = [new() { Name = "Source", Host = "example.com" }],
+            Members = [new() { Id = Guid.NewGuid(), Name = "Private household name",
+                Allergies = [new() { Name = "Private allergy label", ExcludedClasses = [IngredientClass.Milk] }] }]
+        });
+        Assert.NotNull(captured);
+        Assert.Contains(IngredientClass.Milk, Assert.Single(captured).ExcludedClasses!);
+        Assert.Equal(new[] { "different plant dishes" }, captured[0].AlternativeQueries);
+        Assert.Contains("householdAllergyExclusions", intentInput);
+        Assert.DoesNotContain("Private household name", intentInput);
+        Assert.DoesNotContain("Private allergy label", intentInput);
+    }
     private static readonly DateOnly WeekStart = new(2026, 6, 15);
 
     /// <summary>Minimal IChatClient stub returning a canned (or failing) response</summary>
@@ -61,7 +143,8 @@ public class LlmMealSuggestionServiceTests
         public AiModelTestState State => AiModelTestState.Completed;
         public AiModelTestResult Result { get; } = new()
         {
-            TestedAt = DateTimeOffset.UtcNow, Provider = "test", Model = "test", ResponseMode = mode
+            TestedAt = DateTimeOffset.UtcNow, Provider = "test", Model = "test", ResponseMode = mode,
+            EvaluationPassed = mode != AiResponseMode.None, PlanningIntentPassed = mode != AiResponseMode.None
         };
         AiModelTestResult? IAiModelCapabilityService.Result => Result;
         public Task<AiModelTestResult> EnsureTestedAsync(CancellationToken cancellationToken = default)
@@ -93,11 +176,15 @@ public class LlmMealSuggestionServiceTests
         AiResponseMode capabilityMode = AiResponseMode.PromptedJson,
         string? promptOverride = null,
         ILogger<LlmMealSuggestionService>? logger = null,
-        IRecipeImportService? importService = null)
+        IRecipeImportService? importService = null,
+        AiOptions? executionOptions = null,
+        IExternalRecipeSessionFactory? researchFactory = null,
+        IRecipeDishMatcher? dishMatcher = null)
     {
         var search = webSearch ?? new NoOpWebSearchClient();
         var importer = importService ?? Substitute.For<IRecipeImportService>();
-        var options = new AiOptions { Provider = "ollama", Model = "test" };
+        dishMatcher ??= new ApprovedFixtureDishMatcher();
+        var options = executionOptions ?? new AiOptions { Provider = "ollama", Model = "test" };
         var executionGate = new AiExecutionGate(
             chatClient, options, new NoOpAiTaskMetricsStore(), NullLogger<AiExecutionGate>.Instance);
         return new LlmMealSuggestionService(
@@ -106,9 +193,17 @@ public class LlmMealSuggestionServiceTests
             options,
             new StubCapability(capabilityMode),
             new StubPromptProvider(promptOverride),
-            new ExternalRecipeSessionFactory(search, importer, new WebSearchOptions()),
+            researchFactory ?? new ExternalRecipeSessionFactory(search, importer, new Dishhive.Api.Services.Facts.NoOpRecipeFactsExtractor(),
+                new WebSearchOptions(), dishMatcher: dishMatcher),
             new MealSuggestionPostProcessor(NullLogger<MealSuggestionPostProcessor>.Instance),
-            logger ?? NullLogger<LlmMealSuggestionService>.Instance);
+            logger ?? NullLogger<LlmMealSuggestionService>.Instance, dishMatcher: dishMatcher);
+    }
+
+    private sealed class ApprovedFixtureDishMatcher : IRecipeDishMatcher
+    {
+        public Task<IReadOnlyList<string>?> MatchAsync(string foodRequest, IReadOnlyList<DishMatchCandidate> candidates,
+            string operationId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<string>?>(candidates.Select(candidate => candidate.Id).ToList());
     }
 
     /// <summary>A web-search client that reports configured (unlike the NoOp default) so
@@ -150,6 +245,42 @@ public class LlmMealSuggestionServiceTests
         suggestions[0].DishName.Should().Be("Spaghetti");
         suggestions[0].Date.Should().Be(WeekStart);
         suggestions[1].Reason.Should().Be("Variety");
+    }
+
+    [Fact]
+    public async Task Suggest_UnresolvedCollection_DoesNotCallModelOrReturnFallback()
+    {
+        var client = new FakeChatClient("{}");
+        var service = CreateService(client);
+
+        var suggestions = await service.SuggestAsync(Request() with
+        {
+            UnresolvedCollectionNames = ["Deleted collection"]
+        });
+
+        suggestions.Should().BeEmpty();
+        client.Calls.Should().Be(0);
+        service.LastResult!.Status.Should().Be(PlanCompletionStatus.Unable);
+        service.LastResult.UnmetRequirements.Should().ContainSingle(issue =>
+            issue.Id == "collection-unresolved" && issue.Message.Contains("Deleted collection"));
+    }
+
+    [Fact]
+    public async Task Suggest_OperationLimitIncludesIntentAndGenerationTogether()
+    {
+        var intent = new PlanningIntent { Constraints = [new PlanningConstraint
+        {
+            Id = "chicken", Dates = [WeekStart], RequiredClasses = [IngredientClass.Poultry]
+        }] };
+        var client = new FakeChatClient(PlanningIntentContract.FormatForModel(intent));
+        var service = CreateService(client, executionOptions: new AiOptions
+            { Provider = "ollama", Model = "test", MaxOperationAttempts = 1 });
+
+        await service.SuggestAsync(Request(daysToFill: [WeekStart], instructions: "Chicken for dinner"));
+
+        client.Calls.Should().Be(1, "intent and generation must not get independent attempt allowances");
+        service.LastResult!.Status.Should().Be(PlanCompletionStatus.Unable);
+        service.LastResult.UnmetRequirements.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -485,7 +616,9 @@ public class LlmMealSuggestionServiceTests
         await CreateService(chatClient).SuggestAsync(
             Request(instructions: "3 days vegetarian, at least one fish dish"));
 
-        var userPrompt = chatClient.LastMessages.Single(m => m.Role == ChatRole.User).Text;
+        var userPrompt = chatClient.LastMessages.Single(m =>
+            m.Role == ChatRole.User
+            && m.Text.Contains("3 days vegetarian", StringComparison.Ordinal)).Text;
         userPrompt.Should().Contain("3 days vegetarian, at least one fish dish");
     }
 
@@ -577,16 +710,17 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
-    public async Task Suggest_OffListPickOnConstrainedDay_IsKept()
+    public async Task Suggest_OffListPickOnConstrainedDay_IsRemovedAndReported()
     {
         // Enforcement is soft: an off-list dish is logged but never dropped —
         // the review dialog lets the user discard it, an empty day would be worse
-        var chatClient = new FakeChatClient(
-            """
-            {"suggestions":[
-              {"date":"2026-06-15","dishName":"Not in collection","recipeTitle":null,"reason":null}
-            ]}
-            """);
+        var responses = new Queue<ChatResponse>([
+            new(new ChatMessage(ChatRole.Assistant,
+                """{"version":3,"allowRepeatedDishes":false,"maxFreezerMeals":null,"constraints":[]}""")),
+            new(new ChatMessage(ChatRole.Assistant,
+                """{"suggestions":[{"date":"2026-06-15","dishName":"Not in collection","recipeTitle":null,"reason":null}]}"""))
+        ]);
+        var chatClient = new FakeChatClient(() => responses.Dequeue());
 
         var request = Request(daysToFill: [WeekStart]) with
         {
@@ -596,9 +730,11 @@ public class LlmMealSuggestionServiceTests
             ]
         };
 
-        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+        var service = CreateService(chatClient);
+        var suggestions = await service.SuggestAsync(request);
 
-        suggestions.Should().ContainSingle().Which.DishName.Should().Be("Not in collection");
+        suggestions.Should().BeEmpty();
+        service.LastResult!.UnmetRequirements.Should().Contain(issue => issue.Id == "collection-X");
     }
 
     [Fact]
@@ -736,6 +872,38 @@ public class LlmMealSuggestionServiceTests
             s.Date == WeekStart && s.DishName == "AI dish" && s.Source == MealSuggestionSource.Ai);
         suggestions.Should().ContainSingle(s =>
             s.Date == WeekStart.AddDays(1) && s.Source == MealSuggestionSource.RulesFallback);
+    }
+
+    [Fact]
+    public void FinalValidation_RemovesUnclaimedFallbackFromHardConstrainedSlot()
+    {
+        var request = Request(daysToFill: [WeekStart]);
+        var intent = new PlanningIntent
+        {
+            Constraints =
+            [
+                new PlanningConstraint
+                {
+                    Id = "source-1",
+                    Dates = [WeekStart],
+                    SourceHost = "recipes.example",
+                    AllowedOrigins = [PlanningOrigin.ExternalRecipe]
+                }
+            ]
+        };
+        var fallbackSuggestion = new MealSuggestion
+        {
+            Date = WeekStart,
+            DishName = "Local fallback",
+            Source = MealSuggestionSource.RulesFallback
+        };
+
+        var validation = PlanningIntentValidator.ValidateFinal(
+            [fallbackSuggestion], intent, request);
+
+        validation.Suggestions.Should().BeEmpty();
+        validation.UnmetRequirements.Should().Contain(issue =>
+            issue.Id == "source-1" && issue.Message.Contains("not linked"));
     }
 
     [Fact]
@@ -956,7 +1124,7 @@ public class LlmMealSuggestionServiceTests
     [Fact]
     public async Task PostProcess_ExternalCandidateId_ResolvesVerifiedSource()
     {
-        const string url = "https://dagelijksekost.vrt.be/recepten/vegetarische-lasagne";
+        const string url = "https://dagelijksekost.vrt.be/gerechten/vegetarische-lasagne";
         var importService = Substitute.For<IRecipeImportService>();
         importService.PreviewAsync(url, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(new RecipePreview(
@@ -1208,7 +1376,7 @@ public class LlmMealSuggestionServiceTests
     }
 
     [Fact]
-    public async Task Suggest_AssessedRecipe_ConflictsAreFlaggedByExactClassMatch()
+    public async Task Suggest_AssessedRecipe_ConflictsAreRemovedByExactClassMatch()
     {
         // Exact facts beat the substring heuristic: no ingredient name contains the
         // literal tag "Noten" ("hazelnootpasta" doesn't), so the legacy heuristic
@@ -1243,10 +1411,14 @@ public class LlmMealSuggestionServiceTests
             }
         };
 
-        var suggestions = await CreateService(chatClient).SuggestAsync(request);
+        var service = CreateService(chatClient);
+        var suggestions = await service.SuggestAsync(request);
 
-        suggestions.Should().ContainSingle();
-        suggestions[0].AllergyWarning.Should().Contain("TreeNuts").And.Contain("Noten");
+        suggestions.Should().BeEmpty();
+        service.LastResult!.UnmetRequirements.Should().Contain(issue =>
+            issue.Id == "allergy-safety"
+            && issue.Message.Contains("TreeNuts", StringComparison.Ordinal)
+            && issue.Message.Contains("Noten", StringComparison.Ordinal));
     }
 
     [Fact]

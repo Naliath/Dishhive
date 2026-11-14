@@ -1,30 +1,27 @@
+import { StatisticsClient } from '../api/generated/dishhive-api.client';
+import { apiResponse } from '../api/api-response';
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { DishStatistics, MemberStatistics } from '../models/statistics.model';
 
 @Injectable({ providedIn: 'root' })
 export class StatisticsService {
+  private readonly api: StatisticsClient;
+
   private apiUrl = '/api/statistics';
 
-  constructor(private http: HttpClient) {}
+  constructor(http: HttpClient) {
+    this.api = new StatisticsClient(http, "");
+  }
 
   getDishStatistics(from?: string, to?: string): Observable<DishStatistics> {
-    const params: Record<string, string> = {};
-    if (from) params['from'] = from;
-    if (to) params['to'] = to;
-    return this.http.get<DishStatistics>(`${this.apiUrl}/dishes`, { params })
-      .pipe(catchError(this.handleError));
+    return apiResponse(this.api.getDishStatistics(from, to));
   }
 
   getMemberStatistics(memberId: string): Observable<MemberStatistics> {
-    return this.http.get<MemberStatistics>(`${this.apiUrl}/members/${memberId}`)
-      .pipe(catchError(this.handleError));
+    return apiResponse(this.api.getMemberStatistics(memberId));
   }
 
-  private handleError(error: HttpErrorResponse): Observable<never> {
-    console.error('Statistics API error:', error);
-    return throwError(() => new Error('Could not reach the statistics API'));
-  }
 }

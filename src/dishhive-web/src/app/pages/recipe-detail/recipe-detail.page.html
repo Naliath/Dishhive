@@ -4,14 +4,14 @@
   </div>
 } @else if (recipe(); as r) {
   <div class="detail-header">
-    <a mat-icon-button routerLink="/recipes" aria-label="Back to recipes">
+    <a mat-icon-button routerLink="/recipes" [attr.aria-label]="'recipeForm.backToRecipes' | translate">
       <mat-icon>arrow_back</mat-icon>
     </a>
     <h1 class="mat-headline-medium">{{ r.title }}</h1>
-    <button mat-flat-button class="plan-now-button" type="button"
-            [disabled]="quickPlanLoading()" (click)="openQuickPlan()">
+    <button #planNowButton mat-flat-button class="plan-now-button" type="button"
+            [disabled]="quickPlanLoading()" (click)="openQuickPlan(planNowButton)">
       <mat-icon>calendar_add_on</mat-icon>
-      Plan now!
+      {{ 'ui.planNow' | translate }}
     </button>
   </div>
 
@@ -26,12 +26,12 @@
       }
 
       <div class="meta-row">
-        <span><mat-icon>group</mat-icon> {{ selectedServings() }} {{ selectedServings() === 1 ? 'serving' : 'servings' }}</span>
+        <span><mat-icon>group</mat-icon> {{ selectedServings() }} {{ (selectedServings() === 1 ? 'ui.serving' : 'ui.servings') | translate }}</span>
         @if (r.prepTimeMinutes) {
-          <span><mat-icon>schedule</mat-icon> prep {{ r.prepTimeMinutes }} min</span>
+          <span><mat-icon>schedule</mat-icon> {{ 'ui.prepValueMin' | translate:{ p0: (r.prepTimeMinutes) } }}</span>
         }
         @if (r.cookTimeMinutes) {
-          <span><mat-icon>skillet</mat-icon> cook {{ r.cookTimeMinutes }} min</span>
+          <span><mat-icon>skillet</mat-icon> {{ 'ui.cookValueMin' | translate:{ p0: (r.cookTimeMinutes) } }}</span>
         }
         @if (r.category) {
           <span><mat-icon>category</mat-icon> {{ r.category }}</span>
@@ -39,44 +39,43 @@
       </div>
 
       @if (r.tags.length > 0) {
-        <div class="tag-chips" aria-label="Recipe tags">
+        <div class="tag-chips" [attr.aria-label]="'recipeForm.recipeTags' | translate">
           @for (tag of r.tags; track tag) {
             <span class="tag-chip"><mat-icon>sell</mat-icon>{{ tag }}</span>
           }
         </div>
       }
 
-      <div class="facts-section" aria-label="Dietary facts">
+      <div class="facts-section" [attr.aria-label]="'ui.dietaryFacts' | translate">
         <div class="tag-chips facts-row">
           <span class="facts-badge"
                 [class.facts-badge--ai]="r.dietaryFacts.status === FactsStatus.AiDetected"
                 [class.facts-badge--confirmed]="r.dietaryFacts.status === FactsStatus.UserConfirmed"
+                [class.facts-badge--stale]="r.dietaryFacts.status === FactsStatus.Stale || r.dietaryFacts.status === FactsStatus.Failed"
                 [matTooltip]="r.dietaryFacts.status === FactsStatus.Unassessed
-                  ? 'Not assessed yet — facts are detected in the background after import, or set them via Edit'
+                  ? ('ui.factsUnassessedHint' | translate)
                   : ''">
-            <mat-icon>{{ r.dietaryFacts.status === FactsStatus.UserConfirmed ? 'verified' :
-                         r.dietaryFacts.status === FactsStatus.AiDetected ? 'smart_toy' : 'help_outline' }}</mat-icon>
-            {{ r.dietaryFacts.status === FactsStatus.UserConfirmed ? 'Contains (confirmed)' :
-               r.dietaryFacts.status === FactsStatus.AiDetected ? 'Contains (AI-detected)' : 'Contains: not assessed yet' }}
+            <mat-icon>{{ factsIcon(r.dietaryFacts.status) }}</mat-icon>
+            {{ factsLabel(r.dietaryFacts.status) }}
           </span>
           @if (r.dietaryFacts.status !== FactsStatus.Unassessed) {
             @for (name of r.dietaryFacts.contains; track name) {
               <span class="tag-chip facts-chip">{{ classLabel(name) }}</span>
             }
             @if (r.dietaryFacts.contains.length === 0) {
-              <span class="facts-none">none of the tracked classes</span>
+              <span class="facts-none">{{ 'ui.noneOfTheTrackedClasses' | translate }}</span>
             }
           }
           @if (!factsEditing()) {
-            @if (r.dietaryFacts.status === FactsStatus.AiDetected) {
+            @if (r.dietaryFacts.status === FactsStatus.AiDetected || r.dietaryFacts.status === FactsStatus.Stale) {
               <button mat-stroked-button class="facts-action" (click)="confirmFacts()"
                       [disabled]="savingFacts()"
-                      matTooltip="Mark the AI-detected facts as verified">
-                <mat-icon>check</mat-icon> Confirm
+                      [matTooltip]="'ui.markTheAIDetectedFactsAsVerified' | translate">
+                <mat-icon>check</mat-icon> {{ 'ui.confirm' | translate }}
               </button>
             }
             <button mat-button class="facts-action" (click)="startFactsEdit()">
-              <mat-icon>edit</mat-icon> Edit
+              <mat-icon>edit</mat-icon> {{ 'family.edit' | translate }}
             </button>
           }
         </div>
@@ -85,29 +84,29 @@
             <app-class-picker [selected]="factsDraft()"
                               (selectedChange)="factsDraft.set($event)" />
             <div class="facts-editor-actions">
-              <button mat-button (click)="factsEditing.set(false)">Cancel</button>
-              <button mat-flat-button (click)="saveFactsEdit()" [disabled]="savingFacts()">Save</button>
+              <button mat-button (click)="factsEditing.set(false)">{{ 'family.cancel' | translate }}</button>
+              <button mat-flat-button (click)="saveFactsEdit()" [disabled]="savingFacts()">{{ 'common.save' | translate }}</button>
             </div>
           </div>
         }
       </div>
 
       @if (memberOfCookbooks().length > 0 || availableCookbooks().length > 0) {
-        <div class="tag-chips collections-row" aria-label="Collections">
+        <div class="tag-chips collections-row" [attr.aria-label]="'ui.collections' | translate">
           @for (cookbook of memberOfCookbooks(); track cookbook.id) {
             <button class="tag-chip collection-chip" type="button"
                     (click)="toggleCookbook(cookbook)"
-                    [matTooltip]="'Remove from ' + cookbook.name">
+                    [matTooltip]="'ui.removeFromNamedCollection' | translate:{ name: cookbook.name }">
               <mat-icon>bookmark</mat-icon>{{ cookbook.name }}
             </button>
           }
           @if (availableCookbooks().length > 0) {
             <button class="tag-chip collection-chip add-collection" type="button"
                     [matMenuTriggerFor]="collectionMenu"
-                    matTooltip="Add this recipe to a collection">
+                    [matTooltip]="'ui.addThisRecipeToACollection' | translate">
               <mat-icon>bookmark_add</mat-icon>
               @if (memberOfCookbooks().length === 0) {
-                Add to collection
+                {{ 'ui.addToCollection' | translate }}
               }
             </button>
             <mat-menu #collectionMenu="matMenu">
@@ -124,29 +123,29 @@
 
       @if (stats(); as s) {
         <div class="meta-row history-row">
-          <span><mat-icon>history</mat-icon> last planned {{ s.lastPlanned | date:'d MMM y' }}</span>
-          <span>planned {{ s.timesPlanned }}×</span>
+          <span><mat-icon>history</mat-icon> {{ 'ui.lastPlannedValue' | translate:{ p0: (s.lastPlanned | date:'d MMM y') } }}</span>
+          <span>{{ 'ui.plannedValue' | translate:{ p0: (s.timesPlanned) } }}</span>
           @if (s.timesEaten > 0) {
-            <span>eaten {{ s.timesEaten }}×</span>
+            <span>{{ 'ui.eatenValue' | translate:{ p0: (s.timesEaten) } }}</span>
           }
           <button class="rating-button" type="button" (click)="openRating()"
-                  matTooltip="Rate the last time this dish was on the menu">
+                  [matTooltip]="'ui.rateTheLastTimeThisDishWasOnTheMenu' | translate">
             <mat-icon>{{ s.averageRating !== null ? 'star' : 'star_border' }}</mat-icon>
             @if (s.averageRating !== null) {
               {{ s.averageRating | number:'1.1-1' }}
             } @else {
-              Rate
+              {{ 'ui.rate' | translate }}
             }
           </button>
         </div>
       }
 
       @if (members().length > 0) {
-        <div class="favorites-row" aria-label="Favorite of">
+        <div class="favorites-row" [attr.aria-label]="'ui.favoriteOf' | translate">
           @for (member of favoritedMembers(); track member.id) {
             <button class="member-heart is-favorite" type="button"
                     (click)="toggleFavorite(member)"
-                    [matTooltip]="'Remove favorite for ' + member.name">
+                    [matTooltip]="'ui.removeFavoriteFor' | translate:{ name: member.name }">
               <mat-icon>favorite</mat-icon>
               {{ member.name }}
             </button>
@@ -154,10 +153,10 @@
           @if (otherMembers().length > 0) {
             <button class="member-heart add-favorite" type="button"
                     [matMenuTriggerFor]="favoriteMenu"
-                    matTooltip="Mark this recipe as someone's favorite">
+                    [matTooltip]="'ui.markThisRecipeAsSomeoneSFavorite' | translate">
               <mat-icon>favorite_border</mat-icon>
               @if (favoritedMembers().length === 0) {
-                Mark as favorite
+                {{ 'ui.markAsFavorite' | translate }}
               } @else {
                 <mat-icon class="add-icon">add</mat-icon>
               }
@@ -175,11 +174,11 @@
       }
 
       <div class="section-heading-row">
-        <h2 class="mat-title-large">Preparation</h2>
+        <h2 class="mat-title-large">{{ 'ui.preparation' | translate }}</h2>
         @if (hasOriginalSteps()) {
           <mat-slide-toggle [checked]="showOriginalSteps()"
                             (change)="showOriginalSteps.set($event.checked)">
-            Show original
+            {{ 'ui.showOriginal' | translate }}
           </mat-slide-toggle>
         }
       </div>
@@ -188,7 +187,7 @@
           <li>
             <span>{{ step.instruction }}</span>
             @if (showOriginalSteps() && originalStepInstruction(step); as original) {
-              <span class="original-value"><strong>Original:</strong> {{ original }}</span>
+              <span class="original-value"><strong>{{ 'ui.original' | translate }}</strong> {{ original }}</span>
             }
           </li>
         }
@@ -198,22 +197,22 @@
         @if (r.videoUrl) {
           <a mat-stroked-button [href]="r.videoUrl" target="_blank" rel="noopener">
             <mat-icon>play_circle</mat-icon>
-            Watch video
+            {{ 'ui.watchVideo' | translate }}
           </a>
         }
         @if (r.sourceUrl) {
           <a mat-stroked-button [href]="r.sourceUrl" target="_blank" rel="noopener">
             <mat-icon>open_in_new</mat-icon>
-            Source
+            {{ 'recipeForm.source' | translate }}
           </a>
         }
         <a mat-stroked-button [routerLink]="['/recipes', r.id, 'edit']">
           <mat-icon>edit</mat-icon>
-          Edit
+          {{ 'family.edit' | translate }}
         </a>
         <button mat-stroked-button (click)="remove()">
           <mat-icon>delete</mat-icon>
-          Delete
+          {{ 'ui.delete' | translate }}
         </button>
       </div>
     </div>
@@ -221,20 +220,20 @@
     <mat-card class="ingredients-card" appearance="raised">
       <mat-card-header>
         <mat-card-title class="ingredients-title-row">
-          <span>Ingredients</span>
-          <span class="servings-stepper" aria-label="Servings">
+          <span>{{ 'recipeForm.ingredients' | translate }}</span>
+          <span class="servings-stepper" [attr.aria-label]="'recipeForm.servings' | translate">
             <button mat-icon-button type="button"
-                    aria-label="Decrease servings"
+                    [attr.aria-label]="'ui.decreaseServings' | translate"
                     [disabled]="selectedServings() <= 1"
                     (click)="adjustServings(-1)">
               <mat-icon>remove</mat-icon>
             </button>
             <span class="servings-value" aria-live="polite">
               <strong>{{ selectedServings() }}</strong>
-              {{ selectedServings() === 1 ? 'serving' : 'servings' }}
+              {{ (selectedServings() === 1 ? 'ui.serving' : 'ui.servings') | translate }}
             </span>
             <button mat-icon-button type="button"
-                    aria-label="Increase servings"
+                    [attr.aria-label]="'ui.increaseServings' | translate"
                     [disabled]="selectedServings() >= 100"
                     (click)="adjustServings(1)">
               <mat-icon>add</mat-icon>
@@ -245,10 +244,10 @@
                               [checked]="showOriginalIngredients()"
                               [disabled]="selectedServings() !== r.servings"
                               [matTooltip]="selectedServings() !== r.servings
-                                ? 'Original values are available at the recipe\'s original serving count'
+                                ? ('ui.originalServingHint' | translate)
                                 : ''"
                               (change)="showOriginalIngredients.set($event.checked)">
-              Show original
+              {{ 'ui.showOriginal' | translate }}
             </mat-slide-toggle>
           }
         </mat-card-title>
@@ -264,7 +263,7 @@
                 {{ ingredient.name }}
               </span>
               @if (showOriginalIngredients() && originalIngredientText(ingredient); as original) {
-                <span class="original-value"><strong>Original:</strong> {{ original }}</span>
+                <span class="original-value"><strong>{{ 'ui.original' | translate }}</strong> {{ original }}</span>
               }
             </li>
           }

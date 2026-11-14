@@ -1,3 +1,4 @@
+using Dishhive.Api.Services.Time;
 using Dishhive.Api.Models;
 using Dishhive.Api.Services.Ai;
 using Microsoft.Extensions.AI;
@@ -9,9 +10,9 @@ namespace Dishhive.Api.Services.Suggestions;
 /// <summary>Which response format the configured model was verified to handle.</summary>
 public enum AiResponseMode
 {
-    /// <summary>No attempt produced parseable JSON — the model is unfit for suggestions.</summary>
+    /// <summary>No attempt produced parseable JSON â€” the model is unfit for suggestions.</summary>
     None,
-    /// <summary>Native json_schema structured output works: hard format guarantee.</summary>
+    /// <summary>The native json_schema probe returned usable structured output.</summary>
     JsonSchema,
     /// <summary>Only prompt-instructed JSON works (the pre-test default behavior).</summary>
     PromptedJson
@@ -27,7 +28,7 @@ public record AiModelTestResult
     public required string Provider { get; init; }
     public required string Model { get; init; }
 
-    /// <summary>The /models probe answered (advisory — completions are the real signal)</summary>
+    /// <summary>The /models probe answered (advisory â€” completions are the real signal)</summary>
     public bool EndpointReachable { get; init; }
 
     /// <summary>Configured model id present in /models; null when the list could not be read</summary>
@@ -48,13 +49,14 @@ public record AiModelTestResult
 
     public long ElapsedMs { get; init; }
 
-    /// <summary>The model can produce parseable suggestions at all; gates the LLM path</summary>
+    /// <summary>Format evidence only; semantic task eligibility is separate.</summary>
     public bool Viable => ResponseMode != AiResponseMode.None;
+    public bool PlanningEligible => Viable && EvaluationPassed == true && PlanningIntentPassed == true;
 
-    /// <summary>failed | warnings | passed — the settings page headline</summary>
-    public string Verdict => !Viable
+    /// <summary>failed | warnings | passed â€” the settings page headline</summary>
+    public string Verdict => !PlanningEligible
         ? "failed"
-        : EvaluationPassed == true && ModelListed != false && PlanningIntentPassed != false ? "passed" : "warnings";
+        : ModelListed != false ? "passed" : "warnings";
 }
 
 /// <summary>
@@ -70,11 +72,11 @@ internal sealed record AiModelTestFixture(
     IReadOnlyList<string> VegetarianTitles);
 
 /// <summary>
-/// Probes the configured model's actual fitness for week suggestions (reachable ≠ usable:
+/// Probes the configured model's actual fitness for week suggestions (reachable â‰  usable:
 /// the /models ping says nothing about JSON discipline or context headroom). Three stages:
-/// 1. /models — endpoint up, configured model id present (catches "wrong model loaded").
-/// 2. A medium-complexity suggestion request — first with native json_schema enforcement,
-///    then falling back to prompted JSON — sized to the full Ai:MaxPromptTokens budget so
+/// 1. /models â€” endpoint up, configured model id present (catches "wrong model loaded").
+/// 2. A medium-complexity suggestion request â€” first with native json_schema enforcement,
+///    then falling back to prompted JSON â€” sized to the full Ai:MaxPromptTokens budget so
 ///    a too-small context window fails HERE, not on every future planning evening.
 /// 3. The reply is scored against known-correct answers: a #[Collection]-constrained day,
 ///    a specific dish demanded on a specific day, and "two days vegetarian".
@@ -83,6 +85,7 @@ internal sealed record AiModelTestFixture(
 /// </summary>
 public class AiModelTester
 {
+    private readonly IHouseholdClock _clock;
     private readonly IAiExecutionGate _executionGate;
     private readonly AiOptions _options;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -90,19 +93,20 @@ public class AiModelTester
 
     public AiModelTester(
         IAiExecutionGate executionGate, AiOptions options,
-        IHttpClientFactory httpClientFactory, ILogger<AiModelTester> logger)
+        IHttpClientFactory httpClientFactory, ILogger<AiModelTester> logger, IHouseholdClock clock)
     {
         _executionGate = executionGate;
         _options = options;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _clock = clock;
     }
 
     /// <summary>JSON schema for the suggestions payload (strict style: all fields required,
-    /// nullability via type unions, no extra properties) — shared with the LLM service
+    /// nullability via type unions, no extra properties) â€” shared with the LLM service
     /// when schema mode is verified.</summary>
     /// <summary>
-    /// Runs the capability test under the given effective system prompt — the same
+    /// Runs the capability test under the given effective system prompt â€” the same
     /// composed prompt production uses, including any user override, so the verdict
     /// describes what actually runs. Virtual so the capability service's persistence
     /// tests can stub the actual probing.
@@ -113,29 +117,33 @@ public class AiModelTester
         var stopwatch = Stopwatch.StartNew();
         var checks = new List<AiModelTestCheck>();
         var operationId = $"capability-{Guid.NewGuid():N}"[..23];
+        using var operation = _executionGate.BeginOperation(cancellationToken, operationId, independent: true);
+        cancellationToken = operation.Token;
 
         try
         {
             var (endpointReachable, modelListed) = await ProbeModelsAsync(cancellationToken);
             checks.Add(new AiModelTestCheck("Endpoint", endpointReachable,
-                endpointReachable ? "The AI endpoint answered the /models probe" : "The /models probe failed — endpoint may be down"));
+                endpointReachable ? "The AI endpoint answered the /models probe" : "The /models probe failed â€” endpoint may be down"));
             checks.Add(new AiModelTestCheck("Model available", modelListed != false, modelListed switch
             {
                 true => $"'{_options.Model}' is served by the endpoint",
-                false => $"'{_options.Model}' is NOT in the endpoint's model list — is the right model loaded?",
+                false => $"'{_options.Model}' is NOT in the endpoint's model list â€” is the right model loaded?",
                 null => "Could not read the endpoint's model list to verify (not all providers expose it)"
             }));
 
-            var fixture = CreateFixture(DateOnly.FromDateTime(DateTime.Today));
-            var userPrompt = MealSuggestionPromptBuilder.BuildUserPrompt(fixture.Request, _options.MaxPromptTokens);
+            var fixture = CreateFixture(_clock.Today);
             var systemPrompt = effectiveSystemPrompt;
+            var userPromptBudget = MealSuggestionPromptBuilder.FitUserPromptTokenBudget(
+                _options.MaxPromptTokens, _options.MaxInputTokens, systemPrompt);
+            var userPrompt = MealSuggestionPromptBuilder.BuildUserPrompt(fixture.Request, userPromptBudget);
 
             // Native schema enforcement first (hard guarantee when it works), prompted
             // JSON second (the broadly-compatible default). Whichever succeeds becomes
             // the production response mode.
             var mode = AiResponseMode.None;
             var (payload, tokensPerSecond) = await TryCompleteAsync(
-                systemPrompt, userPrompt, MealSuggestionResponseContract.JsonSchemaFormat,
+                systemPrompt, userPrompt, fixture, MealSuggestionResponseContract.JsonSchemaFormat,
                 "json_schema", operationId, 1, cancellationToken);
             if (payload?.Suggestions is not null)
             {
@@ -144,7 +152,7 @@ public class AiModelTester
             else
             {
                 (payload, tokensPerSecond) = await TryCompleteAsync(
-                    systemPrompt, userPrompt, responseFormat: null,
+                    systemPrompt, userPrompt, fixture, responseFormat: null,
                     "prompted", operationId, 2, cancellationToken);
                 if (payload?.Suggestions is not null)
                 {
@@ -154,9 +162,9 @@ public class AiModelTester
 
             checks.Add(new AiModelTestCheck("Structured JSON reply", mode != AiResponseMode.None, mode switch
             {
-                AiResponseMode.JsonSchema => "Native json_schema output works — format is guaranteed",
+                AiResponseMode.JsonSchema => "The native json_schema probe returned usable structured output",
                 AiResponseMode.PromptedJson => "Prompted JSON works (native json_schema was rejected or came back empty)",
-                _ => "No attempt produced parseable JSON — suggestions would always fall back to the rules engine"
+                _ => "No attempt produced parseable JSON â€” suggestions would always fall back to the rules engine"
             }));
 
             bool? evaluationPassed = null;
@@ -220,9 +228,6 @@ public class AiModelTester
     private async Task<bool> TestPlanningIntentAsync(
         string operationId, CancellationToken cancellationToken)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(
-            _executionGate.Profile(AiTaskKind.PlanningIntent).TimeoutSeconds));
         try
         {
             var request = new MealSuggestionRequest
@@ -239,7 +244,7 @@ public class AiModelTester
             for (var promptIndex = 0; promptIndex < prompts.Length; promptIndex++)
             {
                 var prompt = prompts[promptIndex];
-                var execution = await _executionGate.ExecuteAsync(new AiExecutionRequest(
+                var execution = await _executionGate.ExecuteValidatedAsync(new AiExecutionRequest(
                     AiTaskKind.PlanningIntent,
                     [
                         new ChatMessage(ChatRole.System, PlanningIntentContract.SystemPrompt),
@@ -247,30 +252,25 @@ public class AiModelTester
                             "Referenced source: recipes.example. Selected dates: 2099-01-05 and 2099-01-11. " +
                             "Weekday mapping: Monday is 2099-01-05 and Sunday is 2099-01-11. Instructions: " + prompt)
                     ],
-                    "capability-planning-intent-v2",
-                    operationId,
-                    promptIndex + 1,
-                    ResponseFormatPolicy: AiResponseFormatPolicy.None), timeout.Token);
-                var response = execution.Response;
-                var intent = PlanningIntentContract.Parse(response.Text, request);
-                var constraints = intent?.Constraints.Where(constraint =>
-                        constraint.SourceHost == "recipes.example"
-                        && constraint.MealType == MealType.Dinner
-                        && constraint.Course == Course.Dessert)
-                    .ToList() ?? [];
-                var dates = constraints.SelectMany(constraint => constraint.Dates).ToHashSet();
-                var count = constraints.Sum(constraint => constraint.Count);
-                if (count != 2
-                    || !dates.Contains(new DateOnly(2099, 1, 5))
-                    || !dates.Contains(new DateOnly(2099, 1, 11)))
+                    $"capability-{PlanningIntentContract.ContractVersion}", operationId, promptIndex + 1,
+                    ResponseFormatPolicy: AiResponseFormatPolicy.None, CapabilityProbe: true), response =>
+                    {
+                        var intent = PlanningIntentContract.Parse(response.Text, request);
+                        var constraints = intent?.Constraints.Where(constraint => constraint.SourceHost == "recipes.example"
+                            && constraint.MealType == MealType.Dinner && constraint.Course == Course.Dessert).ToList() ?? [];
+                        var dates = constraints.SelectMany(constraint => constraint.Dates).ToHashSet();
+                        return constraints.Sum(constraint => constraint.Count) == 2
+                            && dates.Contains(new DateOnly(2099, 1, 5)) && dates.Contains(new DateOnly(2099, 1, 11))
+                                ? AiValidation<PlanningIntent>.Valid(intent!)
+                                : AiValidation<PlanningIntent>.Invalid(AiTaskOutcome.ValidationFailure,
+                                    "Multilingual planning intent did not satisfy the fixture");
+                    }, cancellationToken);
+                if (!execution.Succeeded)
                 {
-                    await execution.ReportOutcomeAsync("validationFailure", "Multilingual planning intent did not satisfy the fixture");
-                    _logger.LogWarning(
-                        "Multilingual planning capability probe failed for prompt {Prompt}; raw response={Response}",
-                        prompt, response.Text);
+                    _logger.LogWarning("Multilingual planning capability probe failed for prompt {Prompt}; raw response={Response}",
+                        prompt, execution.Response.Text);
                     return false;
                 }
-                await execution.ReportOutcomeAsync("success");
             }
             return true;
         }
@@ -287,17 +287,14 @@ public class AiModelTester
 
     /// <summary>One completion attempt under the plain-path timeout; null payload on any failure.</summary>
     private async Task<(WeekSuggestionsPayload? Payload, double? TokensPerSecond)> TryCompleteAsync(
-        string systemPrompt, string userPrompt, ChatResponseFormat? responseFormat,
+        string systemPrompt, string userPrompt, AiModelTestFixture fixture, ChatResponseFormat? responseFormat,
         string attemptName, string operationId, int attempt, CancellationToken cancellationToken)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(
-            _executionGate.Profile(AiTaskKind.CapabilityPlanning).TimeoutSeconds));
 
         var attemptStopwatch = Stopwatch.StartNew();
         try
         {
-            var execution = await _executionGate.ExecuteAsync(new AiExecutionRequest(
+            var execution = await _executionGate.ExecuteValidatedAsync(new AiExecutionRequest(
                 AiTaskKind.CapabilityPlanning,
                 [new ChatMessage(ChatRole.System, systemPrompt), new ChatMessage(ChatRole.User, userPrompt)],
                 "capability-week-planning-v1",
@@ -306,7 +303,16 @@ public class AiModelTester
                 ResponseFormat: responseFormat,
                 ResponseFormatPolicy: responseFormat is null
                     ? AiResponseFormatPolicy.None
-                    : AiResponseFormatPolicy.Force), timeout.Token);
+                    : AiResponseFormatPolicy.Force), response =>
+                    {
+                        var parsed = MealSuggestionResponseContract.Parse(response.Text);
+                        if (parsed?.Suggestions is null) return AiValidation<WeekSuggestionsPayload>.Invalid(
+                            AiTaskOutcome.ParseFailure, "Capability response was not parseable");
+                        var failures = Evaluate(parsed, fixture).Where(check => !check.Passed).ToList();
+                        return failures.Count == 0 ? AiValidation<WeekSuggestionsPayload>.Valid(parsed)
+                            : AiValidation<WeekSuggestionsPayload>.Invalid(AiTaskOutcome.ValidationFailure,
+                                string.Join("; ", failures.Select(check => check.Detail)), parsed);
+                    }, cancellationToken);
             var response = execution.Response;
             attemptStopwatch.Stop();
 
@@ -314,9 +320,7 @@ public class AiModelTester
                 ? output / attemptStopwatch.Elapsed.TotalSeconds
                 : null;
 
-            var payload = MealSuggestionResponseContract.Parse(response.Text);
-            await execution.ReportOutcomeAsync(payload?.Suggestions is not null ? "success" : "parseFailure",
-                payload?.Suggestions is null ? "Capability response was not parseable" : null);
+            var payload = execution.Value;
             _logger.LogInformation(
                 "AI model test {Attempt} attempt: parseable={Parseable} in {ElapsedMs}ms (finish={Finish})",
                 attemptName, payload?.Suggestions is not null, attemptStopwatch.ElapsedMilliseconds, response.FinishReason);
@@ -337,7 +341,7 @@ public class AiModelTester
 
     /// <summary>
     /// GET {base}/models: endpoint reachable, and is the configured model id in the list?
-    /// Advisory only — some gateways block the listing while completions work fine, so a
+    /// Advisory only â€” some gateways block the listing while completions work fine, so a
     /// failure here never aborts the completion stages.
     /// </summary>
     private async Task<(bool Reachable, bool? ModelListed)> ProbeModelsAsync(CancellationToken cancellationToken)
@@ -367,7 +371,7 @@ public class AiModelTester
                 return (false, null);
             }
 
-            // OpenAI shape: {"data":[{"id":"..."}]} — anything else counts as "can't verify"
+            // OpenAI shape: {"data":[{"id":"..."}]} â€” anything else counts as "can't verify"
             try
             {
                 using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cts.Token));
@@ -396,11 +400,11 @@ public class AiModelTester
     }
 
     /// <summary>
-    /// A realistic planning request with verifiable expectations: Mon–Fri of the next week,
+    /// A realistic planning request with verifiable expectations: Monâ€“Fri of the next week,
     /// a #[Quick Pasta] collection pinned to Wednesday, "serve Chicken curry on Thursday",
     /// and "two days vegetarian" (the recipes carry a Vegetarian/Meat/Fish category, so
     /// this tests instruction-following, not world knowledge). The known-recipes list is
-    /// padded with filler titles so the prompt fills the whole MaxPromptTokens budget —
+    /// padded with filler titles so the prompt fills the whole MaxPromptTokens budget â€”
     /// a context window too small for real requests fails here, in the test.
     /// </summary>
     internal static AiModelTestFixture CreateFixture(DateOnly today)
@@ -412,7 +416,7 @@ public class AiModelTester
 
         // The named candidates carry assessed dietary facts so the evaluation prompt
         // uses the production "[contains: ...]" annotation format; the filler stays
-        // unassessed, like a real half-assessed library. No member exclusions here —
+        // unassessed, like a real half-assessed library. No member exclusions here â€”
         // they would contradict the expected answers (Chicken curry on Thursday).
         (string Title, IngredientClass[] Contains)[] vegetarianRecipes =
         [
@@ -468,6 +472,8 @@ public class AiModelTester
                 new CollectionConstraint
                 {
                     Name = "Quick Pasta",
+                    Id = "fixture-quick-pasta",
+                    RecipeIds = recipes.Where(recipe => collectionTitles.Contains(recipe.Title)).Select(recipe => recipe.Id).ToList(),
                     RecipeTitles = collectionTitles,
                     Dates = [collectionDay]
                 }
@@ -532,7 +538,7 @@ public class AiModelTester
                 : $"The instruction to serve '{fixture.SpecificDish}' on {fixture.SpecificDishDay.DayOfWeek} was not followed"),
             new AiModelTestCheck("Vegetarian days", vegetarianDays >= 2, vegetarianDays >= 2
                 ? $"{vegetarianDays} day(s) use vegetarian dishes (2 were asked)"
-                : $"Only {vegetarianDays} day(s) vegetarian — the instruction asked for 2")
+                : $"Only {vegetarianDays} day(s) vegetarian â€” the instruction asked for 2")
         ];
     }
 }

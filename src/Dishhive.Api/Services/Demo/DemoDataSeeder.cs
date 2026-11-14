@@ -1,3 +1,4 @@
+using Dishhive.Api.Services.Time;
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,7 @@ namespace Dishhive.Api.Services.Demo;
 /// </summary>
 public class DemoDataSeeder : BackgroundService
 {
+    private readonly IHouseholdClock _clock;
     private const string SeedResourceSuffix = "demo-seed.json";
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -26,11 +28,12 @@ public class DemoDataSeeder : BackgroundService
     public DemoDataSeeder(
         IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
-        ILogger<DemoDataSeeder> logger)
+        ILogger<DemoDataSeeder> logger, IHouseholdClock clock)
     {
         _scopeFactory = scopeFactory;
         _configuration = configuration;
         _logger = logger;
+        _clock = clock;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -220,7 +223,7 @@ public class DemoDataSeeder : BackgroundService
     /// statistics and AI suggestion features have data to show. Deterministic: same
     /// dishes and ratings on every fresh seed.
     /// </summary>
-    private static void SeedPastMeals(
+    private void SeedPastMeals(
         DishhiveDbContext context, IReadOnlyList<Recipe> recipes, IReadOnlyList<FamilyMember> members)
     {
         if (recipes.Count == 0 || members.Count == 0)
@@ -228,7 +231,7 @@ public class DemoDataSeeder : BackgroundService
             return;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
 
         for (var daysAgo = 14; daysAgo >= 1; daysAgo--)
         {

@@ -71,6 +71,9 @@ public record RecipeOption
     public string? OriginalTitle { get; init; }
 
     public string? Category { get; init; }
+    public int? TotalTimeMinutes { get; init; }
+    public long Revision { get; init; }
+    public long FactsConfirmationVersion { get; init; }
 
     /// <summary>
     /// Canonical ingredient classes the recipe contains, meaningful only when
@@ -95,18 +98,25 @@ public record RecipeAllergenInfo
 }
 
 /// <summary>
-/// A #[Collection Name] reference resolved to its member recipe titles. Dates list
-/// the days whose instruction referenced the collection (a dish for such a day must
-/// come from the titles); an empty list means the global instructions referenced it
-/// (its recipes should be preferred). Titles are least-recently-planned first and
-/// capped, see <see cref="CollectionMentionResolver"/>.
+/// A referenced collection with stable identity and full membership. Titles are a
+/// ranked prompt sample only; membership must never be inferred from a dish name.
 /// </summary>
 public record CollectionConstraint
 {
+    public string Id { get; init; } = "";
     public required string Name { get; init; }
+    public IReadOnlyList<Guid> RecipeIds { get; init; } = [];
     public IReadOnlyList<string> RecipeTitles { get; init; } = [];
     public IReadOnlyList<DateOnly> Dates { get; init; } = [];
+    public IReadOnlyList<PlanningSlot> Slots { get; init; } = [];
+    public bool IsGlobal { get; init; }
+
+    public bool AppliesTo(PlanningSlot slot) => Slots.Count > 0
+        ? Slots.Contains(slot)
+        : Dates.Contains(slot.Date) && slot.MealType == MealType.Dinner && slot.Course == Course.Main;
 }
+
+public sealed record PlanningSlot(DateOnly Date, MealType MealType = MealType.Dinner, Course Course = Course.Main);
 
 /// <summary>
 /// An @[Source] reference resolved to a website host, so the LLM's search tool can
@@ -168,6 +178,9 @@ public record MealSuggestionRequest
     /// </summary>
     public IReadOnlyList<CollectionConstraint> CollectionConstraints { get; init; } = [];
 
+    /// <summary>Referenced names that could not be resolved; never silently widen the request.</summary>
+    public IReadOnlyList<string> UnresolvedCollectionNames { get; init; } = [];
+
     /// <summary>
     /// Resolved @[Source] references (external recipe sites) from the day and global
     /// instructions (see <see cref="SourceMentionResolver"/>). Empty when web search
@@ -200,8 +213,39 @@ public enum MealSuggestionSource
     RulesFallback
 }
 
+public enum PlanCompletionStatus
+{
+    Complete,
+    Partial,
+    Unable
+}
+
+public sealed record UnmetPlanningRequirement(string Id, string Message)
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Dishhive.Api.Services.Localization.LocalizedUserText? DisplayText { get; init; }
+
+    public UnmetPlanningRequirement WithText(string key, params (string Name, object? Value)[] parameters) =>
+        this with { DisplayText = new(key, parameters) };
+}
+
+public sealed record MealSuggestionResult(
+    PlanCompletionStatus Status,
+    IReadOnlyList<MealSuggestion> Suggestions,
+    IReadOnlyList<UnmetPlanningRequirement> UnmetRequirements)
+{
+    public PlanningIntent? Intent { get; init; }
+    public string? OperationId { get; init; }
+}
+
 public record MealSuggestion
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Dishhive.Api.Services.Localization.LocalizedUserText? ReasonText { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Dishhive.Api.Services.Localization.LocalizedUserText? AllergyWarningText { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Dishhive.Api.Services.Localization.LocalizedUserText? DietWarningText { get; init; }
     public DateOnly Date { get; init; }
     public MealType MealType { get; init; } = MealType.Dinner;
     public Course Course { get; init; } = Course.Main;
@@ -250,7 +294,11 @@ public record MealSuggestion
     /// <summary>Canonical facts resolved from either the stored recipe or verified candidate.</summary>
     internal IReadOnlyList<IngredientClass> ResolvedContainsClasses { get; init; } = [];
     internal bool ResolvedFactsAssessed { get; init; }
+    internal bool ResolvedAllergyConflict { get; init; }
+    internal int? ResolvedTotalTimeMinutes { get; init; }
     internal IReadOnlyList<string> ExternalIngredients { get; init; } = [];
+    internal IReadOnlyList<string> ResearchConstraintIds { get; init; } = [];
+    internal string? CandidateVersion { get; init; }
 }
 
 /// <summary>
@@ -264,6 +312,8 @@ public interface IMealSuggestionService
     /// <summary>Whether suggestions are available (drives UI visibility)</summary>
     bool IsEnabled { get; }
 
+    MealSuggestionResult? LastResult => null;
+
     Task<IReadOnlyList<MealSuggestion>> SuggestAsync(MealSuggestionRequest request, CancellationToken cancellationToken = default);
 }
 
@@ -274,6 +324,8 @@ public interface IMealSuggestionService
 public class NoOpMealSuggestionService : IMealSuggestionService
 {
     public bool IsEnabled => false;
+    public MealSuggestionResult? LastResult =>
+        new(PlanCompletionStatus.Unable, [], [new("ai-disabled", "AI suggestions are disabled")]);
 
     public Task<IReadOnlyList<MealSuggestion>> SuggestAsync(MealSuggestionRequest request, CancellationToken cancellationToken = default)
     {

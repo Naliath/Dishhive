@@ -1,3 +1,6 @@
+import { SettingsClient } from '../api/generated/dishhive-api.client';
+import { apiResponse } from '../api/api-response';
+import { HouseholdClockService } from './household-clock.service';
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
@@ -16,6 +19,7 @@ import {
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
+  private readonly api: SettingsClient;
   private apiUrl = '/api/settings';
 
   /** Current measurement system; metric is the default by absence */
@@ -27,21 +31,22 @@ export class SettingsService {
   readonly translateImportedRecipes = signal(false);
   readonly supportedLanguages = signal<ReadonlyArray<{ code: string; displayName: string }>>([]);
 
-  constructor(private http: HttpClient) {
+  constructor(http: HttpClient, private readonly clock: HouseholdClockService) {
+    this.api = new SettingsClient(http, "");
     // Language selection remains available even when loading database-backed
     // preferences fails (for example during initial setup or a database outage).
     this.loadSupportedLanguages().subscribe();
   }
 
   loadSupportedLanguages(): Observable<SupportedLanguageDto[]> {
-    return this.http.get<SupportedLanguageDto[]>(`${this.apiUrl}/languages`).pipe(
+    return this.api.getSupportedLanguages().pipe(
       tap(languages => this.supportedLanguages.set(languages)),
       catchError(() => of([]))
     );
   }
 
   loadPreferences(): Observable<UserPreferencesDto | null> {
-    return this.http.get<UserPreferencesDto>(`${this.apiUrl}/preferences`).pipe(
+    return this.api.getPreferences().pipe(
       tap(preferences => this.apply(preferences)),
       catchError(() => of(null))
     );
@@ -82,6 +87,7 @@ export class SettingsService {
   }
 
   private apply(preferences: UserPreferencesDto): void {
+    this.clock.timeZone.set(preferences.householdTimeZone ?? 'Europe/Brussels');
     this.measurementSystem.set(preferences.measurementSystem);
     this.firstDayOfWeek.set(preferences.firstDayOfWeek);
     this.preferredLanguage.set(preferences.preferredLanguage);
@@ -90,8 +96,7 @@ export class SettingsService {
   }
 
   private updatePreference(change: Partial<UpdateUserPreferencesDto>): Observable<UserPreferencesDto> {
-    return this.http.patch<UserPreferencesDto>(`${this.apiUrl}/preferences`,
-      new UpdateUserPreferencesDto(change)).pipe(tap(preferences => this.apply(preferences)));
+    return apiResponse(this.api.updatePreference(change)).pipe(tap(preferences => this.apply(preferences)));
   }
 
   private browserLanguage(): SupportedLanguage {
@@ -108,20 +113,20 @@ export class SettingsService {
   }
 
   getAiPrompt(): Observable<AiPromptSettings | null> {
-    return this.http.get<AiPromptSettings>(`${this.apiUrl}/ai-prompt`).pipe(
+    return this.api.getAiPrompt().pipe(
       catchError(() => of(null))
     );
   }
 
   /** Saving a changed prompt also restarts the model capability test server-side */
   setAiPrompt(editablePrompt: string): Observable<AiPromptSettings | null> {
-    return this.http.put<AiPromptSettings>(`${this.apiUrl}/ai-prompt`, { editablePrompt }).pipe(
+    return this.api.setAiPrompt({ editablePrompt }).pipe(
       catchError(() => of(null))
     );
   }
 
   resetAiPrompt(): Observable<AiPromptSettings | null> {
-    return this.http.delete<AiPromptSettings>(`${this.apiUrl}/ai-prompt`).pipe(
+    return this.api.resetAiPrompt().pipe(
       catchError(() => of(null))
     );
   }

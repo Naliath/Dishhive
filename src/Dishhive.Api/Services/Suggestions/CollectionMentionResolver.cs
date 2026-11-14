@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Dishhive.Api.Data;
+using Dishhive.Api.Models;
 using Dishhive.Api.Services.Collections;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,10 +8,10 @@ namespace Dishhive.Api.Services.Suggestions;
 
 /// <summary>
 /// Resolves #[Collection Name] references in planning instruction texts into
-/// concrete recipe-title constraints for the suggestion providers. References are
-/// matched by name, case-insensitively, at use time — a dangling reference (renamed
-/// or deleted collection) simply resolves to nothing and the raw text flows through
-/// to the LLM as a plain hint. See docs/features/ai-week-planning.md.
+/// stable collection identities and full recipe-id membership for suggestion providers. References are
+/// matched by name, case-insensitively, at use time. The request builder surfaces
+/// unresolved names instead of silently widening the plan. Reviewed requirements
+/// are subsequently resolved by stable identity. See docs/features/ai-week-planning.md.
 /// </summary>
 public partial class CollectionMentionResolver(
     DishhiveDbContext context,
@@ -45,79 +46,107 @@ public partial class CollectionMentionResolver(
     /// that specific day. Titles are ordered least-recently-planned first (so
     /// providers can prefer variety) and capped per collection.
     /// </summary>
-    public async Task<IReadOnlyList<CollectionConstraint>> ResolveAsync(
+    public Task<IReadOnlyList<CollectionConstraint>> ResolveAsync(
         IReadOnlyList<(DateOnly? Date, string? Text)> sources,
         IReadOnlyDictionary<string, DateOnly>? lastPlannedByTitle = null,
         CancellationToken cancellationToken = default)
+        => ResolveAsync(sources.Select(source => (source.Date, MealType.Dinner, Course.Main, source.Text)).ToList(),
+            lastPlannedByTitle, cancellationToken);
+
+    public async Task<IReadOnlyList<CollectionConstraint>> ResolveAsync(
+        IReadOnlyList<(DateOnly? Date, MealType MealType, Course Course, string? Text)> sources,
+        IReadOnlyDictionary<string, DateOnly>? lastPlannedByTitle = null,
+        CancellationToken cancellationToken = default)
     {
-        // Gather where each referenced name occurs (per-day and/or globally)
-        var datesByName = new Dictionary<string, SortedSet<DateOnly>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (date, text) in sources)
+        var slotsByName = new Dictionary<string, HashSet<PlanningSlot>>(StringComparer.OrdinalIgnoreCase);
+        var globalNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (date, mealType, course, text) in sources)
         {
             foreach (var name in ExtractMentions(text))
             {
-                if (!datesByName.TryGetValue(name, out var dates))
+                if (!slotsByName.TryGetValue(name, out var slots))
                 {
-                    dates = [];
-                    datesByName[name] = dates;
+                    slots = [];
+                    slotsByName[name] = slots;
                 }
                 if (date != null)
                 {
-                    dates.Add(date.Value);
+                    slots.Add(new(date.Value, mealType, course));
                 }
+                else globalNames.Add(name);
             }
         }
 
         var constraints = new List<CollectionConstraint>();
-        foreach (var (name, dates) in datesByName)
+        foreach (var (name, slots) in slotsByName)
         {
-            var resolved = await ResolveTitlesAsync(name, cancellationToken);
+            var resolved = await ResolveCollectionAsync(name, byId: false, cancellationToken);
             if (resolved == null)
             {
-                continue; // dangling reference: stays a plain-text hint
+                continue; // the request builder reports unresolved names
             }
 
-            var ordered = resolved.Value.Titles
-                .OrderBy(t => lastPlannedByTitle != null && lastPlannedByTitle.TryGetValue(t, out var last)
+            var ordered = resolved.Recipes
+                .OrderBy(t => lastPlannedByTitle != null && lastPlannedByTitle.TryGetValue(t.Title, out var last)
                     ? last
                     : DateOnly.MinValue)
-                .ThenBy(t => t, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
                 .Take(MaxTitlesPerCollection)
+                .Select(recipe => recipe.Title)
                 .ToList();
 
             constraints.Add(new CollectionConstraint
             {
-                Name = resolved.Value.Name,
+                Id = resolved.Id,
+                Name = resolved.Name,
+                RecipeIds = resolved.Recipes.Select(recipe => recipe.Id).ToList(),
                 RecipeTitles = ordered,
-                Dates = dates.ToList()
+                Dates = slots.Select(slot => slot.Date).Distinct().Order().ToList(),
+                Slots = slots.OrderBy(slot => slot.Date).ThenBy(slot => slot.MealType).ThenBy(slot => slot.Course).ToList(),
+                IsGlobal = globalNames.Contains(name)
             });
         }
 
         return constraints.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    /// <summary>Member titles of the manual or auto collection with this name, or null</summary>
-    private async Task<(string Name, List<string> Titles)?> ResolveTitlesAsync(
-        string name, CancellationToken cancellationToken)
+    public async Task<CollectionConstraint?> ResolveByIdAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var resolved = await ResolveCollectionAsync(id, byId: true, cancellationToken);
+        return resolved is null ? null : new CollectionConstraint
+        {
+            Id = resolved.Id, Name = resolved.Name,
+            RecipeIds = resolved.Recipes.Select(recipe => recipe.Id).ToList(),
+            RecipeTitles = resolved.Recipes.Take(MaxTitlesPerCollection).Select(recipe => recipe.Title).ToList()
+        };
+    }
+
+    private sealed record MemberRecipe(Guid Id, string Title);
+    private sealed record ResolvedCollection(string Id, string Name, List<MemberRecipe> Recipes);
+
+    private async Task<ResolvedCollection?> ResolveCollectionAsync(
+        string name, bool byId, CancellationToken cancellationToken)
     {
         var lowered = name.ToLower();
+        var hasGuid = Guid.TryParse(name, out var id);
         var manual = await context.Cookbooks
             .AsNoTracking()
-            .Where(c => c.Name.ToLower() == lowered)
-            .Select(c => new { c.Name, Titles = c.Entries.Select(e => e.Recipe!.Title).ToList() })
+            .Where(c => byId ? hasGuid && c.Id == id : c.Name.ToLower() == lowered)
+            .Select(c => new { c.Id, c.Name, Recipes = c.Entries.Select(e => new MemberRecipe(e.RecipeId, e.Recipe!.Title)).ToList() })
             .FirstOrDefaultAsync(cancellationToken);
         if (manual != null)
         {
-            return (manual.Name, manual.Titles);
+            return new(manual.Id.ToString(), manual.Name, manual.Recipes);
         }
 
-        var auto = await autoCollections.FindByNameAsync(name, cancellationToken);
+        var auto = byId ? await autoCollections.FindByIdAsync(name, cancellationToken)
+            : await autoCollections.FindByNameAsync(name, cancellationToken);
         if (auto != null)
         {
             var titles = await auto.ApplyFilter(context.Recipes.AsNoTracking())
-                .Select(r => r.Title)
+                .Select(r => new MemberRecipe(r.Id, r.Title))
                 .ToListAsync(cancellationToken);
-            return (auto.Name, titles);
+            return new(auto.Id, auto.Name, titles);
         }
 
         return null;

@@ -77,7 +77,11 @@ referenceable from planning instructions as `#[Name]`.
   tags (kept separate to avoid tag-pool spam from scraped keyword lists).
 - Tag filtering is AND-based; OR semantics can be added later if needed.
 - `#[Name]` references are by name: renaming a collection dangles references in
-  existing planning texts (they degrade to plain-text hints; see ai-week-planning.md).
+  existing planning texts. Generation surfaces an explicit unresolved-collection result
+  until the text is updated. Resolved requirements use stable collection ids and full
+  recipe membership; title samples do not define membership. Acceptance rechecks current
+  membership by id, so a renamed collection remains valid while a removed recipe requires
+  another review. See [AI planning](ai-week-planning.md).
 
 ## Implementation Checklist
 

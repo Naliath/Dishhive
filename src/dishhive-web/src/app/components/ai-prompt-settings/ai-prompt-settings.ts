@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { inject, ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -40,6 +41,7 @@ import { TranslatePipe } from '../../services/language.service';
   styleUrl: './ai-prompt-settings.scss'
 })
 export class AiPromptSettingsComponent implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
   readonly maxLength = 4000;
 
   readonly aiConfigured = signal(false);
@@ -84,13 +86,13 @@ export class AiPromptSettingsComponent implements OnInit {
     this.settingsService.setAiPrompt(this.draftTrimmed()).subscribe(prompt => {
       this.saving.set(false);
       if (!prompt) {
-        this.snackBar.open('Could not save the prompt', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotSaveThePrompt'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
         return;
       }
       this.apply(prompt);
       this.snackBar.open(
-        'Prompt saved — the model capability test restarts so you can see it still works',
-        'Dismiss', { duration: 5000 });
+        this.uiLanguage.t('ui.promptSavedTheModelCapabilityTestRestartsSoYouCanSeeItStillWorks'),
+        this.uiLanguage.t('common.dismiss'), { duration: 5000 });
     });
   }
 
@@ -102,11 +104,11 @@ export class AiPromptSettingsComponent implements OnInit {
     this.settingsService.resetAiPrompt().subscribe(prompt => {
       this.saving.set(false);
       if (!prompt) {
-        this.snackBar.open('Could not reset the prompt', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotResetThePrompt'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
         return;
       }
       this.apply(prompt);
-      this.snackBar.open('Prompt reset to the built-in default', 'Dismiss', { duration: 4000 });
+      this.snackBar.open(this.uiLanguage.t('ui.promptResetToTheBuiltInDefault'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
     });
   }
 

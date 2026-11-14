@@ -29,8 +29,7 @@
   margin-block-end: 12px;
   padding: 10px 12px;
   border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.4;
+  font: var(--mat-sys-body-small);
   background: var(--mat-sys-surface-container-high);
   color: var(--mat-sys-on-surface-variant);
 
@@ -47,6 +46,13 @@
   display: flex;
   flex-direction: column;
   min-width: min(420px, 80vw);
+}
+
+.unmet-banner {
+  border-inline-start: 3px solid var(--mat-sys-tertiary);
+
+  strong { font: var(--mat-sys-title-small); }
+  ul { margin-block: 4px 0; padding-inline-start: 20px; }
 }
 
 .day-selection {
@@ -86,7 +92,7 @@
 
 .planned-day-note {
   color: var(--mat-sys-on-surface-variant);
-  font-size: 12px;
+  font: var(--mat-sys-body-small);
 }
 
 .suggestion-day {
@@ -98,8 +104,7 @@
 }
 
 .suggestion-day-header {
-  font-size: 12px;
-  font-weight: 600;
+  font: var(--mat-sys-label-medium);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--mat-sys-on-surface-variant);
@@ -141,7 +146,7 @@
 }
 
 .suggestion-tag {
-  font-size: 10px;
+  font: var(--mat-sys-label-small);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 1px 6px;
@@ -152,14 +157,14 @@
 
 .suggestion-context {
   color: var(--mat-sys-on-surface-variant);
-  font-size: 12px;
+  font: var(--mat-sys-body-small);
 }
 
 .suggestion-allergy {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font: var(--mat-sys-body-small);
   color: var(--mat-sys-error);
 
   mat-icon {
@@ -174,7 +179,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font: var(--mat-sys-body-small);
   color: var(--mat-sys-tertiary);
 
   mat-icon {
@@ -186,12 +191,12 @@
 
 .suggestion-reason {
   color: var(--mat-sys-on-surface-variant);
-  font-size: 13px;
+  font: var(--mat-sys-body-medium);
 }
 
 .suggestion-source {
   color: var(--mat-sys-primary);
-  font-size: 12px;
+  font: var(--mat-sys-body-small);
   text-decoration: none;
 
   &:hover {
@@ -221,7 +226,7 @@
 }
 
 .mention-count {
-  font-size: 11px;
+  font: var(--mat-sys-label-small);
   opacity: 0.6;
   margin-inline-start: 6px;
 }

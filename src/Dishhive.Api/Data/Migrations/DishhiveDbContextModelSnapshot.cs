@@ -98,6 +98,11 @@ namespace Dishhive.Api.Data.Migrations
                     b.Property<long>("CompletionDurationMs")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("ConfigFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<int>("EmptySearchCount")
                         .HasColumnType("integer");
 
@@ -201,6 +206,74 @@ namespace Dishhive.Api.Data.Migrations
                     b.ToTable("AiPlanningRuns");
                 });
 
+            modelBuilder.Entity("Dishhive.Api.Models.AiReviewEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid?>("BatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("InputChangesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<long?>("ObservedConfirmationVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ObservedRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OperationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid?>("RecipeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("SourceConfirmationVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("SourceRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("SuggestionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Task")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("OperationId");
+
+                    b.HasIndex("RecipeId");
+
+                    b.ToTable("AiReviewEvents");
+                });
+
             modelBuilder.Entity("Dishhive.Api.Models.AiTaskRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -235,6 +308,16 @@ namespace Dishhive.Api.Data.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<int>("InputBudgetTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InputFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("InputRevisionsJson")
+                        .HasColumnType("text");
+
                     b.Property<long>("InputTokens")
                         .HasColumnType("bigint");
 
@@ -245,6 +328,9 @@ namespace Dishhive.Api.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("OperationAttempt")
+                        .HasColumnType("integer");
 
                     b.Property<string>("OperationId")
                         .IsRequired()
@@ -265,10 +351,18 @@ namespace Dishhive.Api.Data.Migrations
                     b.Property<long>("PromptCharacters")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("PromptHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<long>("QueueWaitMs")
+                        .HasColumnType("bigint");
 
                     b.Property<bool>("ReasoningDisabled")
                         .HasColumnType("boolean");
@@ -466,8 +560,8 @@ namespace Dishhive.Api.Data.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("DishName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<Guid>("FamilyMemberId")
                         .HasColumnType("uuid");
@@ -512,6 +606,105 @@ namespace Dishhive.Api.Data.Migrations
                     b.ToTable("MealRatings");
                 });
 
+            modelBuilder.Entity("Dishhive.Api.Models.MealSuggestionBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OperationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.ToTable("MealSuggestionBatches");
+                });
+
+            modelBuilder.Entity("Dishhive.Api.Models.MealSuggestionCandidate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CandidateVersion")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("Course")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DishName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<long?>("FactsConfirmationVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("FreezyItemQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FreezyItemRef")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("MealType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("RecipeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("RecipeRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewOutcome")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("ReviewSnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SourceUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("WasModified")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId", "Id")
+                        .IsUnique();
+
+                    b.ToTable("MealSuggestionCandidates");
+                });
+
             modelBuilder.Entity("Dishhive.Api.Models.PlannedMeal", b =>
                 {
                     b.Property<Guid>("Id")
@@ -531,16 +724,23 @@ namespace Dishhive.Api.Data.Migrations
                         .HasColumnType("date");
 
                     b.Property<string>("DishName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<int?>("Eaten")
                         .HasColumnType("integer");
 
+                    b.Property<string>("FreezyItemFingerprint")
+                        .IsConcurrencyToken()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int>("FreezyItemQuantity")
+                        .IsConcurrencyToken()
                         .HasColumnType("integer");
 
                     b.Property<string>("FreezyItemRef")
+                        .IsConcurrencyToken()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
@@ -626,8 +826,15 @@ namespace Dishhive.Api.Data.Migrations
                     b.Property<DateTime?>("DietaryFactsAssessedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long?>("DietaryFactsAssessedRevision")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("DietaryFactsStatus")
                         .HasColumnType("integer");
+
+                    b.Property<long>("FactsConfirmationVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
 
                     b.Property<string>("ImageContentType")
                         .HasMaxLength(100)
@@ -654,6 +861,12 @@ namespace Dishhive.Api.Data.Migrations
 
                     b.Property<int?>("PrepTimeMinutes")
                         .HasColumnType("integer");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
 
                     b.Property<int>("Servings")
                         .ValueGeneratedOnAdd()
@@ -709,6 +922,113 @@ namespace Dishhive.Api.Data.Migrations
                     b.HasKey("RecipeId", "IngredientClass");
 
                     b.ToTable("RecipeDietaryFacts");
+                });
+
+            modelBuilder.Entity("Dishhive.Api.Models.RecipeDietaryFactHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("ArchivedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("AssessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Contains")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("RecipeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("RecipeRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecipeId", "ArchivedAt");
+
+                    b.ToTable("RecipeDietaryFactHistory");
+                });
+
+            modelBuilder.Entity("Dishhive.Api.Models.RecipeEnrichmentJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<long>("FactsConfirmationVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("LeaseExpiresAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("NotBefore")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("RecipeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("RecipeRevision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("State")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TargetLanguage")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<int>("Task")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecipeId", "Task")
+                        .IsUnique()
+                        .HasFilter("\"State\" = 0");
+
+                    b.HasIndex("State", "NotBefore");
+
+                    b.HasIndex("RecipeId", "Task", "State");
+
+                    b.ToTable("RecipeEnrichmentJobs");
                 });
 
             modelBuilder.Entity("Dishhive.Api.Models.RecipeIngredient", b =>
@@ -927,6 +1247,17 @@ namespace Dishhive.Api.Data.Migrations
                     b.Navigation("PlannedMeal");
                 });
 
+            modelBuilder.Entity("Dishhive.Api.Models.MealSuggestionCandidate", b =>
+                {
+                    b.HasOne("Dishhive.Api.Models.MealSuggestionBatch", "Batch")
+                        .WithMany("Candidates")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Batch");
+                });
+
             modelBuilder.Entity("Dishhive.Api.Models.PlannedMeal", b =>
                 {
                     b.HasOne("Dishhive.Api.Models.Recipe", "Recipe")
@@ -960,6 +1291,28 @@ namespace Dishhive.Api.Data.Migrations
                 {
                     b.HasOne("Dishhive.Api.Models.Recipe", "Recipe")
                         .WithMany("DietaryFacts")
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recipe");
+                });
+
+            modelBuilder.Entity("Dishhive.Api.Models.RecipeDietaryFactHistory", b =>
+                {
+                    b.HasOne("Dishhive.Api.Models.Recipe", "Recipe")
+                        .WithMany("DietaryFactsHistory")
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recipe");
+                });
+
+            modelBuilder.Entity("Dishhive.Api.Models.RecipeEnrichmentJob", b =>
+                {
+                    b.HasOne("Dishhive.Api.Models.Recipe", "Recipe")
+                        .WithMany()
                         .HasForeignKey("RecipeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1023,6 +1376,11 @@ namespace Dishhive.Api.Data.Migrations
                     b.Navigation("DietaryTags");
                 });
 
+            modelBuilder.Entity("Dishhive.Api.Models.MealSuggestionBatch", b =>
+                {
+                    b.Navigation("Candidates");
+                });
+
             modelBuilder.Entity("Dishhive.Api.Models.PlannedMeal", b =>
                 {
                     b.Navigation("Attendees");
@@ -1033,6 +1391,8 @@ namespace Dishhive.Api.Data.Migrations
             modelBuilder.Entity("Dishhive.Api.Models.Recipe", b =>
                 {
                     b.Navigation("DietaryFacts");
+
+                    b.Navigation("DietaryFactsHistory");
 
                     b.Navigation("Ingredients");
 

@@ -3,6 +3,7 @@ using Dishhive.Api.Models;
 using Dishhive.Api.Models.DTOs;
 using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.Localization;
+using Dishhive.Api.Services.Time;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,14 +24,16 @@ public class SettingsController : ControllerBase
     private readonly ILogger<SettingsController> _logger;
     private readonly SupportedLanguageCatalog _languages;
     private readonly UserMessageLocalizer _messages;
+    private readonly IHouseholdClock _clock;
 
     public SettingsController(DishhiveDbContext context, ILogger<SettingsController> logger,
-        SupportedLanguageCatalog languages, UserMessageLocalizer messages)
+        SupportedLanguageCatalog languages, UserMessageLocalizer messages, IHouseholdClock clock)
     {
         _context = context;
         _logger = logger;
         _languages = languages;
         _messages = messages;
+        _clock = clock;
     }
 
     [HttpGet("preferences")]
@@ -93,14 +96,15 @@ public class SettingsController : ControllerBase
     {
         var defaultLanguage = _languages.DefaultCode;
         var language = values.GetValueOrDefault(UserSettingKeys.PreferredLanguage);
-        return new(
+        return new UserPreferencesDto(
             EnumNames.TryParse<MeasurementSystem>(values.GetValueOrDefault(UserSettingKeys.MeasurementSystem), out var measurement)
                 ? measurement : MeasurementSystem.Metric,
             EnumNames.TryParse<FirstDayOfWeek>(values.GetValueOrDefault(UserSettingKeys.FirstDayOfWeek), out var firstDay)
                 ? firstDay : FirstDayOfWeek.Monday,
             _languages.Contains(language) ? language!.ToLowerInvariant() : defaultLanguage,
             bool.TryParse(values.GetValueOrDefault(UserSettingKeys.TranslateImportedRecipes), out var translate) && translate,
-            _languages.Languages.Select(language => new SupportedLanguageDto(language.Code, language.DisplayName)).ToList());
+            _languages.Languages.Select(language => new SupportedLanguageDto(language.Code, language.DisplayName)).ToList())
+            { HouseholdTimeZone = _clock.TimeZoneId };
     }
 
     /// <summary>

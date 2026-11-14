@@ -23,8 +23,9 @@ RUN groupadd -r appgroup && useradd -r -g appgroup appuser \
     && mkdir -p /data/lib && chown -R appuser:appgroup /data
 USER appuser
 
-# Volume-backed package overrides win over the baked site-packages install
-ENV PYTHONPATH=/data/lib
+# The atomically switched current version wins over the baked fallback. When no
+# update has been activated yet, Python simply falls through to site-packages.
+ENV PYTHONPATH=/data/lib/current
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000

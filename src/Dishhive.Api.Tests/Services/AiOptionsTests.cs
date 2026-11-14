@@ -6,6 +6,18 @@ namespace Dishhive.Api.Tests.Services;
 public class AiOptionsTests
 {
     [Fact]
+    public void FactsReasoningRequiresOutputRoomAndOnlyChangesExecutionEvidence()
+    {
+        var baseline = new AiOptions();
+        var enabled = new AiOptions { FactsEnableReasoning = true };
+        Assert.Throws<InvalidOperationException>(() => enabled.Validate());
+        enabled.FactsMaxOutputTokens = 2048;
+        enabled.Validate();
+        Assert.Equal(baseline.CapabilityFingerprint, enabled.CapabilityFingerprint);
+        Assert.NotEqual(baseline.ExecutionFingerprint, enabled.ExecutionFingerprint);
+    }
+
+    [Fact]
     public void IsConfigured_NoProvider_IsFalse()
     {
         new AiOptions { Model = "llama3.1" }.IsConfigured.Should().BeFalse();
@@ -97,5 +109,33 @@ public class AiOptionsTests
         var act = () => ChatClientFactory.Create(options);
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*skynet*");
+    }
+
+    [Fact]
+    public void CapabilityFingerprint_ChangesWithInputBudget()
+    {
+        var first = new AiOptions { Provider = "ollama", Model = "model", MaxInputTokens = 8_000 };
+        var second = new AiOptions { Provider = "ollama", Model = "model", MaxInputTokens = 16_000 };
+
+        first.CapabilityFingerprint.Should().NotBe(second.CapabilityFingerprint);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(4)]
+    public void TransportRetries_RejectsUnboundedValues(int retries)
+    {
+        var options = new AiOptions { MaxTransportRetries = retries };
+        var validate = () => options.Validate();
+        validate.Should().Throw<InvalidOperationException>().WithMessage("*MaxTransportRetries*");
+    }
+
+    [Fact]
+    public void TransportRetries_ChangesExecutionFingerprintAndPreservesQualityEvidenceKey()
+    {
+        var first = new AiOptions { MaxTransportRetries = 0 };
+        var second = new AiOptions { MaxTransportRetries = 1 };
+        first.ExecutionFingerprint.Should().NotBe(second.ExecutionFingerprint);
+        first.CapabilityFingerprint.Should().Be(second.CapabilityFingerprint);
     }
 }

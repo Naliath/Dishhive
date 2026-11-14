@@ -1,11 +1,13 @@
 using Dishhive.Api.Data;
 using Dishhive.Api.Models.DTOs;
+using Dishhive.Api.Services.Ai;
 using Dishhive.Api.Services.Freezy;
 using Dishhive.Api.Services.Import;
 using Dishhive.Api.Services.Suggestions;
 using Dishhive.Api.Services.WebSearch;
 using Dishhive.Api.Services.Localization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using System.Net;
 using System.Net.Http.Headers;
@@ -119,7 +121,12 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
                     Error: await messages.GetAsync("integration.searchUnexpectedResponse", cancellationToken));
             }
 
-            return new WebSearchProbe(Reachable: true, Operational: true, Error: null);
+            // Source-site fallback remains usable when metasearch engines are blocked.
+            var limited = results.GetArrayLength() == 0
+                && document.RootElement.TryGetProperty("unresponsive_engines", out var unavailable)
+                && unavailable.ValueKind == JsonValueKind.Array && unavailable.GetArrayLength() > 0;
+            return new WebSearchProbe(Reachable: true, Operational: true,
+                Error: limited ? await messages.GetAsync("integration.searchLimited", cancellationToken) : null);
         }
         catch (JsonException)
         {
@@ -181,6 +188,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
     /// briefly unreachable afterwards — poll the status endpoint to see it come back.
     /// </summary>
     [HttpPost("scraper/update")]
+    [EnableRateLimiting("expensive")]
     [ProducesResponseType(typeof(ScraperUpdateResponseDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public async Task<ActionResult<ScraperUpdateResponseDto>> UpdateScraper(
@@ -222,6 +230,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
     /// run can never start.
     /// </summary>
     [HttpPost("ai/test")]
+    [EnableRateLimiting("expensive")]
     [ProducesResponseType(typeof(AiModelTestStatusDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<AiModelTestStatusDto>> RunAiModelTest(
@@ -246,19 +255,41 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
     [ProducesResponseType(typeof(AiPlanningMetricsResponseDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<AiPlanningMetricsResponseDto>> GetAiPlanningRuns(
         [FromServices] DishhiveDbContext context,
+        [FromServices] AiReviewMetricsService reviews,
         [FromQuery] int count = 30,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] string? task = null,
+        [FromQuery] string? model = null,
+        [FromQuery] string? fingerprint = null,
+        [FromQuery] string? outcome = null,
+        [FromQuery] string? operationId = null,
         CancellationToken cancellationToken = default)
     {
         count = Math.Clamp(count, 1, 100);
-        var runs = await context.AiPlanningRuns
-            .AsNoTracking()
+        var planningQuery = context.AiPlanningRuns.AsNoTracking();
+        if (from.HasValue) planningQuery = planningQuery.Where(run => run.StartedAt >= from.Value);
+        if (!string.IsNullOrWhiteSpace(model)) planningQuery = planningQuery.Where(run => run.Model == model);
+        if (!string.IsNullOrWhiteSpace(fingerprint))
+            planningQuery = planningQuery.Where(run => run.ConfigFingerprint == fingerprint);
+        if (!string.IsNullOrWhiteSpace(outcome)) planningQuery = planningQuery.Where(run => run.Outcome == outcome);
+        if (!string.IsNullOrWhiteSpace(operationId))
+            planningQuery = planningQuery.Where(run => run.RequestId == operationId);
+        var runs = await planningQuery
             .OrderByDescending(run => run.StartedAt)
             .Take(count)
             .ToListAsync(cancellationToken);
         // Task summaries use the full retained metrics window so a high-volume task
         // cannot hide lower-volume capabilities. The detailed list still honors count.
-        var metricCalls = await context.AiTaskRuns
-            .AsNoTracking()
+        var callQuery = context.AiTaskRuns.AsNoTracking();
+        if (from.HasValue) callQuery = callQuery.Where(run => run.StartedAt >= from.Value);
+        if (!string.IsNullOrWhiteSpace(task)) callQuery = callQuery.Where(run => run.Task == task);
+        if (!string.IsNullOrWhiteSpace(model)) callQuery = callQuery.Where(run => run.Model == model);
+        if (!string.IsNullOrWhiteSpace(fingerprint))
+            callQuery = callQuery.Where(run => run.ConfigFingerprint == fingerprint);
+        if (!string.IsNullOrWhiteSpace(outcome)) callQuery = callQuery.Where(run => run.Outcome == outcome);
+        if (!string.IsNullOrWhiteSpace(operationId))
+            callQuery = callQuery.Where(run => run.OperationId == operationId);
+        var metricCalls = await callQuery
             .OrderByDescending(run => run.StartedAt)
             .ToListAsync(cancellationToken);
         var calls = metricCalls.Take(count).ToList();
@@ -283,14 +314,22 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
 
         var successfulOutcomes = new HashSet<string>(StringComparer.Ordinal)
             { "success", "noResult" };
+        var cancelledOutcomes = new HashSet<string>(StringComparer.Ordinal) { "cancelled" };
+        var incompleteOutcomes = new HashSet<string>(StringComparer.Ordinal)
+            { "responseReceived", "abandoned", "completed" };
         var taskSummaries = metricCalls
-            .GroupBy(call => call.Task)
-            .OrderBy(group => group.Key)
+            .GroupBy(call => new { call.Task, call.Provider, call.Model, call.ConfigFingerprint })
+            .OrderBy(group => group.Key.Task)
             .Select(group => new AiTaskSummaryDto(
-                group.Key,
+                group.Key.Task,
+                group.Key.Provider,
+                group.Key.Model,
+                group.Key.ConfigFingerprint,
                 group.Count(),
                 group.Count(call => successfulOutcomes.Contains(call.Outcome)),
-                group.Count(call => !successfulOutcomes.Contains(call.Outcome)),
+                group.Count(call => !successfulOutcomes.Contains(call.Outcome)
+                    && !cancelledOutcomes.Contains(call.Outcome)
+                    && !incompleteOutcomes.Contains(call.Outcome)),
                 group.Average(call => call.DurationMs),
                 Percentile95(group.Select(call => call.DurationMs)),
                 group.Sum(call => call.TotalTokens)))
@@ -298,7 +337,11 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
         var taskMetrics = new AiTaskMetricsDto(
             metricCalls.Count,
             metricCalls.Count(call => successfulOutcomes.Contains(call.Outcome)),
-            metricCalls.Count(call => !successfulOutcomes.Contains(call.Outcome)),
+            metricCalls.Count(call => !successfulOutcomes.Contains(call.Outcome)
+                && !cancelledOutcomes.Contains(call.Outcome)
+                && !incompleteOutcomes.Contains(call.Outcome)),
+            metricCalls.Count(call => cancelledOutcomes.Contains(call.Outcome)),
+            metricCalls.Count(call => incompleteOutcomes.Contains(call.Outcome)),
             metricCalls.Count == 0 ? 0 : metricCalls.Average(call => call.DurationMs),
             Percentile95(metricCalls.Select(call => call.DurationMs)),
             metricCalls.Sum(call => call.InputTokens),
@@ -308,6 +351,7 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
 
         return Ok(new AiPlanningMetricsResponseDto(summary, runs.Select(run => new AiPlanningRunDto(
             run.Id, run.RequestId, run.StartedAt, run.Outcome, run.Provider, run.Model,
+            run.ConfigFingerprint,
             run.Instructions, run.NormalizedIntentJson, run.Error, run.RequestedDays, run.SuggestedItems,
             run.ExternalSuggestions, run.FallbackSuggestions, run.UsedExternalResearch,
             run.CompletionAttempts, run.ParseFailures, run.ModelTurns, run.InputTokens,
@@ -323,8 +367,30 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
                 call.ResponseMode, call.FinishReason, call.Error, call.Attempt,
                 call.MaxOutputTokens, call.Temperature, call.ReasoningDisabled,
                 call.SchemaRequested, call.SchemaApplied, call.PromptCharacters,
+                call.InputBudgetTokens, call.QueueWaitMs, call.PromptHash,
                 call.OutputCharacters, call.InputTokens, call.OutputTokens,
-                call.ReasoningTokens, call.TotalTokens, call.DurationMs)).ToList()));
+                call.ReasoningTokens, call.TotalTokens, call.DurationMs)
+            {
+                OperationAttempt = call.OperationAttempt,
+                InputFingerprint = call.InputFingerprint,
+                InputRevisions = call.InputRevisionsJson == null ? null
+                    : System.Text.Json.JsonSerializer.Deserialize<List<AiInputRevisionDto>>(call.InputRevisionsJson,
+                        new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
+            }).ToList())
+            { Reviews = await reviews.LoadAsync(count, from, task, model, fingerprint, outcome, operationId, cancellationToken) });
+    }
+
+    [HttpGet("scraper/update-status")]
+    [ProducesResponseType(typeof(ScraperUpdateStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<ScraperUpdateStatusDto>> GetScraperUpdateStatus(
+        [FromServices] IRecipeScrapersClient scrapersClient,
+        CancellationToken cancellationToken)
+    {
+        var status = await scrapersClient.GetUpdateStatusAsync(cancellationToken);
+        if (status is null) return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        return Ok(new ScraperUpdateStatusDto(
+            status.Status, status.ActiveVersion, status.UpdatedAt, status.Error));
     }
 
     private static double Percentile95(IEnumerable<long> values)
@@ -344,10 +410,15 @@ public class IntegrationsController(IHttpClientFactory httpClientFactory, UserMe
                 TestedAt: result.TestedAt,
                 Verdict: result.Verdict,
                 ResponseMode: result.ResponseMode.ToString(),
+                EndpointReachable: result.EndpointReachable,
+                ModelListed: result.ModelListed,
+                FormatCompatible: result.ResponseMode != AiResponseMode.None,
                 EvaluationPassed: result.EvaluationPassed,
+                PlanningQualityPassed: result.PlanningIntentPassed,
                 TokensPerSecond: result.TokensPerSecond,
                 ElapsedMs: result.ElapsedMs,
-                Checks: [.. result.Checks.Select(c => new AiModelTestCheckDto(c.Name, c.Passed, c.Detail))]));
+                Checks: [.. result.Checks.Select(c => new AiModelTestCheckDto(c.Name, c.Passed, c.Detail))])
+                { PlanningEligible = result.PlanningEligible });
     }
 
     private static string StateString(AiModelTestState state) => state switch

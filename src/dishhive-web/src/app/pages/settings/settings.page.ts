@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { inject, ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
@@ -35,6 +36,7 @@ import { environment } from '../../../environments/environment';
   styleUrl: './settings.page.scss'
 })
 export class SettingsPage implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
   readonly version = environment.version;
   readonly MeasurementSystem = MeasurementSystem;
   readonly FirstDayOfWeek = FirstDayOfWeek;
@@ -76,7 +78,7 @@ export class SettingsPage implements OnInit {
       error: () => {
         this.autoCollections.update(list =>
           list.map(c => c.id === collection.id ? { ...c, enabled: !enabled } : c));
-        this.snackBar.open('Could not update the collection', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotUpdateTheCollection'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       }
     });
   }
@@ -94,16 +96,16 @@ export class SettingsPage implements OnInit {
         this.importing.set(false);
         this.importSkipped.set(result.skippedRecipes);
         const parts = [
-          result.created > 0 ? `${result.created} added` : null,
-          result.updated > 0 ? `${result.updated} updated` : null,
-          result.skipped > 0 ? `${result.skipped} skipped` : null
+          result.created > 0 ? this.uiLanguage.t('ui.valueAdded', { p0: (result.created) }) : null,
+          result.updated > 0 ? this.uiLanguage.t('ui.valueUpdated', { p0: (result.updated) }) : null,
+          result.skipped > 0 ? this.uiLanguage.t('ui.valueSkipped', { p0: (result.skipped) }) : null
         ].filter(p => p !== null);
-        this.snackBar.open(`Import finished: ${parts.join(', ') || 'nothing to do'}`, 'Dismiss', { duration: 6000 });
+        this.snackBar.open(this.uiLanguage.t('ui.importFinishedValue', { p0: (parts.join(', ') || this.uiLanguage.t('ui.nothingToDo')) }), this.uiLanguage.t('common.dismiss'), { duration: 6000 });
       },
       error: err => {
         this.importing.set(false);
-        const detail = err?.error?.detail ?? 'Is it a recipe JSON file?';
-        this.snackBar.open(`Could not import the file. ${detail}`, 'Dismiss', { duration: 6000 });
+        const detail = err?.error?.detail ?? this.uiLanguage.t('ui.isItARecipeJSONFile');
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotImportTheFileValue', { p0: (detail) }), this.uiLanguage.t('common.dismiss'), { duration: 6000 });
       }
     });
   }
@@ -111,15 +113,15 @@ export class SettingsPage implements OnInit {
   installApp(): void {
     this.pwaService.promptInstall().then(accepted => {
       if (accepted) {
-        this.snackBar.open('Dishhive installed', 'Dismiss', { duration: 3000 });
+        this.snackBar.open(this.uiLanguage.t('ui.dishhiveInstalled'), this.uiLanguage.t('common.dismiss'), { duration: 3000 });
       }
     });
   }
 
   setMeasurementSystem(system: MeasurementSystem): void {
     this.settingsService.setMeasurementSystem(system).subscribe({
-      next: () => this.snackBar.open(`Measurement system set to ${system}`, 'Dismiss', { duration: 3000 }),
-      error: () => this.snackBar.open('Could not save the setting', 'Dismiss', { duration: 4000 })
+      next: () => this.snackBar.open(this.uiLanguage.t('ui.measurementSystemSetToValue', { p0: this.uiLanguage.t(system === MeasurementSystem.Metric ? 'ui.metric' : 'ui.imperial') }), this.uiLanguage.t('common.dismiss'), { duration: 3000 }),
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotSaveTheSetting'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -129,21 +131,21 @@ export class SettingsPage implements OnInit {
 
   setFirstDayOfWeek(day: FirstDayOfWeek): void {
     this.settingsService.setFirstDayOfWeek(day).subscribe({
-      next: () => this.snackBar.open(`First day of the week set to ${day}`, 'Dismiss', { duration: 3000 }),
-      error: () => this.snackBar.open('Could not save the setting', 'Dismiss', { duration: 4000 })
+      next: () => this.snackBar.open(this.uiLanguage.t('ui.firstDayOfTheWeekSetToValue', { p0: this.uiLanguage.t(day === FirstDayOfWeek.Monday ? 'common.monday' : 'common.sunday') }), this.uiLanguage.t('common.dismiss'), { duration: 3000 }),
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotSaveTheSetting'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
   setLanguage(language: SupportedLanguage): void {
     this.settingsService.setPreferredLanguage(language).subscribe({
       next: () => this.languageService.use(language),
-      error: () => this.snackBar.open('Could not save the setting', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotSaveTheSetting'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
   setTranslateImportedRecipes(enabled: boolean): void {
     this.settingsService.setTranslateImportedRecipes(enabled).subscribe({
-      error: () => this.snackBar.open('Could not save the setting', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotSaveTheSetting'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 }

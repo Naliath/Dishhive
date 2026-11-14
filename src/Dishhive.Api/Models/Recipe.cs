@@ -89,6 +89,15 @@ public class Recipe
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Monotonic source-content revision used by asynchronous enrichment.</summary>
+    public long Revision { get; set; } = 1;
+
+    /// <summary>
+    /// Incremented for every explicit human facts confirmation. Background work
+    /// captures this value and may not apply across a later confirmation.
+    /// </summary>
+    public long FactsConfirmationVersion { get; set; }
+
     public List<RecipeIngredient> Ingredients { get; set; } = new();
 
     public List<RecipeStep> Steps { get; set; } = new();
@@ -111,4 +120,9 @@ public class Recipe
     public DietaryFactsStatus DietaryFactsStatus { get; set; } = DietaryFactsStatus.Unassessed;
 
     public DateTime? DietaryFactsAssessedAt { get; set; }
+
+    /// <summary>The recipe revision described by the current fact rows.</summary>
+    public long? DietaryFactsAssessedRevision { get; set; }
+
+    public List<RecipeDietaryFactHistory> DietaryFactsHistory { get; set; } = new();
 }

@@ -17,9 +17,7 @@
         <div class="prompt-drift-notice">
           <mat-icon>update</mat-icon>
           <span>
-            The built-in prompt has been improved since you customized yours — you are
-            running on an older base. Reset to pick up the improvements, then re-apply
-            your tweaks.
+            {{ 'ui.theBuiltInPromptHasBeenImprovedSinceYouCustomizedYoursYouAreRunningOnAnOlderBaseResetToPickUpThe' | translate }}
           </span>
         </div>
       }
@@ -53,11 +51,7 @@
           </mat-panel-title>
         </mat-expansion-panel-header>
         <p class="protected-explain">
-          Appended after your prompt on every request. The app depends on these —
-          exact recipe titles and freezer-item names link suggestions back to your
-          data, and the JSON shape is how the reply is read. Note that a conflicting
-          editable prompt can still confuse the model into ignoring them; the model
-          test verdict will show it.
+          {{ 'ui.appendedAfterYourPromptOnEveryRequestTheAppDependsOnTheseExactRecipeTitlesAndFreezerItemNamesLin' | translate }}
         </p>
         <pre class="protected-text">{{ p.protectedPrompt }}</pre>
       </mat-expansion-panel>

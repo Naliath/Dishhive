@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { inject, ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
@@ -26,6 +27,7 @@ import {
   styleUrl: './integrations-status.scss'
 })
 export class IntegrationsStatusComponent implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
   private static readonly updatePollIntervalMs = 2000;
   private static readonly updatePollAttempts = 15;
   // The model test makes up to two full completions (each bounded by Ai__TimeoutSeconds,
@@ -79,11 +81,12 @@ export class IntegrationsStatusComponent implements OnInit {
     });
   }
 
-  aiVerdictLabel(verdict: AiModelTestVerdict): string {
+  aiVerdictLabel(verdict: string): string {
     switch (verdict) {
       case 'passed': return 'integration.allTestedAIPlanningFeaturesAreAvailable';
       case 'warnings': return 'integration.aIPlanningWorksButSomeFeaturesAreUnavailable';
       case 'failed': return 'integration.aIPlanningIsUnavailableSuggestionsWillUseTheRulesFallback';
+      default: return 'integration.aIPlanningIsUnavailableSuggestionsWillUseTheRulesFallback';
     }
   }
 
@@ -136,9 +139,9 @@ export class IntegrationsStatusComponent implements OnInit {
         unsupported: 'integration.atLeastOneEnglishOrDutchSourceRequestDidNotProduceAUsableCountDateAndCoursePlanThisIsStricterThanUnderstandingConversationalLanguage'
       },
       'Test run': {
-        name: 'Capability test',
-        supported: 'The model capability test completed successfully.',
-        unsupported: 'The model capability test could not be completed.'
+        name: 'ui.capabilityTest',
+        supported: 'ui.capabilityPassed',
+        unsupported: 'ui.capabilityFailed'
       }
     };
     const feature = features[check.name];
@@ -146,7 +149,7 @@ export class IntegrationsStatusComponent implements OnInit {
       ? { name: feature.name, detail: check.passed ? feature.supported : feature.unsupported }
       : {
           name: check.name,
-          detail: check.passed ? 'This capability is supported.' : 'This capability is not supported.'
+          detail: check.passed ? 'ui.capabilitySupported' : 'ui.capabilityUnsupported'
         };
   }
 
@@ -183,17 +186,17 @@ export class IntegrationsStatusComponent implements OnInit {
 
   webSearchChipClass(integration: IntegrationStatusResponse['webSearch']): string {
     if (!integration.configured) return 'status-chip--off';
-    return integration.operational ? 'status-chip--ok' : 'status-chip--warn';
+    return integration.operational && !integration.error ? 'status-chip--ok' : 'status-chip--warn';
   }
 
   webSearchChipIcon(integration: IntegrationStatusResponse['webSearch']): string {
     if (!integration.configured) return 'radio_button_unchecked';
-    return integration.operational ? 'check_circle' : 'warning';
+    return integration.operational && !integration.error ? 'check_circle' : 'warning';
   }
 
   webSearchChipLabel(integration: IntegrationStatusResponse['webSearch']): string {
     if (!integration.configured) return 'common.notConfigured';
-    if (integration.operational) return 'common.active';
+    if (integration.operational) return integration.error ? 'common.limited' : 'common.active';
     return integration.reachable ? 'common.misconfigured' : 'common.unreachable';
   }
 
@@ -204,7 +207,7 @@ export class IntegrationsStatusComponent implements OnInit {
       this.checkingVersion.set(false);
       this.versionCheck.set(result);
       if (!result) {
-        this.scraperMessage.set('Could not check for updates — is the scraper container running?');
+        this.scraperMessage.set(this.uiLanguage.t('ui.couldNotCheckForUpdatesIsTheScraperContainerRunning'));
       }
     });
   }
@@ -216,7 +219,7 @@ export class IntegrationsStatusComponent implements OnInit {
     this.integrationsService.updateScraper(target).subscribe(result => {
       if (!result) {
         this.updating.set(false);
-        this.scraperMessage.set('Update failed — check the scraper container logs.');
+        this.scraperMessage.set(this.uiLanguage.t('ui.updateFailedCheckTheScraperContainerLogs'));
         return;
       }
       // The sidecar restarts to load the new version; poll until it is back
@@ -235,11 +238,11 @@ export class IntegrationsStatusComponent implements OnInit {
           this.integrations.set(status);
           this.updating.set(false);
           this.versionCheck.set(null);
-          this.scraperMessage.set(`Updated to v${scraper!.packageVersion}.`);
+          this.scraperMessage.set(this.uiLanguage.t('ui.updatedToVValue', { p0: (scraper!.packageVersion) }));
         } else if (attemptsLeft <= 1) {
           if (status) this.integrations.set(status);
           this.updating.set(false);
-          this.scraperMessage.set('The scraper service has not come back up yet — refresh the page in a moment.');
+          this.scraperMessage.set(this.uiLanguage.t('ui.theScraperServiceHasNotComeBackUpYetRefreshThePageInAMoment'));
         } else {
           this.pollUntilScraperBack(targetVersion, attemptsLeft - 1);
         }

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Dishhive.Api.Services.Suggestions;
 
 namespace Dishhive.Api.Models.DTOs;
 
@@ -45,9 +46,9 @@ public class MealSuggestionDto
     public bool FromFallback { get; set; }
 
     /// <summary>
-    /// Warning that the linked recipe conflicts with a household allergy (exact
-    /// facts match on assessed recipes, ingredient-substring heuristic otherwise);
-    /// surfaced in the review dialog (never used to hide the suggestion)
+    /// Allergy review warning retained for older review snapshots. New generation
+    /// omits conflicts and unassessed meals when an attendee has canonical allergies;
+    /// missing dates are reported in the partial-plan requirements instead.
     /// </summary>
     public string? AllergyWarning { get; set; }
 
@@ -79,6 +80,8 @@ public class MealSuggestionDto
     /// <summary>Canonical dietary facts used for deterministic validation.</summary>
     public List<string> ContainsClasses { get; set; } = new();
     public bool FactsAssessed { get; set; }
+    public int? TotalTimeMinutes { get; set; }
+    public string? CandidateVersion { get; set; }
 }
 
 /// <summary>
@@ -89,6 +92,9 @@ public class MealSuggestionsDto
 {
     public Guid BatchId { get; set; }
     public bool Enabled { get; set; }
+    /// <summary>Structured final-plan state: complete, partial, or unable.</summary>
+    public string Status { get; set; } = "complete";
+    public List<UnmetPlanningRequirementDto> UnmetRequirements { get; set; } = [];
     public List<MealSuggestionDto> Suggestions { get; set; } = new();
 
     /// <summary>
@@ -100,11 +106,14 @@ public class MealSuggestionsDto
     public int ExcludedForAllergies { get; set; }
 }
 
+public record UnmetPlanningRequirementDto(string Id, string Message);
+
 public class AcceptMealSuggestionsRequestDto
 {
     public Guid BatchId { get; set; }
 
-    [MinLength(1)]
+    public List<Guid> RejectedSuggestionIds { get; set; } = new();
+
     public List<AcceptMealSuggestionDto> Suggestions { get; set; } = new();
 }
 
@@ -117,7 +126,7 @@ public class AcceptMealSuggestionDto
     public List<Guid> AttendeeIds { get; set; } = new();
     public Guid? RecipeId { get; set; }
 
-    [Required, MaxLength(200)]
+    [Required, MaxLength(DomainLimits.DishName)]
     public string DishName { get; set; } = string.Empty;
 
     [MaxLength(100)]
@@ -127,6 +136,8 @@ public class AcceptMealSuggestionDto
 
     [MaxLength(1000), Url]
     public string? SourceUrl { get; set; }
+    [MaxLength(80)]
+    public string? CandidateVersion { get; set; }
 }
 
 public class AcceptMealSuggestionsResponseDto
@@ -136,6 +147,7 @@ public class AcceptMealSuggestionsResponseDto
 
 public class AcceptMealSuggestionResultDto
 {
+    public string? Code { get; set; }
     public Guid SuggestionId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string DishName { get; set; } = string.Empty;

@@ -56,7 +56,8 @@ public class RulesMealSuggestionService : IMealSuggestionService
                 RecipeId = matchedRecipe?.Id,
                 FreezyItemRef = item.Id,
                 FreezyItemQuantity = 1,
-                Reason = $"From the freezer, expires {item.ExpirationDate:d MMMM}"
+                Reason = $"From the freezer, expires {item.ExpirationDate:d MMMM}",
+                ReasonText = new("planningReason.freezer", ("date", new Dishhive.Api.Services.Localization.LocalizedUserValue(item.ExpirationDate!.Value, "d MMMM")))
             });
         }
 
@@ -104,7 +105,8 @@ public class RulesMealSuggestionService : IMealSuggestionService
                         Date = date,
                         DishName = matchedRecipe?.Title ?? pick,
                         RecipeId = matchedRecipe?.Id,
-                        Reason = $"From your #[{constraintsByDate[date].Name}] collection"
+                        Reason = $"From your #[{constraintsByDate[date].Name}] collection",
+                        ReasonText = new("planningReason.collection", ("name", constraintsByDate[date].Name))
                     });
                 }
                 else
@@ -181,7 +183,11 @@ public class RulesMealSuggestionService : IMealSuggestionService
                             RecipeId = matchedRecipe?.Id,
                             Reason = history?.AverageRating >= 4
                                 ? $"{favorite.MemberName}'s favorite, rated {history.AverageRating:0.0}/5"
-                                : $"{favorite.MemberName}'s favorite"
+                                : $"{favorite.MemberName}'s favorite",
+                            ReasonText = history?.AverageRating >= 4
+                                ? new("planningReason.ratedFavorite", ("name", favorite.MemberName),
+                                    ("rating", new Dishhive.Api.Services.Localization.LocalizedUserValue(history.AverageRating.Value, "0.0")))
+                                : new("planningReason.favorite", ("name", favorite.MemberName))
                         });
                         break;
                     }
@@ -191,7 +197,8 @@ public class RulesMealSuggestionService : IMealSuggestionService
 
         return Task.FromResult<IReadOnlyList<MealSuggestion>>(
             suggestions
-                .Select(s => s with { Source = MealSuggestionSource.RulesFallback })
+                .Select(s => MealSuggestionPostProcessor.Normalize(
+                    s with { Source = MealSuggestionSource.RulesFallback }, request))
                 .OrderBy(s => s.Date)
                 .ToList());
     }

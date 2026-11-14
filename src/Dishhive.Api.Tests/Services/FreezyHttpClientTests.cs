@@ -12,6 +12,28 @@ namespace Dishhive.Api.Tests.Services;
 /// </summary>
 public class FreezyHttpClientTests
 {
+    [Theory]
+    [InlineData("[]", true)]
+    [InlineData("null", false)]
+    [InlineData("[{\"id\":\"item\",\"name\":\"Soup\",\"quantity\":2}]", true)]
+    [InlineData("[{\"id\":\"item\",\"name\":\"Soup\"}]", false)]
+    [InlineData("[{\"name\":\"Soup\",\"quantity\":2}]", false)]
+    public async Task AuthoritativeSnapshot_DistinguishesEmptyStockFromIncompleteData(string json, bool available)
+    {
+        var handler = new MockHttpMessageHandler().RespondWith(FreezyBaseUrl + "api/items", json, "application/json");
+        var snapshot = await CreateClient(handler).GetStockSnapshotAsync();
+        Assert.True(snapshot.Configured);
+        Assert.Equal(available, snapshot.Available);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task AuthoritativeSnapshot_ServerErrorIsUnavailable_NotEmptyStock()
+    {
+        var client = CreateClient(new MockHttpMessageHandler().FailWith(FreezyBaseUrl + "api/items", HttpStatusCode.ServiceUnavailable));
+        Assert.False((await client.GetStockSnapshotAsync()).Available);
+    }
+
     private const string FreezyBaseUrl = "http://freezy.test/";
 
     private static FreezyHttpClient CreateClient(HttpMessageHandler handler, bool configured = true)

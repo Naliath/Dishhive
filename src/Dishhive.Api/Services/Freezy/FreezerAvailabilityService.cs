@@ -1,3 +1,4 @@
+using Dishhive.Api.Services.Time;
 using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -14,13 +15,15 @@ namespace Dishhive.Api.Services.Freezy;
 /// </summary>
 public class FreezerAvailabilityService
 {
+    private readonly IHouseholdClock _clock;
     private readonly IFreezyClient _freezyClient;
     private readonly DishhiveDbContext _context;
 
-    public FreezerAvailabilityService(IFreezyClient freezyClient, DishhiveDbContext context)
+    public FreezerAvailabilityService(IFreezyClient freezyClient, DishhiveDbContext context, IHouseholdClock clock)
     {
         _freezyClient = freezyClient;
         _context = context;
+        _clock = clock;
     }
 
     /// <summary>Whether the Freezy integration is configured (delegates to the client)</summary>
@@ -39,7 +42,7 @@ public class FreezerAvailabilityService
             return [];
         }
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
 
         // Future, not-yet-eaten freezer meals reserve stock Freezy hasn't decremented.
         // An already-eaten meal (even today's) is reflected in Freezy, so don't double-count.
@@ -48,7 +51,7 @@ public class FreezerAvailabilityService
             .Where(m => m.FreezyItemRef != null
                 && m.FreezyItemQuantity > 0
                 && m.Date >= today
-                && m.Eaten != EatenStatus.Eaten)
+                && m.Eaten == null)
             .GroupBy(m => m.FreezyItemRef!)
             .Select(g => new { ItemId = g.Key, Reserved = g.Sum(m => m.FreezyItemQuantity) })
             .ToDictionaryAsync(x => x.ItemId, x => x.Reserved, cancellationToken);

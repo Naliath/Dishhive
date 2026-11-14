@@ -11,6 +11,7 @@ namespace Dishhive.Api.Services.Suggestions;
 /// and corrective-reprompt quoting.</summary>
 public static partial class MealSuggestionResponseContract
 {
+    public const string ContractVersion = "week-suggestions-v6";
     public static string ExampleJson { get; } = AiJsonContract.Serialize(
         new WeekSuggestionsPayload(
         [

@@ -66,7 +66,7 @@ public class RecipeImportEndpointIntegrationTests : IDisposable
         recipe.Steps.Should().HaveCount(11);
         recipe.SourceProvider.Should().Be("dagelijkse-kost");
         recipe.HasLocalImage.Should().BeTrue();
-        recipe.ImageUrl.Should().Be($"/api/recipes/{recipe.Id}/image");
+        recipe.ImageUrl.Should().Be($"/api/recipes/{recipe.Id}/image?v={recipe.UpdatedAt.Ticks}");
     }
 
     [Fact]

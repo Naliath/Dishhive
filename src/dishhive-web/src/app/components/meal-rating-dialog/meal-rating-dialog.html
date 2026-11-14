@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>Rate {{ meal().dishName ?? 'this meal' }}</h2>
+<h2 mat-dialog-title>{{ 'ui.rateValue' | translate:{ p0: (meal().dishName ?? ('ui.thisMeal' | translate)) } }}</h2>
 
 <mat-dialog-content>
   <div class="rating-rows">
@@ -10,7 +10,7 @@
             <button
               mat-icon-button
               class="star-button"
-              [attr.aria-label]="'Rate ' + star + ' of 5 for ' + member.name"
+              [attr.aria-label]="'ui.rateStars' | translate:{ stars: star, name: member.name }"
               (click)="rate(member.id, star)">
               <mat-icon>{{ star <= ratingOf(member.id) ? 'star' : 'star_border' }}</mat-icon>
             </button>
@@ -22,5 +22,5 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button (click)="close()">Done</button>
+  <button mat-button (click)="close()">{{ 'ui.done' | translate }}</button>
 </mat-dialog-actions>

@@ -23,9 +23,9 @@ services:
     environment:
       POSTGRES_DB: dishhive
       POSTGRES_USER: dishhive
-      POSTGRES_PASSWORD: dishhive_dev_password
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-dishhive_dev_password}"
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,10 +46,15 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5100
+      Database__AutoMigrate: "true"
+      BackgroundJobs__Enabled: "true"
+      Household__TimeZone: "${HOUSEHOLD_TIME_ZONE:-Europe/Brussels}"
       # Minimum application log level. Override LOG_LEVEL in .env (e.g. Debug while
       # diagnosing AI output, Warning to reduce production log volume).
       Logging__LogLevel__Default: "${LOG_LEVEL:-Information}"
-      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=dishhive;Username=dishhive;Password=dishhive_dev_password"
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=dishhive;Username=dishhive;Password=${POSTGRES_PASSWORD:-dishhive_dev_password}"
+      ApiSecurity__ApiKey: "${DISHHIVE_API_KEY:-}"
+      ApiSecurity__McpReadApiKey: "${DISHHIVE_MCP_READ_API_KEY:-}"
       # Optional Freezy integration; set to e.g. http://host.docker.internal:5000
       Freezy__BaseUrl: "http://host.docker.internal:5000"
       # Demo mode: seeds an empty database with 20 Dagelijkse Kost recipes and a
@@ -62,7 +67,7 @@ services:
       Ai__Provider: "${AI_PROVIDER:-lmstudio}"
       Ai__ApiKey: "${AI_API_KEY:-}"
       Ai__BaseUrl: "${AI_BASE_URL:-http://host.docker.internal:1234/v1}"
-      Ai__Model: "${AI_MODEL:-qwen/qwen3.6-35b-a3b}"
+      Ai__Model: "${AI_MODEL:-qwen/qwen3.8-27b:2}"
       # Shared and task-specific execution settings (built-in defaults shown).
       # IAiExecutionGate applies these consistently to every model call.
       Ai__MaxOutputTokens: "${AI_MAX_OUTPUT_TOKENS:-12000}"
@@ -71,7 +76,19 @@ services:
       Ai__Temperature: "${AI_TEMPERATURE:-0.3}"
       Ai__MaxRetries: "${AI_MAX_RETRIES:-1}"
       Ai__MaxPromptTokens: "${AI_MAX_PROMPT_TOKENS:-6000}"
+      Ai__MaxInputTokens: "${AI_MAX_INPUT_TOKENS:-20000}"
+      Ai__MaxConcurrentRequests: "${AI_MAX_CONCURRENT_REQUESTS:-1}"
+      Ai__MaxQueuedRequests: "${AI_MAX_QUEUED_REQUESTS:-32}"
+      Ai__ContextWindowTokens: "${AI_CONTEXT_WINDOW_TOKENS:-65536}"
+      Ai__OperationTimeoutSeconds: "${AI_OPERATION_TIMEOUT_SECONDS:-300}"
+      Ai__MaxOperationAttempts: "${AI_MAX_OPERATION_ATTEMPTS:-32}"
+      Ai__MaxTransportRetries: "${AI_MAX_TRANSPORT_RETRIES:-1}"
+      Ai__CapabilitySuccessHours: "${AI_CAPABILITY_SUCCESS_HOURS:-168}"
+      Ai__CapabilityFailureCooldownSeconds: "${AI_CAPABILITY_FAILURE_COOLDOWN_SECONDS:-60}"
+      Ai__RetainDiagnosticText: "${AI_RETAIN_DIAGNOSTIC_TEXT:-false}"
       Ai__FactsMaxOutputTokens: "${AI_FACTS_MAX_OUTPUT_TOKENS:-512}"
+      Ai__FactsMaxPromptTokens: "${AI_FACTS_MAX_PROMPT_TOKENS:-4000}"
+      Ai__FactsEnableReasoning: "${AI_FACTS_ENABLE_REASONING:-false}"
       Ai__TranslationMaxOutputTokens: "${AI_TRANSLATION_MAX_OUTPUT_TOKENS:-8000}"
       Ai__TranslationMaxPromptTokens: "${AI_TRANSLATION_MAX_PROMPT_TOKENS:-12000}"
       Ai__ImportExtractionMaxOutputTokens: "${AI_IMPORT_MAX_OUTPUT_TOKENS:-6000}"
@@ -90,7 +107,7 @@ services:
       WebSearch__BaseUrl: "${WEBSEARCH_BASE_URL:-http://searxng:8080}"
       WebSearch__MaxResults: "${WEBSEARCH_MAX_RESULTS:-6}"
     ports:
-      - "5100:5100"
+      - "127.0.0.1:${DISHHIVE_PORT:-5100}:5100"
     depends_on:
       db:
         condition: service_healthy
@@ -118,7 +135,7 @@ services:
       # Host access for local development (dotnet run with
       # RecipeScrapers__BaseUrl=http://localhost:5101); the app container
       # reaches it internally at http://scraper:8000
-      - "5101:8000"
+      - "127.0.0.1:5101:8000"
     volumes:
       - scraper_lib:/data/lib
     healthcheck:
@@ -144,7 +161,7 @@ services:
     container_name: dishhive-searxng
     restart: unless-stopped
     ports:
-      - "5102:8080"
+      - "127.0.0.1:5102:8080"
     volumes:
       - ./docker/searxng:/etc/searxng:rw
     environment:

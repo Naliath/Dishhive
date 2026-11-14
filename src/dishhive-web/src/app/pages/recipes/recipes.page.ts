@@ -1,14 +1,18 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../services/language.service';
+import { inject, ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { DecimalPipe } from '@angular/common';
@@ -27,18 +31,20 @@ import { AutoCollectionNamePipe } from '../../services/language.service';
 @Component({
   selector: 'app-recipes-page',
   standalone: true,
-  imports: [
+  imports: [TranslatePipe,
     CookingLoaderComponent,
     DecimalPipe,
     RouterLink,
     FormsModule,
     MatButtonModule,
     MatCardModule,
+    MatChipsModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
     MatMenuModule,
     MatSelectModule,
+    MatPaginatorModule,
     MatSnackBarModule,
     MatTooltipModule,
     AutoCollectionNamePipe
@@ -48,10 +54,14 @@ import { AutoCollectionNamePipe } from '../../services/language.service';
   styleUrl: './recipes.page.scss'
 })
 export class RecipesPage implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
   readonly recipes = signal<RecipeListItem[]>([]);
   readonly loading = signal(true);
   readonly importing = signal(false);
   readonly importVisible = signal(false);
+  readonly totalRecipes = signal(0);
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(24);
 
   searchTerm = '';
   importUrl = '';
@@ -84,6 +94,7 @@ export class RecipesPage implements OnInit {
   private readonly searchInput$ = new Subject<string>();
   /** The full-page spinner only shows before the first results arrive */
   private firstLoad = true;
+  private recipeLoadSequence = 0;
 
   constructor(
     private recipesService: RecipesService,
@@ -106,23 +117,29 @@ export class RecipesPage implements OnInit {
   }
 
   loadRecipes(): void {
+    const sequence = ++this.recipeLoadSequence;
     if (this.firstLoad) {
       this.loading.set(true);
     }
-    this.recipesService.getRecipes(
+    this.recipesService.getRecipesPage(
       this.searchTerm.trim() || undefined,
       this.selectedCategory() ?? undefined,
       this.selectedTags(),
-      this.activeCookbookId() ?? undefined
+      this.activeCookbookId() ?? undefined,
+      this.pageIndex() + 1,
+      this.pageSize()
     ).subscribe({
-      next: recipes => {
-        this.recipes.set(recipes);
+      next: page => {
+        if (sequence !== this.recipeLoadSequence) return;
+        this.recipes.set(page.items);
+        this.totalRecipes.set(page.totalCount);
         this.firstLoad = false;
         this.loading.set(false);
       },
       error: () => {
+        if (sequence !== this.recipeLoadSequence) return;
         this.loading.set(false);
-        this.snackBar.open('Could not load recipes', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotLoadRecipes'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       }
     });
   }
@@ -134,6 +151,13 @@ export class RecipesPage implements OnInit {
 
   /** Manual filter changes apply within the active collection (when one is selected) */
   onFilterChanged(): void {
+    this.pageIndex.set(0);
+    this.loadRecipes();
+  }
+
+  onPage(event: PageEvent): void {
+    this.pageIndex.set(event.pageIndex);
+    this.pageSize.set(event.pageSize);
     this.loadRecipes();
   }
 
@@ -150,6 +174,7 @@ export class RecipesPage implements OnInit {
   /** Tap a collection chip to view its recipes; tap again to deselect */
   applyCookbook(cookbook: Cookbook): void {
     this.activeCookbookId.set(this.activeCookbookId() === cookbook.id ? null : cookbook.id);
+    this.pageIndex.set(0);
     this.loadRecipes();
   }
 
@@ -158,6 +183,7 @@ export class RecipesPage implements OnInit {
     this.selectedCategory.set(null);
     this.selectedTags.set([]);
     this.activeCookbookId.set(null);
+    this.pageIndex.set(0);
     this.loadRecipes();
   }
 
@@ -176,18 +202,17 @@ export class RecipesPage implements OnInit {
         this.loadCookbooks();
         this.loadRecipes();
         this.snackBar.open(
-          `Collection "${cookbook.name}" created — add recipes via the card menus`, 'Dismiss', { duration: 4000 });
+          this.uiLanguage.t('ui.collectionValueCreatedAddRecipesViaTheCardMenus', { p0: (cookbook.name) }), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       },
       error: (error: HttpErrorResponse) => {
         this.savingCookbook.set(false);
-        const detail = error.error?.detail ?? 'Could not create the collection';
-        this.snackBar.open(detail, 'Dismiss', { duration: 4000 });
+        const detail = error.error?.detail ?? this.uiLanguage.t('ui.couldNotCreateTheCollection');
+        this.snackBar.open(detail, this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       }
     });
   }
 
-  deleteCookbook(cookbook: Cookbook, event: Event): void {
-    event.stopPropagation();
+  deleteCookbook(cookbook: Cookbook): void {
     this.cookbooksService.deleteCookbook(cookbook.id).subscribe({
       next: () => {
         if (this.activeCookbookId() === cookbook.id) {
@@ -196,7 +221,7 @@ export class RecipesPage implements OnInit {
         }
         this.loadCookbooks();
       },
-      error: () => this.snackBar.open('Could not delete the collection', 'Dismiss', { duration: 4000 })
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotDeleteTheCollection'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -214,12 +239,12 @@ export class RecipesPage implements OnInit {
       next: () => {
         this.loadCookbooks();
         this.loadRecipes();
-        const action = wasMember ? 'removed from' : 'added to';
+        const action = wasMember ? this.uiLanguage.t('ui.removedFrom') : this.uiLanguage.t('ui.addedTo');
         this.snackBar.open(
-          `"${recipe.title}" ${action} ${cookbook.name}`, 'Dismiss', { duration: 3000 });
+          `"${recipe.title}" ${action} ${cookbook.name}`, this.uiLanguage.t('common.dismiss'), { duration: 3000 });
       },
       error: () => this.snackBar.open(
-        'Could not update the collection', 'Dismiss', { duration: 4000 })
+        this.uiLanguage.t('ui.couldNotUpdateTheCollection'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 
@@ -247,13 +272,13 @@ export class RecipesPage implements OnInit {
         this.importing.set(false);
         this.importUrl = '';
         this.importVisible.set(false);
-        this.snackBar.open(`Imported "${recipe.title}" — check the values`, 'Dismiss', { duration: 5000 });
+        this.snackBar.open(this.uiLanguage.t('ui.importedValueCheckTheValues', { p0: (recipe.title) }), this.uiLanguage.t('common.dismiss'), { duration: 5000 });
         this.router.navigate(['/recipes', recipe.id]);
       },
       error: (error: HttpErrorResponse) => {
         this.importing.set(false);
-        const detail = error.error?.title ?? 'Import failed';
-        this.snackBar.open(detail, 'Dismiss', { duration: 5000 });
+        const detail = error.error?.title ?? this.uiLanguage.t('aiStats.reviewOutcomes.importFailed');
+        this.snackBar.open(detail, this.uiLanguage.t('common.dismiss'), { duration: 5000 });
       }
     });
   }

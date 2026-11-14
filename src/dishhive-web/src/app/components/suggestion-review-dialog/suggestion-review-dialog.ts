@@ -1,3 +1,5 @@
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { HouseholdClockService } from '../../services/household-clock.service';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -20,12 +22,13 @@ import { MatInputModule } from '@angular/material/input';
 import { TextFieldModule } from '@angular/cdk/text-field';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { RouterLink } from '@angular/router';
 import { CookingLoaderComponent } from '../cooking-loader/cooking-loader';
 import { CollectionMentionDirective } from '../../directives/collection-mention.directive';
 import { MealSuggestionsService } from '../../services/meal-suggestions.service';
 import { IntegrationsService } from '../../services/integrations.service';
-import { MealSuggestion, SuggestionReviewResult } from '../../models/meal-suggestion.model';
-import { COURSE_LABELS, Course, MEAL_TYPE_LABELS, MealType } from '../../models/planned-meal.model';
+import { AcceptSuggestionResult, MealSuggestion, SuggestionReviewResult } from '../../models/meal-suggestion.model';
+import { Course, MealType } from '../../models/planned-meal.model';
 
 export interface SuggestionReviewDialogData {
   /** ISO date (yyyy-MM-dd) of the configured first day of the week */
@@ -56,13 +59,6 @@ export function defaultSuggestionDates(
   return new Set(days
     .filter(day => day.date >= firstSelectedDate && !day.hasPlannedDinner)
     .map(day => day.date));
-}
-
-function localTodayIso(): string {
-  const today = new Date();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${today.getFullYear()}-${month}-${day}`;
 }
 
 /** One day's suggestions, grouped for display; indexes point back into suggestions() */
@@ -105,13 +101,16 @@ type DialogPhase = 'checking' | 'compose' | 'generating' | 'review';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatTooltipModule
+    MatTooltipModule,
+    RouterLink
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './suggestion-review-dialog.html',
   styleUrl: './suggestion-review-dialog.scss'
 })
 export class SuggestionReviewDialog implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
+  readonly clock = inject(HouseholdClockService);
   readonly planningDays: SuggestionPlanningDay[];
   readonly phase = signal<DialogPhase>('checking');
   readonly failed = signal(false);
@@ -122,7 +121,12 @@ export class SuggestionReviewDialog implements OnInit {
   readonly selectedDates = signal<Set<string>>(new Set());
   /** Recipes kept out of planning for household allergies (visibility for false positives) */
   readonly excludedForAllergies = signal(0);
+  readonly unmetRequirements = signal<{ id: string; message: string }[]>([]);
   readonly batchId = signal<string | null>(null);
+  readonly saving = signal(false);
+  readonly saveFailed = signal(false);
+  readonly acceptanceResults = signal<Record<string, AcceptSuggestionResult>>({});
+  private appliedSuggestions: MealSuggestion[] = [];
 
   readonly selectedCount = computed(() => this.selectedIndexes().size);
   readonly selectedDayCount = computed(() => this.selectedDates().size);
@@ -159,7 +163,7 @@ export class SuggestionReviewDialog implements OnInit {
     private integrationsService: IntegrationsService
   ) {
     this.planningDays = data.days;
-    this.selectedDates.set(defaultSuggestionDates(data.days, localTodayIso()));
+    this.selectedDates.set(defaultSuggestionDates(data.days, this.clock.today()));
   }
 
   ngOnInit(): void {
@@ -185,11 +189,13 @@ export class SuggestionReviewDialog implements OnInit {
    *  closing mid-generation actually stops the model call server-side instead of
    *  leaving it running for up to five minutes on the agentic path. */
   fetch(): void {
-    if (this.selectedDayCount() === 0) {
+    if (this.saving() || this.selectedDayCount() === 0) {
       return;
     }
     this.phase.set('generating');
     this.failed.set(false);
+    this.acceptanceResults.set({});
+    this.saveFailed.set(false);
     this.suggestionsService.suggestWeek(
       this.data.weekStart,
       [...this.selectedDates()].sort(),
@@ -200,6 +206,7 @@ export class SuggestionReviewDialog implements OnInit {
           this.suggestions.set(result.suggestions);
           this.batchId.set(result.batchId);
           this.excludedForAllergies.set(result.excludedForAllergies ?? 0);
+          this.unmetRequirements.set(result.unmetRequirements ?? []);
           this.selectedIndexes.set(new Set(result.suggestions.map((_, index) => index)));
           this.phase.set('review');
         },
@@ -231,6 +238,7 @@ export class SuggestionReviewDialog implements OnInit {
   }
 
   toggle(index: number): void {
+    if (this.saving() || this.acceptanceResults()[this.suggestions()[index]?.id]?.status === 'needsReview') return;
     this.selectedIndexes.update(indexes => {
       const next = new Set(indexes);
       if (next.has(index)) {
@@ -245,10 +253,10 @@ export class SuggestionReviewDialog implements OnInit {
   suggestionContext(suggestion: MealSuggestion): string | null {
     const parts: string[] = [];
     if (suggestion.mealType !== MealType.Dinner) {
-      parts.push(MEAL_TYPE_LABELS[suggestion.mealType]);
+      parts.push(this.uiLanguage.mealTypeLabel(suggestion.mealType));
     }
     if (suggestion.course !== Course.Main) {
-      parts.push(COURSE_LABELS[suggestion.course]);
+      parts.push(this.uiLanguage.courseLabel(suggestion.course));
     }
     if (suggestion.attendeeNames.length > 0) {
       parts.push(suggestion.attendeeNames.join(', '));
@@ -257,10 +265,49 @@ export class SuggestionReviewDialog implements OnInit {
   }
 
   addSelected(): void {
+    if (this.saving()) return;
     const selected = this.suggestions().filter((_, index) => this.isSelected(index));
+    const rejectedSuggestionIds = this.suggestions()
+      .filter((_, index) => !this.isSelected(index))
+      .map(suggestion => suggestion.id);
     const batchId = this.batchId();
-    if (batchId) {
-      this.dialogRef.close({ batchId, suggestions: selected });
-    }
+    if (!batchId) return;
+    this.saving.set(true);
+    this.saveFailed.set(false);
+    this.dialogRef.disableClose = true;
+    this.suggestionsService.acceptSuggestions(batchId, selected, rejectedSuggestionIds)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: response => {
+          this.saving.set(false);
+          this.dialogRef.disableClose = false;
+          const succeeded = new Set(response.results.filter(result =>
+            result.status === 'created' || result.status === 'alreadyApplied').map(result => result.suggestionId));
+          this.appliedSuggestions.push(...selected.filter(suggestion => succeeded.has(suggestion.id)));
+          this.acceptanceResults.update(results => ({ ...results,
+            ...Object.fromEntries(response.results.map(result => [result.suggestionId, result])) }));
+          const remaining = this.suggestions().filter(suggestion => !succeeded.has(suggestion.id));
+          const failures = response.results.filter(result => !succeeded.has(result.suggestionId));
+          if (failures.length === 0) {
+            this.closeReview();
+          } else {
+            this.suggestions.set(remaining);
+            this.selectedIndexes.set(new Set(remaining.flatMap((suggestion, index) =>
+              selected.some(item => item.id === suggestion.id)
+                && this.acceptanceResults()[suggestion.id]?.status !== 'needsReview' ? [index] : [])));
+          }
+        },
+        error: () => {
+          this.saving.set(false);
+          this.saveFailed.set(true);
+          this.dialogRef.disableClose = false;
+        }
+      });
+  }
+
+  closeReview(): void {
+    if (this.saving()) return;
+    this.dialogRef.close({ batchId: this.batchId() ?? '', suggestions: this.appliedSuggestions,
+      rejectedSuggestionIds: [], applied: true });
   }
 }

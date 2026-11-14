@@ -28,13 +28,15 @@
     </div>
 
     <div class="task-grid">
-      @for (task of data.taskMetrics.tasks; track task.task) {
-        <button mat-stroked-button type="button" class="task-card" [class.task-card--selected]="selectedTask() === task.task" [attr.aria-pressed]="selectedTask() === task.task" (click)="selectTask(selectedTask() === task.task ? null : task.task)">
-          <span class="task-name">{{ taskLabel(task.task) | translate }}</span>
+      @for (task of taskOptions(); track task.task + task.configFingerprint) {
+        <mat-card appearance="outlined" class="task-card" [class.task-card--selected]="selectedTask() === task.task">
+          <button mat-button type="button" class="task-filter" [attr.aria-pressed]="selectedTask() === task.task" (click)="selectTask(selectedTask() === task.task ? null : task.task)">
+            {{ taskLabel(task.task) | translate }}
+          </button>
           <strong>{{ percent(task.successfulRuns, task.runCount) }}</strong>
-          <span>{{ task.runCount }} {{ 'aiStats.calls' | translate }} · p95 {{ seconds(task.p95DurationMs) }}</span>
-          <span>{{ task.totalTokens | number }} {{ 'aiStats.tokens' | translate }}</span>
-        </button>
+          <span class="mat-body-small">{{ task.runCount }} {{ 'aiStats.calls' | translate }} · p95 {{ seconds(task.p95DurationMs) }}</span>
+          <span class="mat-body-small">{{ task.totalTokens | number }} {{ 'aiStats.tokens' | translate }} · {{ task.provider }}/{{ task.model }}</span>
+        </mat-card>
       }
     </div>
   </section>
@@ -47,7 +49,7 @@
       }
     </div>
     <div class="run-list">
-      @for (call of visibleCalls(); track call.id) {
+      @for (call of data.calls; track call.id) {
         <mat-card appearance="outlined" class="run-card" [class.run-card--failed]="isFailure(call.outcome)">
           <mat-card-header>
             <mat-card-title>{{ taskLabel(call.task) | translate }} · {{ outcomeLabel(call.outcome) | translate }}</mat-card-title>
@@ -57,7 +59,9 @@
             @if (call.error) { <p class="error">{{ call.error }}</p> }
             <div class="metric-grid">
               <span>{{ 'aiStats.duration' | translate }} <strong>{{ seconds(call.durationMs) }}</strong></span>
+              <span>{{ 'aiStats.queueWait' | translate }} <strong>{{ seconds(call.queueWaitMs) }}</strong></span>
               <span>{{ 'aiStats.attempt' | translate }} <strong>{{ call.attempt }}</strong></span>
+              <span>{{ 'aiStats.operationAttempt' | translate }} <strong>{{ call.operationAttempt === null || call.operationAttempt === undefined ? ('aiStats.notRecorded' | translate) : call.operationAttempt === 0 ? ('aiStats.notSent' | translate) : call.operationAttempt }}</strong></span>
               <span>{{ 'aiStats.mode' | translate }} <strong>{{ call.responseMode }}</strong></span>
               <span>{{ 'aiStats.finish' | translate }} <strong>{{ call.finishReason || '—' }}</strong></span>
               <span>{{ 'aiStats.tokensInOutReasoning' | translate }} <strong>{{ call.inputTokens | number }} / {{ call.outputTokens | number }} / {{ call.reasoningTokens | number }}</strong></span>
@@ -65,6 +69,18 @@
               <span>{{ 'aiStats.temperatureOutputLimit' | translate }} <strong>{{ call.temperature | number:'1.0-2' }} / {{ call.maxOutputTokens | number }}</strong></span>
               <span>{{ 'aiStats.contract' | translate }} <strong>{{ call.contractVersion }}</strong></span>
             </div>
+            @if (call.inputRevisions; as inputs) {
+              <details>
+                <summary>{{ 'aiStats.inputSnapshot' | translate:{count: inputs.length} }}</summary>
+                <p class="mat-body-small">{{ 'aiStats.inputSnapshotHint' | translate }}</p>
+                @for (input of inputs; track $index) {
+                  <p><code>{{ input.kind }}: {{ input.id }}</code>
+                    @if (input.revision !== null && input.revision !== undefined) { · {{ 'aiStats.revision' | translate }} {{ input.revision }} }
+                    @if (input.confirmationVersion !== null && input.confirmationVersion !== undefined) { · {{ 'aiStats.confirmationVersion' | translate }} {{ input.confirmationVersion }} }
+                  </p>
+                }
+              </details>
+            }
           </mat-card-content>
         </mat-card>
       } @empty {
@@ -72,6 +88,49 @@
       }
     </div>
   </section>
+
+  @if (data.reviews; as reviews) {
+    <section aria-labelledby="review-summary-title">
+      <h2 id="review-summary-title" class="mat-title-large">{{ 'aiStats.reviewSignals' | translate }}</h2>
+      <p>{{ 'aiStats.reviewSignalsHint' | translate }}</p>
+      <div class="summary-grid">
+        <mat-card appearance="outlined"><span>{{ 'aiStats.factsReviews' | translate }}</span><strong>{{ reviews.factsReviews }}</strong></mat-card>
+        <mat-card appearance="outlined"><span>{{ 'aiStats.factsCorrections' | translate }}</span><strong>{{ reviews.factsCorrections }}</strong></mat-card>
+        <mat-card appearance="outlined"><span>{{ 'aiStats.textEditsAfterTranslation' | translate }}</span><strong>{{ reviews.textEditsAfterTranslation }}</strong></mat-card>
+        <mat-card appearance="outlined"><span>{{ 'aiStats.reviewedSuggestions' | translate }}</span><strong>{{ reviews.reviewedSuggestions }}</strong></mat-card>
+        <mat-card appearance="outlined"><span>{{ 'aiStats.editedSuggestions' | translate }}</span><strong>{{ reviews.editedSuggestions }}</strong></mat-card>
+        <mat-card appearance="outlined"><span>{{ 'aiStats.changedInputSuggestions' | translate }}</span><strong>{{ reviews.suggestionsWithChangedInputs }}</strong></mat-card>
+      </div>
+      <details class="planning-details">
+        <summary>{{ 'aiStats.reviewHistory' | translate }}</summary>
+        <div class="run-list">
+          @for (review of reviews.events; track review.id) {
+            <mat-card appearance="outlined" class="run-card">
+              <mat-card-header>
+                <mat-card-title>{{ ('aiStats.reviewKinds.' + review.kind) | translate }}</mat-card-title>
+                <mat-card-subtitle>{{ review.occurredAt | date:'medium' }} · {{ taskLabel(review.task) | translate }}</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                @if (review.recipeId) { <p><a [routerLink]="['/recipes', review.recipeId]">{{ 'aiStats.reviewRecipe' | translate }}</a></p> }
+                @if (review.outcome) { <p>{{ outcomeLabel(review.outcome) | translate }}</p> }
+                <p>{{ 'aiStats.changedFields' | translate }}
+                  @for (field of review.changedFields; track field) { {{ ('aiStats.reviewFields.' + field) | translate }}@if (!$last) {, } }
+                  @empty { {{ 'aiStats.none' | translate }} }
+                </p>
+                <p>{{ 'aiStats.changedInputs' | translate }}
+                  @for (field of review.inputChanges; track field) { {{ ('aiStats.reviewFields.' + field) | translate }}@if (!$last) {, } }
+                  @empty { {{ 'aiStats.none' | translate }} }
+                </p>
+                @if (review.sourceRevision !== null && review.sourceRevision !== undefined) {
+                  <p>{{ 'aiStats.revision' | translate }} {{ review.sourceRevision }} → {{ review.observedRevision ?? '—' }}</p>
+                }
+              </mat-card-content>
+            </mat-card>
+          } @empty { <p>{{ 'aiStats.noReviewEvents' | translate }}</p> }
+        </div>
+      </details>
+    </section>
+  }
 
   <section aria-labelledby="planning-summary-title">
     <h2 id="planning-summary-title" class="mat-title-large">{{ 'aiStats.planningOperations' | translate }}</h2>

@@ -104,6 +104,7 @@ public class MealSuggestionsIntegrationTests : TestBase
     [Fact]
     public async Task AcceptSuggestions_RepeatedRequest_IsIdempotent()
     {
+        using var reviewScope = Factory.Services.CreateScope();
         var batchId = Guid.NewGuid();
         var suggestionId = Guid.NewGuid();
         var request = new AcceptMealSuggestionsRequestDto
@@ -120,6 +121,9 @@ public class MealSuggestionsIntegrationTests : TestBase
             ]
         };
 
+        await reviewScope.ServiceProvider.GetRequiredService<MealSuggestionAcceptanceService>()
+            .StoreBatchAsync(batchId, PlanCompletionStatus.Complete,
+                [new MealSuggestionDto { Id = suggestionId, Date = Monday, DishName = "Idempotent soup" }]);
         var first = await Client.PostAsJsonAsync("/api/plannedmeals/suggestions/accept", request);
         var second = await Client.PostAsJsonAsync("/api/plannedmeals/suggestions/accept", request);
         var firstResult = await first.Content.ReadFromJsonAsync<AcceptMealSuggestionsResponseDto>();
@@ -273,14 +277,58 @@ public class MealSuggestionsIntegrationTests : TestBase
             new SuggestWeekRequestDto
             {
                 WeekStart = Monday,
-                Instructions = "prefer #[Easy Weekday Dishes] and ignore #[No Such Collection]"
+                Instructions = "prefer #[Easy Weekday Dishes]"
             });
         response.IsSuccessStatusCode.Should().BeTrue();
 
         var constraints = stub.LastRequest!.CollectionConstraints;
-        var constraint = constraints.Should().ContainSingle().Subject; // the dangling name resolves to nothing
+        var constraint = constraints.Should().ContainSingle().Subject;
         constraint.Name.Should().Be("Easy Weekday Dishes");
         constraint.RecipeTitles.Should().Equal("Wrap");
         constraint.Dates.Should().Equal(Monday.AddDays(4));
+    }
+
+    [Fact]
+    public async Task SuggestWeek_UnresolvedCollection_ReturnsUnableWithoutCallingProvider()
+    {
+        var stub = new StubSuggestionService();
+        using var factory = new StubbedFactory(stub);
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/plannedmeals/suggestions",
+            new SuggestWeekRequestDto { WeekStart = Monday, Instructions = "Only #[No Such Collection]" });
+        var result = await response.Content.ReadFromJsonAsync<MealSuggestionsDto>();
+
+        response.IsSuccessStatusCode.Should().BeTrue();
+        result!.Status.Should().Be("unable");
+        result.Suggestions.Should().BeEmpty();
+        result.UnmetRequirements.Should().ContainSingle(issue =>
+            issue.Id == "collection-unresolved" && issue.Message.Contains("No Such Collection"));
+        stub.LastRequest.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SuggestWeek_UnselectedDayCollection_DoesNotConstrainSelectedDates()
+    {
+        var stub = new StubSuggestionService();
+        using var factory = new StubbedFactory(stub);
+        using var client = factory.CreateClient();
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<Data.DishhiveDbContext>();
+        context.PlannedMeals.Add(new Models.PlannedMeal
+        {
+            Id = Guid.NewGuid(), Date = Monday.AddDays(4),
+            MealType = Models.MealType.Dinner, Course = Models.Course.Main,
+            VagueInstruction = "Only #[No Such Collection]"
+        });
+        await context.SaveChangesAsync();
+
+        var response = await client.PostAsJsonAsync("/api/plannedmeals/suggestions",
+            new SuggestWeekRequestDto { WeekStart = Monday, SelectedDates = [Monday] });
+        var result = await response.Content.ReadFromJsonAsync<MealSuggestionsDto>();
+
+        result!.Status.Should().Be("complete");
+        stub.LastRequest!.UnresolvedCollectionNames.Should().BeEmpty();
+        stub.LastRequest.CollectionConstraints.Should().BeEmpty();
     }
 }

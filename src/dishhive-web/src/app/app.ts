@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
-import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { OfflineReadCacheService } from './services/offline-read-cache.service';
+import { NavigationStart, Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SettingsService } from './services/settings.service';
 import { OnboardingService } from './services/onboarding.service';
 import { PwaService } from './services/pwa.service';
@@ -13,7 +15,7 @@ import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatListModule } from '@angular/material/list';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { LanguageService, TranslatePipe } from './services/language.service';
+import { LanguageService, LocalizedDatePipe, TranslatePipe } from './services/language.service';
 
 @Component({
   selector: 'app-root',
@@ -30,7 +32,8 @@ import { LanguageService, TranslatePipe } from './services/language.service';
     MatDividerModule,
     MatProgressSpinnerModule,
     OnboardingComponent,
-    TranslatePipe
+    TranslatePipe,
+    LocalizedDatePipe
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -39,6 +42,8 @@ import { LanguageService, TranslatePipe } from './services/language.service';
 export class App implements OnInit {
   title = 'Dishhive';
   readonly checkingOnboarding = signal(true);
+  readonly checkingPreferences = signal(true);
+  readonly offlineReads = inject(OfflineReadCacheService);
   readonly showOnboarding = signal(false);
 
   constructor(
@@ -53,12 +58,16 @@ export class App implements OnInit {
     private themeService: ThemeService
   ) {
     iconRegistry.setDefaultFontSetClass('material-symbols-outlined');
+    this.router.events.pipe(takeUntilDestroyed()).subscribe(event => {
+      if (event instanceof NavigationStart) this.offlineReads.beginView();
+    });
   }
 
   ngOnInit(): void {
     // Load display preferences once so all pages use them from the start
     this.settingsService.loadPreferences().subscribe(preferences => {
       if (preferences) this.languageService.use(preferences.preferredLanguage);
+      this.checkingPreferences.set(false);
     });
     this.onboardingService.start().subscribe({
       next: status => {

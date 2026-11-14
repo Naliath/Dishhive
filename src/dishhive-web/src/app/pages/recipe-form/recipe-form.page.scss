@@ -92,6 +92,9 @@
 
 .image-placeholder {
   border: 1px solid var(--mat-sys-outline-variant);
+  aspect-ratio: auto;
+  min-height: 200px;
+  max-height: 240px;
 }
 
 .skeleton-block {

@@ -1,3 +1,1 @@
-export interface OnboardingStatus {
-  shouldShow: boolean;
-}
+export type OnboardingStatus = import('../api/generated/dishhive-api.client').OnboardingStatusDto;

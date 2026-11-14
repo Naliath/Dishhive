@@ -19,6 +19,17 @@ table {
   background: transparent;
 }
 
+th,
+td {
+  padding-inline: 16px;
+}
+
+td:first-child {
+  min-width: 180px;
+  padding-block: 10px;
+  overflow-wrap: anywhere;
+}
+
 .statistics-table-scroll {
   max-width: 100%;
   overflow-x: auto;

@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { TestBed } from '@angular/core/testing';
 import { WebSearchIntegrationStatus } from '../../models/integration-status.model';
 import { IntegrationsService } from '../../services/integrations.service';
 import { IntegrationsStatusComponent } from './integrations-status';
 
 describe('IntegrationsStatusComponent', () => {
-  const component = new IntegrationsStatusComponent({} as IntegrationsService);
+  let component: IntegrationsStatusComponent;
+  beforeEach(() => { component = TestBed.runInInjectionContext(() => new IntegrationsStatusComponent({} as IntegrationsService)); });
 
   it('labels a reachable but non-operational web search integration as misconfigured', () => {
     const status: WebSearchIntegrationStatus = {
@@ -32,6 +34,14 @@ describe('IntegrationsStatusComponent', () => {
     };
 
     expect(component.webSearchChipLabel(status)).toBe('common.active');
+  });
+
+  it('distinguishes limited search results from an unconfigured or unusable service', () => {
+    const status: WebSearchIntegrationStatus = { configured: true, reachable: true, operational: true,
+      error: 'Some engines are unavailable', provider: 'searxng', baseUrl: 'http://searxng:8080' };
+    expect(component.webSearchChipLabel(status)).toBe('common.limited');
+    expect(component.webSearchChipIcon(status)).toBe('warning');
+    expect(component.webSearchChipClass(status)).toBe('status-chip--warn');
   });
 
   it('presents model checks as product features without exposing test fixtures', () => {

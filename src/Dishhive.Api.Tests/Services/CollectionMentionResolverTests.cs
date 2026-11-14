@@ -121,8 +121,25 @@ public class CollectionMentionResolverTests : IDisposable
 
         var constraint = constraints.Should().ContainSingle().Subject;
         constraint.RecipeTitles.Should().HaveCount(15);
+        constraint.RecipeIds.Should().HaveCount(20, "prompt sampling must not truncate actual collection membership");
         constraint.RecipeTitles.Should().NotContain("Dish 01");
         constraint.RecipeTitles[0].Should().Be("Dish 02");
+    }
+
+    [Fact]
+    public async Task Resolve_StableIdentitySurvivesACollectionRename()
+    {
+        await SeedCollectionAsync("Before", "Dish");
+        var before = (await _resolver.ResolveAsync([(null, "#[Before]")])).Single();
+        var collection = await _context.Cookbooks.SingleAsync();
+        collection.Name = "After";
+        await _context.SaveChangesAsync();
+
+        var after = await _resolver.ResolveByIdAsync(before.Id);
+
+        after.Should().NotBeNull();
+        after!.Name.Should().Be("After");
+        after.RecipeIds.Should().Equal(before.RecipeIds);
     }
 
     [Fact]

@@ -64,6 +64,7 @@ public class RecipeImportService : IRecipeImportService
 
     public async Task<Recipe> ImportAsync(string url, CancellationToken cancellationToken = default)
     {
+        var operationId = $"import-{Guid.NewGuid():N}";
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
@@ -107,14 +108,14 @@ public class RecipeImportService : IRecipeImportService
             }
             catch (RecipeExtractionFailedException) when (_llmExtractor.IsAvailable)
             {
-                imported = await ExtractWithLlmAsync(html, uri, cancellationToken);
+                imported = await ExtractWithLlmAsync(html, uri, operationId, cancellationToken);
                 providerKey = "llm";
             }
         }
         else
         {
             // No structured provider handles this site, but AI is configured — let the LLM read it
-            imported = await ExtractWithLlmAsync(html, uri, cancellationToken);
+            imported = await ExtractWithLlmAsync(html, uri, operationId, cancellationToken);
             providerKey = "llm";
         }
 
@@ -123,6 +124,8 @@ public class RecipeImportService : IRecipeImportService
         var recipe = await _context.Recipes
             .Include(r => r.Ingredients)
             .Include(r => r.Steps)
+            .Include(r => r.DietaryFacts)
+            .Include(r => r.DietaryFactsHistory)
             .FirstOrDefaultAsync(r => r.SourceUrl == sourceUrl, cancellationToken);
 
         var isReimport = recipe != null;
@@ -138,6 +141,8 @@ public class RecipeImportService : IRecipeImportService
             _context.RecipeSteps.RemoveRange(recipe.Steps);
             recipe.Ingredients.Clear();
             recipe.Steps.Clear();
+            RecipeFactsStateService.Invalidate(recipe);
+            recipe.Revision++;
         }
 
         ApplyImportedRecipe(recipe, imported, sourceUrl, providerKey);
@@ -148,19 +153,20 @@ public class RecipeImportService : IRecipeImportService
         recipe.ContentLanguage = null;
         await RecipeImageDownloader.TryDownloadAsync(_httpFetcher, recipe, _logger, cancellationToken);
 
-        await _context.SaveChangesAsync(cancellationToken);
         // Fire-and-forget dietary-facts assessment (no-op when AI is unconfigured).
         // A re-import replaced the ingredient list, so even user-confirmed facts are
         // stale then and get overwritten by the fresh assessment.
-        _factsQueue.TryEnqueue(recipe.Id, overwriteUserConfirmed: isReimport);
+        await _factsQueue.StageAsync(_context, recipe, overwriteUserConfirmed: isReimport,
+            operationId: operationId, cancellationToken: cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
         return recipe;
     }
 
     /// <summary>Runs the LLM extractor, mapping a no-recipe result to the standard failure</summary>
-    private async Task<ImportedRecipe> ExtractWithLlmAsync(string html, Uri uri, CancellationToken cancellationToken)
+    private async Task<ImportedRecipe> ExtractWithLlmAsync(string html, Uri uri, string operationId, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Structured extraction unavailable for {Url}; trying LLM extraction", uri);
-        return await _llmExtractor.ExtractAsync(html, uri, cancellationToken)
+        return await _llmExtractor.ExtractAsync(html, uri, cancellationToken, operationId)
             ?? throw new RecipeExtractionFailedException(
                 $"No recipe data found at '{uri}'. The page may not be a recipe, or the site is not supported.");
     }

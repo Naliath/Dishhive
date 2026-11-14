@@ -45,10 +45,16 @@ public class FreezyHttpClient : IFreezyClient
     }
 
     public async Task<IReadOnlyList<FrozenItem>> GetFrozenItemsAsync(CancellationToken cancellationToken = default)
+        => (await ReadStockAsync(false, cancellationToken)).Items;
+
+    public Task<FreezyStockSnapshot> GetStockSnapshotAsync(CancellationToken cancellationToken = default)
+        => ReadStockAsync(true, cancellationToken);
+
+    private async Task<FreezyStockSnapshot> ReadStockAsync(bool authoritative, CancellationToken cancellationToken)
     {
         if (!IsConfigured)
         {
-            return [];
+            return new(false, false, DateTime.UtcNow, []);
         }
 
         try
@@ -59,7 +65,11 @@ public class FreezyHttpClient : IFreezyClient
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             var items = await JsonSerializer.DeserializeAsync<List<FreezyItemDto>>(stream, JsonOptions, cancellationToken);
 
-            return (items ?? [])
+            if (authoritative && (items == null || items.Any(item => string.IsNullOrWhiteSpace(item.Id)
+                || string.IsNullOrWhiteSpace(item.Name) || item.Quantity is null or < 0)
+                || items.Select(item => item.Id).Distinct().Count() != items.Count))
+                throw new JsonException("Freezy returned an incomplete stock snapshot");
+            var mapped = (items ?? [])
                 .Where(i => !string.IsNullOrWhiteSpace(i.Name))
                 .Select(i => new FrozenItem
                 {
@@ -72,12 +82,14 @@ public class FreezyHttpClient : IFreezyClient
                 })
                 .OrderBy(i => i.ExpirationDate ?? DateTime.MaxValue)
                 .ToList();
+            return new(true, true, DateTime.UtcNow, mapped);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        catch (Exception ex) when (ex is HttpRequestException or JsonException
+            || ex is TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
             // Freezy being down must never break Dishhive planning
             _logger.LogWarning(ex, "Could not reach Freezy at {BaseUrl}; returning no frozen items", _httpClient.BaseAddress);
-            return [];
+            return new(true, false, DateTime.UtcNow, []);
         }
     }
 

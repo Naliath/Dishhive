@@ -55,82 +55,39 @@
   height: 20px;
 }
 
-.cookbook-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px 4px 12px;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 16px;
-  background: none;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
+.cookbook-count {
+  color: var(--mat-sys-on-surface-variant);
+  margin-inline-start: 4px;
+}
 
-  &:hover {
-    background-color: var(--mat-sys-surface-variant);
-  }
-
-  &.is-active {
-    background-color: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
-    border-color: var(--mat-sys-primary);
-    color: var(--mat-sys-primary);
-  }
-
-  &.is-auto {
-    border-style: dashed;
-  }
-
-  .cookbook-kind-icon {
-    font-size: 15px;
-    width: 15px;
-    height: 15px;
-    opacity: 0.6;
-  }
-
-  .cookbook-count {
-    font-size: 11px;
-    opacity: 0.6;
-    padding-inline-start: 1px;
-  }
-
-  .cookbook-delete {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
-    opacity: 0.5;
-
-    &:hover {
-      opacity: 1;
-    }
-  }
+.collection-name {
+  display: inline-block;
+  max-inline-size: min(50vw, 28ch);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .cookbook-save {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+
+  mat-form-field { width: min(240px, 100%); }
 }
 
-.cookbook-name-input {
-  border: 1px dashed var(--mat-sys-outline-variant);
-  border-radius: 16px;
-  padding: 5px 12px;
-  font: inherit;
-  font-size: 13px;
-  background: none;
-  width: 200px;
-
-  &:focus {
-    outline: none;
-    border-color: var(--mat-sys-primary);
-  }
-}
+.cookbook-row mat-chip-listbox { min-width: 0; }
 
 .recipe-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 16px;
+}
+
+mat-paginator {
+  margin-block-start: 16px;
 }
 
 .recipe-card {

@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Dishhive.Api\Dishhive.Api.csproj" />
+    <ProjectReference Include="..\Dishhive.Evaluations\Dishhive.Evaluations.csproj" />
   </ItemGroup>
 
   <ItemGroup>

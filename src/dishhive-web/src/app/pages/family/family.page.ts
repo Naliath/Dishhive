@@ -18,7 +18,6 @@ import { CookingLoaderComponent } from '../../components/cooking-loader/cooking-
 import { FamilyMembersService } from '../../services/family-members.service';
 import { RecipesService } from '../../services/recipes.service';
 import { DietaryTagEntry, DietaryTagKind, FamilyMember, FamilyMemberFavorite } from '../../models/family-member.model';
-import { ingredientClassLabels } from '../../models/ingredient-class.model';
 import { RecipeListItem } from '../../models/recipe.model';
 import { LanguageService, TranslatePipe } from '../../services/language.service';
 
@@ -92,7 +91,7 @@ export class FamilyPage implements OnInit {
   /** Tooltip text for a tag chip: its excluded classes, human-readable */
   classesTooltip(entry: DietaryTagEntry): string {
     return entry.excludedClasses?.length
-      ? this.language.t('family.excludes', { classes: ingredientClassLabels(entry.excludedClasses) })
+      ? this.language.t('family.excludes', { classes: this.language.classLabels(entry.excludedClasses) })
       : this.language.t('family.notMachineCheckable');
   }
 

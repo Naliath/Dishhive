@@ -42,6 +42,10 @@
                       &middot; ~{{ result.tokensPerSecond | number:'1.0-0' }} {{ 'integration.tokensS' | translate }}
                     }
                   </div>
+                  <div class="integration-detail" [class.warn]="!result.planningEligible">
+                    {{ (result.planningEligible ? 'integration.planningEligible' : 'integration.planningIneligible') | translate }}
+                  </div>
+                  <p class="integration-detail muted">{{ 'integration.capabilityEvidenceScope' | translate }}</p>
                   <ul class="ai-test-checks">
                     @for (check of result.checks; track check.name) {
                       <li [class.warn]="!check.passed">
@@ -115,8 +119,8 @@
                     <div class="integration-detail">{{ 'integration.updatingPackageAndRestartingTheService' | translate }}</div>
                   } @else if (versionCheck(); as check) {
                     @if (check.updateAvailable) {
-                      <div class="integration-detail">v{{ check.latestVersion }} is available (installed: v{{ check.installedVersion }})</div>
-                      <button mat-stroked-button (click)="installUpdate()">Update to v{{ check.latestVersion }}</button>
+                      <div class="integration-detail">{{ 'ui.vValueIsAvailableInstalledVValue' | translate:{ p0: (check.latestVersion), p1: (check.installedVersion) } }}</div>
+                      <button mat-stroked-button (click)="installUpdate()">{{ 'ui.updateToVValue' | translate:{ p0: (check.latestVersion) } }}</button>
                     } @else {
                       <div class="integration-detail muted">{{ 'integration.upToDate' | translate }} (v{{ check.installedVersion }})</div>
                     }

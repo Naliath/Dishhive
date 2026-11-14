@@ -51,3 +51,6 @@ Recurring rules ("Friday = pizza day", "max 2× meat per week") feeding the sugg
 ### External integrations
 Calendar export (iCal) of the week menu; grocery-store or Home Assistant integrations.
 (Mealie: API tokens + integration ecosystem.)
+
+### Browser extension 
+Can be used as a conduit for automated adding to cart in a shop, adding recipes to dishhive directly from a recipe page, etc

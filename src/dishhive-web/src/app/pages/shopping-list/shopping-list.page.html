@@ -4,10 +4,10 @@
   </div>
 } @else if (list(); as shoppingList) {
   <div class="page-header">
-    <h1 class="mat-headline-medium">Shopping list</h1>
+    <h1 class="mat-headline-medium">{{ 'weekPlanner.shoppingList' | translate }}</h1>
     <button mat-flat-button (click)="copyAsText()" [disabled]="shoppingList.items.length === 0">
       <mat-icon>content_copy</mat-icon>
-      Copy as text
+      {{ 'ui.copyAsText' | translate }}
     </button>
   </div>
   <p class="range-line">{{ shoppingList.from | localizedDate:'dayMonth' }} – {{ shoppingList.to | localizedDate:'dayMonthYear' }}</p>
@@ -15,8 +15,8 @@
   @if (shoppingList.items.length === 0 && shoppingList.reminders.length === 0) {
     <div class="empty-state">
       <mat-icon class="empty-icon">shopping_cart</mat-icon>
-      <h2>Nothing to buy</h2>
-      <p>Plan meals with recipes for this week and their ingredients show up here.</p>
+      <h2>{{ 'ui.nothingToBuy' | translate }}</h2>
+      <p>{{ 'ui.planMealsWithRecipesForThisWeekAndTheirIngredientsShowUpHere' | translate }}</p>
     </div>
   } @else {
     @if (shoppingList.items.length > 0) {
@@ -39,8 +39,8 @@
       <mat-card appearance="raised" class="reminders-card">
         <mat-card-header>
           <mat-icon class="card-header-icon">lightbulb</mat-icon>
-          <mat-card-title>Still to decide</mat-card-title>
-          <mat-card-subtitle>Planned meals without a recipe — no ingredients yet</mat-card-subtitle>
+          <mat-card-title>{{ 'ui.stillToDecide' | translate }}</mat-card-title>
+          <mat-card-subtitle>{{ 'ui.plannedMealsWithoutARecipeNoIngredientsYet' | translate }}</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
           <ul class="reminders">
@@ -50,11 +50,11 @@
                   <span>{{ reminder.date | localizedDate:'weekdayShort' }}: {{ reminder.text }}</span>
                   <span class="reminder-actions">
                     <button mat-icon-button (click)="toggleLinking(reminder)"
-                            matTooltip="Link an existing recipe" aria-label="Link recipe">
+                            [matTooltip]="'ui.linkAnExistingRecipe' | translate" [attr.aria-label]="'ui.linkRecipe' | translate">
                       <mat-icon>menu_book</mat-icon>
                     </button>
                     <a mat-icon-button routerLink="/recipes/new" [queryParams]="newRecipeParams(reminder)"
-                       matTooltip="Create a recipe for this dish" aria-label="Create recipe">
+                       [matTooltip]="'ui.createARecipeForThisDish' | translate" [attr.aria-label]="'recipeForm.createRecipe' | translate">
                       <mat-icon>post_add</mat-icon>
                     </a>
                   </span>
@@ -62,7 +62,7 @@
                 @if (linkingMealId() === reminder.plannedMealId) {
                   <div class="link-recipe-panel">
                     <mat-form-field appearance="outline" subscriptSizing="dynamic" class="link-search-field">
-                      <mat-label>Search recipes</mat-label>
+                      <mat-label>{{ 'ui.searchRecipes' | translate }}</mat-label>
                       <input matInput name="linkSearch" [(ngModel)]="linkSearch" (input)="searchLinkRecipes()">
                       <mat-icon matSuffix>search</mat-icon>
                     </mat-form-field>
@@ -76,8 +76,8 @@
                         }
                       </mat-action-list>
                     } @else if (linkSearch.trim()) {
-                      <p class="link-no-results">No recipes match — create one with the
-                        <mat-icon class="inline-icon">post_add</mat-icon> button.</p>
+                      <p class="link-no-results">{{ 'ui.noRecipesMatchCreateOneWithThe' | translate }}
+                        <mat-icon class="inline-icon">post_add</mat-icon> {{ 'ui.button' | translate }}</p>
                     }
                   </div>
                 }

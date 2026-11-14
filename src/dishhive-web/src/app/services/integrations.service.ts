@@ -1,3 +1,5 @@
+import { IntegrationsClient } from '../api/generated/dishhive-api.client';
+import { apiResponse } from '../api/api-response';
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
@@ -12,44 +14,48 @@ import {
 
 @Injectable({ providedIn: 'root' })
 export class IntegrationsService {
-  private readonly http = inject(HttpClient);
+  private readonly api = new IntegrationsClient(inject(HttpClient), "");
 
   getStatus(): Observable<IntegrationStatusResponse | null> {
-    return this.http.get<IntegrationStatusResponse>('/api/integrations/status').pipe(
+    return this.api.getStatus().pipe(
       catchError(() => of(null))
     );
   }
 
   getAiModelTest(): Observable<AiModelTestStatus | null> {
-    return this.http.get<AiModelTestStatus>('/api/integrations/ai/test').pipe(
+    return this.api.getAiModelTest().pipe(
       catchError(() => of(null))
     );
   }
 
   /** Starts a fresh AI model capability test; poll getAiModelTest until completed */
   runAiModelTest(): Observable<AiModelTestStatus | null> {
-    return this.http.post<AiModelTestStatus>('/api/integrations/ai/test', {}).pipe(
+    return this.api.runAiModelTest().pipe(
       catchError(() => of(null))
     );
   }
 
-  getAiPlanningMetrics(count = 30): Observable<AiPlanningMetricsResponse> {
-    return this.http.get<AiPlanningMetricsResponse>('/api/integrations/ai/planning-runs', {
-      params: { count }
-    });
+  getAiPlanningMetrics(count = 30, filters: {
+    from?: string;
+    task?: string;
+    model?: string;
+    fingerprint?: string;
+    outcome?: string;
+    operationId?: string;
+  } = {}): Observable<AiPlanningMetricsResponse> {
+    return apiResponse(this.api.getAiPlanningRuns(count, filters.from, filters.task, filters.model,
+      filters.fingerprint, filters.outcome, filters.operationId));
   }
 
   checkScraperVersion(): Observable<ScraperVersionCheck | null> {
-    return this.http.get<ScraperVersionCheck>('/api/integrations/scraper/version').pipe(
+    return this.api.getScraperVersion().pipe(
       catchError(() => of(null))
     );
   }
 
   /** Installs the latest (or given) recipe-scrapers version; the sidecar restarts afterwards */
   updateScraper(version?: string): Observable<ScraperUpdateResponse | null> {
-    return this.http.post<ScraperUpdateResponse>('/api/integrations/scraper/update', {
-      version: version ?? null
-    }).pipe(
+    return this.api.updateScraper({ version: version ?? null }).pipe(
       catchError(() => of(null))
     );
   }

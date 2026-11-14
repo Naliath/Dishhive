@@ -2,7 +2,11 @@ using Dishhive.Api.Models;
 using Dishhive.Api.Services.Suggestions;
 using Microsoft.Extensions.AI;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.ClientModel;
+using System.Globalization;
 
 namespace Dishhive.Api.Services.Ai;
 
@@ -13,6 +17,23 @@ public enum AiResponseFormatPolicy
     Force
 }
 
+public enum AiTaskOutcome
+{
+    Success,
+    NoResult,
+    ParseFailure,
+    ValidationFailure,
+    Timeout,
+    Cancelled,
+    Error,
+    InputLimit,
+    Abandoned,
+    RateLimited,
+    BudgetExceeded
+}
+
+public enum AiRequestPriority { Interactive, Background }
+
 public sealed record AiExecutionRequest(
     AiTaskKind Task,
     IReadOnlyList<ChatMessage> Messages,
@@ -21,21 +42,48 @@ public sealed record AiExecutionRequest(
     int Attempt = 1,
     ChatResponseFormat? ResponseFormat = null,
     AiResponseFormatPolicy ResponseFormatPolicy = AiResponseFormatPolicy.WhenSupported,
-    bool UseExtendedTimeout = false);
+    bool UseExtendedTimeout = false,
+    DateTime? DeadlineUtc = null,
+    AiRequestPriority Priority = AiRequestPriority.Interactive,
+    bool CapabilityProbe = false);
 
 public sealed record AiGateDecision(bool Allowed, AiResponseMode ResponseMode, long WaitMs, string? Reason);
 
 public sealed class AiExecutionResult(
     ChatResponse response,
     Guid runId,
-    IAiTaskMetricsStore metricsStore)
+    IAiTaskMetricsStore metricsStore) : IAsyncDisposable
 {
+    private int _reported;
     public ChatResponse Response { get; } = response;
     public Guid RunId { get; } = runId;
 
-    public Task ReportOutcomeAsync(string outcome, string? error = null) =>
-        metricsStore.UpdateOutcomeAsync(
-            RunId, Limit(outcome, 30), error is null ? null : Limit(error, 1000));
+    public Task ReportOutcomeAsync(AiTaskOutcome outcome, string? error = null)
+    {
+        if (Interlocked.Exchange(ref _reported, 1) != 0)
+            throw new InvalidOperationException("An AI execution outcome may only be reported once.");
+        return metricsStore.UpdateOutcomeAsync(
+            RunId, OutcomeName(outcome), error is null ? null : Limit(error, 1000));
+    }
+
+    public ValueTask DisposeAsync() => Interlocked.Exchange(ref _reported, 1) == 0
+        ? new ValueTask(metricsStore.UpdateOutcomeAsync(RunId, "abandoned", "Response validation did not complete"))
+        : ValueTask.CompletedTask;
+
+    public static string OutcomeName(AiTaskOutcome outcome) => outcome switch
+    {
+        AiTaskOutcome.Success => "success",
+        AiTaskOutcome.NoResult => "noResult",
+        AiTaskOutcome.ParseFailure => "parseFailure",
+        AiTaskOutcome.ValidationFailure => "validationFailure",
+        AiTaskOutcome.Timeout => "timeout",
+        AiTaskOutcome.Cancelled => "cancelled",
+        AiTaskOutcome.Error => "error",
+        AiTaskOutcome.InputLimit => "inputLimit",
+        AiTaskOutcome.RateLimited => "rateLimited",
+        AiTaskOutcome.BudgetExceeded => "budgetExceeded",
+        _ => "abandoned"
+    };
 
     private static string Limit(string value, int length) =>
         value.Length <= length ? value : value[..length];
@@ -43,6 +91,8 @@ public sealed class AiExecutionResult(
 
 public interface IAiExecutionGate
 {
+    AiOperationBudget BeginOperation(CancellationToken cancellationToken = default, string? operationId = null,
+        bool independent = false) => new(300, 32, cancellationToken, operationId, independent);
     AiTaskProfile Profile(AiTaskKind task, bool useExtendedTimeout = false);
     AiResponseMode VerifiedResponseMode { get; }
     void UpdateCapability(AiModelTestResult result);
@@ -66,14 +116,23 @@ public sealed class AiExecutionGate(
     ILogger<AiExecutionGate> logger) : IAiExecutionGate
 {
     private int _verifiedResponseMode = (int)AiResponseMode.PromptedJson;
+    private int _planningEligibility;
+    private readonly PriorityAdmissionQueue _admission = new(options.MaxConcurrentRequests, options.MaxQueuedRequests);
+
+    public AiOperationBudget BeginOperation(CancellationToken cancellationToken = default, string? operationId = null,
+        bool independent = false) =>
+        new(options.OperationTimeoutSeconds, options.MaxOperationAttempts, cancellationToken, operationId, independent);
 
     public AiResponseMode VerifiedResponseMode => (AiResponseMode)Volatile.Read(ref _verifiedResponseMode);
 
     public AiTaskProfile Profile(AiTaskKind task, bool useExtendedTimeout = false) =>
         AiTaskProfiles.Resolve(task, options, useExtendedTimeout);
 
-    public void UpdateCapability(AiModelTestResult result) =>
+    public void UpdateCapability(AiModelTestResult result)
+    {
         Volatile.Write(ref _verifiedResponseMode, (int)result.ResponseMode);
+        Volatile.Write(ref _planningEligibility, result.PlanningEligible ? 1 : -1);
+    }
 
     public async Task<AiGateDecision> EnsureAvailableAsync(
         AiTaskKind task,
@@ -98,117 +157,172 @@ public sealed class AiExecutionGate(
         var stopwatch = Stopwatch.StartNew();
         var result = await capability.EnsureTestedAsync(cancellationToken);
         UpdateCapability(result);
-        return new(result.Viable, result.ResponseMode, stopwatch.ElapsedMilliseconds,
-            result.Viable ? null : result.Verdict);
+        return new(result.PlanningEligible, result.ResponseMode, stopwatch.ElapsedMilliseconds,
+            result.PlanningEligible ? null : "Planning quality has not passed the capability checks");
     }
 
     public async Task<AiExecutionResult> ExecuteAsync(
         AiExecutionRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (!options.IsConfigured) throw new InvalidOperationException("AI is not configured");
         var profile = Profile(request.Task, request.UseExtendedTimeout);
-        var operationId = string.IsNullOrWhiteSpace(request.OperationId)
-            ? Guid.NewGuid().ToString("N")[..12]
-            : request.OperationId.Trim();
-        operationId = Limit(operationId, 64);
+        if (request.CapabilityProbe && request.Task is not (AiTaskKind.CapabilityPlanning or AiTaskKind.PlanningIntent))
+            throw new InvalidOperationException("Only capability tasks may bypass planning eligibility");
+        if (profile.RequiresPlanningCapability && !request.CapabilityProbe && Volatile.Read(ref _planningEligibility) != 1)
+            throw new InvalidOperationException($"{profile.Name} requires passing planning quality evidence");
+        if (request.ResponseFormatPolicy == AiResponseFormatPolicy.Force
+            && request.Task != AiTaskKind.CapabilityPlanning && !request.CapabilityProbe)
+            throw new InvalidOperationException("Forced response formats are reserved for capability probes");
+
+        using var ownOperation = AiOperationBudget.Current is null
+            ? BeginOperation(cancellationToken, request.OperationId) : null;
+        var operation = AiOperationBudget.Current!;
+        var operationId = Limit(operation.OperationId.Trim(), 64);
         var applySchema = request.ResponseFormat is not null
             && request.ResponseFormatPolicy != AiResponseFormatPolicy.None
-            && (request.ResponseFormatPolicy == AiResponseFormatPolicy.Force
-                || VerifiedResponseMode == AiResponseMode.JsonSchema);
+            && (request.ResponseFormatPolicy == AiResponseFormatPolicy.Force || VerifiedResponseMode == AiResponseMode.JsonSchema);
         var responseMode = applySchema ? "jsonSchema" : "promptedJson";
         var chatOptions = new ChatOptions
         {
             MaxOutputTokens = profile.MaxOutputTokens,
             Temperature = profile.Temperature,
-            Reasoning = options.DisableThinking
-                ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None }
-                : null,
+            Reasoning = profile.EnableReasoning
+                ? new ReasoningOptions { Effort = ReasoningEffort.Low, Output = ReasoningOutput.None }
+                : options.DisableThinking
+                ? new ReasoningOptions { Effort = ReasoningEffort.None, Output = ReasoningOutput.None } : null,
             ResponseFormat = applySchema ? request.ResponseFormat : null
         };
-        var startedAt = DateTime.UtcNow;
-        var stopwatch = Stopwatch.StartNew();
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(profile.TimeoutSeconds));
+        var promptCharacters = request.Messages.Sum(message => (long)(message.Text?.Length ?? 0));
+        var promptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+            string.Join("\0", request.Messages.Select(message => message.Text ?? string.Empty)))));
+        var deadline = new[] { operation.DeadlineUtc, request.DeadlineUtc ?? DateTime.MaxValue,
+            DateTime.UtcNow.AddSeconds(profile.TimeoutSeconds) }.Min();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, operation.Token);
+        timeout.CancelAfter(TimeSpan.FromTicks(Math.Max(1, (deadline - DateTime.UtcNow).Ticks)));
 
-        try
+        for (var transportAttempt = 0; ; transportAttempt++)
         {
-            var response = await chatClient.GetResponseAsync(
-                request.Messages, chatOptions, cancellationToken: timeout.Token);
-            stopwatch.Stop();
-            var usage = response.Usage;
-            var run = new AiTaskRun
+            var startedAt = DateTime.UtcNow;
+            var stopwatch = Stopwatch.StartNew();
+            var queueStopwatch = Stopwatch.StartNew();
+            var ordinal = 0;
+            IDisposable? admission = null;
+            TimeSpan? retryDelay = null;
+            try
             {
-                OperationId = operationId,
-                Task = profile.Name,
-                Provider = Limit(options.Provider, 50),
-                Model = Limit(options.Model, 200),
-                ConfigFingerprint = Limit(options.ExecutionFingerprint, 500),
-                ContractVersion = Limit(request.ContractVersion, 80),
-                StartedAt = startedAt,
-                CompletedAt = DateTime.UtcNow,
-                Outcome = "completed",
-                ResponseMode = responseMode,
-                FinishReason = response.FinishReason?.ToString(),
-                Attempt = request.Attempt,
-                MaxOutputTokens = profile.MaxOutputTokens,
-                Temperature = profile.Temperature,
-                ReasoningDisabled = options.DisableThinking,
-                SchemaRequested = request.ResponseFormat is not null,
-                SchemaApplied = applySchema,
-                PromptCharacters = request.Messages.Sum(message => (long)(message.Text?.Length ?? 0)),
-                OutputCharacters = response.Text?.Length ?? 0,
-                InputTokens = usage?.InputTokenCount ?? 0,
-                OutputTokens = usage?.OutputTokenCount ?? 0,
-                ReasoningTokens = usage?.ReasoningTokenCount ?? 0,
-                TotalTokens = usage?.TotalTokenCount ?? 0,
-                DurationMs = stopwatch.ElapsedMilliseconds
+                timeout.Token.ThrowIfCancellationRequested();
+                if (DateTime.UtcNow >= deadline) throw new OperationCanceledException(timeout.Token);
+                var inputCharacters = AiTokenBudget.InputCharacters(request.Messages, request.ResponseFormat);
+                var inputLimit = Math.Min(profile.MaxInputTokens, options.ContextWindowTokens - profile.MaxOutputTokens);
+                if (inputCharacters > (long)inputLimit * AiTokenBudget.ConservativeCharactersPerToken)
+                    throw new AiInputBudgetExceededException(profile.Name, inputLimit);
+                admission = await _admission.EnterAsync(request.Priority, timeout.Token);
+                queueStopwatch.Stop();
+                if (DateTime.UtcNow >= deadline) throw new OperationCanceledException(timeout.Token);
+                ordinal = operation.TakeAttempt();
+                var response = await chatClient.GetResponseAsync(request.Messages, chatOptions, timeout.Token);
+                stopwatch.Stop();
+                var run = CreateRun("responseReceived", null, response);
+                await metricsStore.SaveAsync(run);
+                LogCompletion(profile.Name, operationId, response, stopwatch.ElapsedMilliseconds);
+                return new AiExecutionResult(response, run.Id, metricsStore);
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                queueStopwatch.Stop();
+                // SDK cleanup can replace cancellation with a disposed response-stream
+                // exception. Preserve the operation's cancellation semantics and do
+                // not retry a request whose deadline has already elapsed.
+                if (ex is not (OperationCanceledException or AiInputBudgetExceededException or AiOperationBudgetExceededException)
+                    && (timeout.IsCancellationRequested || DateTime.UtcNow >= deadline))
+                {
+                    await metricsStore.SaveAsync(CreateRun(AiExecutionResult.OutcomeName(CancellationOutcome()), "Cancelled during provider response handling"));
+                    throw new OperationCanceledException("AI operation was cancelled during provider response handling", ex, timeout.Token);
+                }
+                var outcome = ex switch
+                {
+                    AiInputBudgetExceededException => AiTaskOutcome.InputLimit,
+                    AiOperationBudgetExceededException => AiTaskOutcome.BudgetExceeded,
+                    OperationCanceledException => CancellationOutcome(),
+                    _ when Status(ex) == 429 => AiTaskOutcome.RateLimited,
+                    _ => AiTaskOutcome.Error
+                };
+                await metricsStore.SaveAsync(CreateRun(AiExecutionResult.OutcomeName(outcome), ex.Message));
+                if (ordinal == 0 || transportAttempt >= options.MaxTransportRetries || !IsTransient(ex)) throw;
+                retryDelay = RetryDelay(ex, transportAttempt);
+                logger.LogInformation("[{OperationId}] Retrying {Task} after provider attempt {Attempt}; delay={DelayMs}ms, status={Status}",
+                    operationId, profile.Name, ordinal, retryDelay.Value.TotalMilliseconds, Status(ex));
+            }
+            finally { admission?.Dispose(); }
+
+            // Backoff does not occupy the model admission slot and never resets the deadline.
+            try
+            {
+                var remaining = TimeSpan.FromTicks(Math.Max(1, (deadline - DateTime.UtcNow).Ticks));
+                var exhaustsDeadline = retryDelay!.Value >= remaining;
+                await Task.Delay(exhaustsDeadline ? remaining : retryDelay.Value, timeout.Token);
+                timeout.Token.ThrowIfCancellationRequested();
+                // Task.Delay may round down by a fraction of a millisecond. A
+                // provider backoff that cannot fit must never admit an early retry
+                // in that gap merely because the deadline timer has not fired yet.
+                if (exhaustsDeadline || DateTime.UtcNow >= deadline) throw new OperationCanceledException(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                ordinal = 0;
+                await metricsStore.SaveAsync(CreateRun(AiExecutionResult.OutcomeName(CancellationOutcome()), "Cancelled during provider retry backoff"));
+                throw;
+            }
+
+            AiTaskRun CreateRun(string outcome, string? error, ChatResponse? response = null) => new()
+            {
+                Id = Guid.NewGuid(), OperationId = operationId, Task = profile.Name,
+                Provider = Limit(options.Provider, 50), Model = Limit(options.Model, 200),
+                ConfigFingerprint = Limit(options.ExecutionFingerprint, 500), ContractVersion = Limit(request.ContractVersion, 80),
+                StartedAt = startedAt, CompletedAt = DateTime.UtcNow, Outcome = outcome,
+                ResponseMode = responseMode, FinishReason = response?.FinishReason?.ToString(),
+                Error = error is null ? null : Limit(error, 1000), Attempt = request.Attempt, OperationAttempt = ordinal,
+                MaxOutputTokens = profile.MaxOutputTokens, Temperature = profile.Temperature,
+                ReasoningDisabled = !profile.EnableReasoning && options.DisableThinking, SchemaRequested = request.ResponseFormat is not null,
+                SchemaApplied = applySchema, PromptCharacters = promptCharacters, InputBudgetTokens = profile.MaxInputTokens,
+                QueueWaitMs = queueStopwatch.ElapsedMilliseconds, PromptHash = promptHash,
+                InputRevisionsJson = request.CapabilityProbe ? null : AiInputSnapshotScope.Current?.RevisionsJson,
+                InputFingerprint = request.CapabilityProbe ? null : AiInputSnapshotScope.Current?.Fingerprint,
+                OutputCharacters = response?.Text?.Length ?? 0, InputTokens = response?.Usage?.InputTokenCount ?? 0,
+                OutputTokens = response?.Usage?.OutputTokenCount ?? 0, ReasoningTokens = response?.Usage?.ReasoningTokenCount ?? 0,
+                TotalTokens = response?.Usage?.TotalTokenCount ?? 0, DurationMs = stopwatch.ElapsedMilliseconds
             };
-            await metricsStore.SaveAsync(run);
-            LogCompletion(profile.Name, operationId, response, stopwatch.ElapsedMilliseconds);
-            return new AiExecutionResult(response, run.Id, metricsStore);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            await SaveFailureAsync("timeout", "The AI task timed out");
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            await SaveFailureAsync("cancelled", "Cancelled by caller");
-            throw;
-        }
-        catch (Exception ex)
-        {
-            await SaveFailureAsync("error", ex.Message);
-            throw;
         }
 
-        async Task SaveFailureAsync(string outcome, string error)
+        AiTaskOutcome CancellationOutcome() => operation.CallerCancelled
+            || (cancellationToken.IsCancellationRequested && operation.DeadlineUtc > DateTime.UtcNow)
+                ? AiTaskOutcome.Cancelled : AiTaskOutcome.Timeout;
+    }
+
+    private static int? Status(Exception error) => error switch
+    {
+        ClientResultException client => client.Status,
+        HttpRequestException http => (int?)http.StatusCode,
+        _ => null
+    };
+
+    private static bool IsTransient(Exception error) => error is HttpRequestException { StatusCode: null }
+        || Status(error) is 0 or 408 or 429 or 500 or 502 or 503 or 504;
+
+    private static TimeSpan RetryDelay(Exception error, int attempt)
+    {
+        if (error is ClientResultException client && client.GetRawResponse() is { } response
+            && response.Headers.TryGetValue("Retry-After", out var value))
         {
-            stopwatch.Stop();
-            await metricsStore.SaveAsync(new AiTaskRun
-            {
-                OperationId = operationId,
-                Task = profile.Name,
-                Provider = Limit(options.Provider, 50),
-                Model = Limit(options.Model, 200),
-                ConfigFingerprint = Limit(options.ExecutionFingerprint, 500),
-                ContractVersion = Limit(request.ContractVersion, 80),
-                StartedAt = startedAt,
-                CompletedAt = DateTime.UtcNow,
-                Outcome = outcome,
-                ResponseMode = responseMode,
-                Error = error.Length > 1000 ? error[..1000] : error,
-                Attempt = request.Attempt,
-                MaxOutputTokens = profile.MaxOutputTokens,
-                Temperature = profile.Temperature,
-                ReasoningDisabled = options.DisableThinking,
-                SchemaRequested = request.ResponseFormat is not null,
-                SchemaApplied = applySchema,
-                PromptCharacters = request.Messages.Sum(message => (long)(message.Text?.Length ?? 0)),
-                DurationMs = stopwatch.ElapsedMilliseconds
-            });
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
+                && double.IsFinite(seconds) && seconds >= 0)
+                return TimeSpan.FromSeconds(Math.Min(seconds, TimeSpan.FromDays(1).TotalSeconds));
+            if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var date))
+                return TimeSpan.FromTicks(Math.Max(0, (date - DateTimeOffset.UtcNow).Ticks));
         }
+        return TimeSpan.FromMilliseconds(250 * (1 << attempt));
     }
 
     private void LogCompletion(string task, string operationId, ChatResponse response, long elapsedMs)
@@ -243,3 +357,6 @@ public sealed class AiExecutionGate(
     private static string Limit(string value, int length) =>
         value.Length <= length ? value : value[..length];
 }
+
+public sealed class AiInputBudgetExceededException(string task, int maxInputTokens)
+    : InvalidOperationException($"AI task {task} exceeds its {maxInputTokens}-token input budget.");

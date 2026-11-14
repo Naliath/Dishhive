@@ -19,6 +19,8 @@ public interface IRecipeScrapersClient
     /// <summary>Installed vs latest PyPI version; null when the sidecar is unreachable</summary>
     Task<ScraperVersionInfo?> GetVersionInfoAsync(CancellationToken cancellationToken = default);
 
+    Task<ScraperUpdateStatus?> GetUpdateStatusAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Asks the sidecar to install the given package version (null = latest) and restart.
     /// The sidecar is briefly unavailable afterwards while the container restarts.
@@ -36,6 +38,7 @@ public interface IRecipeScrapersClient
 public record ScraperVersionInfo(string InstalledVersion, string? LatestVersion, bool UpdateAvailable);
 
 public record ScraperUpdateResult(bool Accepted, string? Version, string? Error);
+public record ScraperUpdateStatus(string Status, string? ActiveVersion, DateTimeOffset? UpdatedAt, string? Error);
 
 /// <summary>Wire format of the sidecar's POST /scrape response</summary>
 public record ScrapedRecipe
@@ -145,6 +148,23 @@ public class RecipeScrapersClient : IRecipeScrapersClient
         {
             _logger.LogWarning(ex, "Could not reach the scraper sidecar at {BaseUrl} for update", BaseUrl);
             return new ScraperUpdateResult(false, null, "The scraper service could not be reached.");
+        }
+    }
+
+    public async Task<ScraperUpdateStatus?> GetUpdateStatusAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured) return null;
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(3));
+            return await _httpClient.GetFromJsonAsync<ScraperUpdateStatus>(
+                "update-status", JsonOptions, cts.Token);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogWarning(ex, "Could not get scraper update status from {BaseUrl}", BaseUrl);
+            return null;
         }
     }
 

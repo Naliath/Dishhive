@@ -22,10 +22,18 @@ public class AiWeekPlanningScenarioCorpusTests
             scenario.GetProperty("performanceBudgetMs").GetInt32().Should().BeGreaterThan(0);
             scenario.GetProperty("expectations").GetProperty("uniqueDishes").GetBoolean().Should().BeTrue();
             scenario.GetProperty("expectations").GetProperty("rejectCollectionPages").GetBoolean().Should().BeTrue();
+            scenario.GetProperty("expectations").GetProperty("allowedStatuses")
+                .EnumerateArray().Should().NotBeEmpty();
+            scenario.GetProperty("expectations").GetProperty("allowedOrigins")
+                .EnumerateArray().Should().NotBeEmpty();
+            scenario.GetProperty("expectations").GetProperty("rejectAllergyWarnings")
+                .GetBoolean().Should().BeTrue();
             if (scenario.GetProperty("expectations").TryGetProperty("minimumLocalRecipeLinks", out var minimumLinks))
             {
                 minimumLinks.GetInt32().Should().BeGreaterThan(0);
             }
+            if (scenario.GetProperty("expectations").TryGetProperty("requiredCollections", out var requiredCollections))
+                requiredCollections.EnumerateArray().Should().NotBeEmpty().And.OnlyContain(item => !string.IsNullOrWhiteSpace(item.GetString()));
             if (scenario.TryGetProperty("selectedDayOffsets", out var selectedDayOffsets))
             {
                 var offsets = selectedDayOffsets.EnumerateArray().Select(item => item.GetInt32()).ToList();
@@ -44,6 +52,15 @@ public class AiWeekPlanningScenarioCorpusTests
                     .Should().BeGreaterThanOrEqualTo(source.GetProperty("minDistinctRecipes").GetInt32());
                 source.GetProperty("requiredClasses").ValueKind.Should().Be(JsonValueKind.Array);
                 source.GetProperty("excludedClasses").ValueKind.Should().Be(JsonValueKind.Array);
+            }
+            if (scenario.GetProperty("id").GetString() == "dutch-friday-pancakes-from-source")
+            {
+                scenario.GetProperty("expectations").GetProperty("sources")[0].GetProperty("foodIdentity")
+                    .GetString().Should().Be("belgian-dutch-pancakes", "the user explicitly narrowed Friday's requested style");
+                scenario.GetProperty("prompt").GetString().Should().Be("Op vrijdag pannekoeken van @[Dagelijkse Kost] als hoofd maaltijd");
+                scenario.GetProperty("instructionClarification").GetString().Should().Contain("Belgian/Dutch");
+                scenario.GetProperty("expectations").GetProperty("sources")[0].GetProperty("allowUnfilledWithExplanation").GetBoolean().Should().BeTrue();
+                scenario.GetProperty("expectations").GetProperty("slots")[0].GetProperty("allowUnfilledWithExplanation").GetBoolean().Should().BeTrue();
             }
         }
     }

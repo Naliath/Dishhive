@@ -7,636 +7,5135 @@
 /* eslint-disable */
 // ReSharper disable InconsistentNaming
 
+import { mergeMap as _observableMergeMap, catchError as _observableCatch } from 'rxjs/operators';
+import { Observable, throwError as _observableThrow, of as _observableOf } from 'rxjs';
+import { Injectable, Inject, Optional, InjectionToken } from '@angular/core';
+import { HttpClient, HttpHeaders, HttpResponse, HttpResponseBase } from '@angular/common/http';
 
+export const API_BASE_URL = new InjectionToken<string>('API_BASE_URL');
 
-export class AcceptMealSuggestionDto implements IAcceptMealSuggestionDto {
-    id?: string;
-    date?: string;
-    mealType?: number;
-    course?: number;
-    attendeeIds?: string[];
-    recipeId?: string | undefined;
-    dishName!: string;
-    freezyItemRef?: string | undefined;
-    freezyItemQuantity?: number;
-    sourceUrl?: string | undefined;
+export interface ICookbooksClient {
+    /**
+     * @return OK
+     */
+    getCookbooks(): Observable<CookbookDto[]>;
+    /**
+     * @return Created
+     */
+    createCookbook(body: CreateCookbookDto): Observable<CookbookDto>;
+    /**
+     * @return OK
+     */
+    getAutoCollections(): Observable<AutoCollectionDto[]>;
+    /**
+     * @return No Content
+     */
+    setAutoCollectionEnabled(id: string, body: ToggleAutoCollectionDto): Observable<void>;
+    /**
+     * @return OK
+     */
+    getCookbookRecipes(id: string): Observable<RecipeListItemDto[]>;
+    /**
+     * @return OK
+     */
+    addRecipes(id: string, body: CookbookRecipesRequestDto): Observable<CookbookDto>;
+    /**
+     * @return OK
+     */
+    updateCookbook(id: string, body: UpdateCookbookDto): Observable<CookbookDto>;
+    /**
+     * @return No Content
+     */
+    deleteCookbook(id: string): Observable<void>;
+    /**
+     * @return No Content
+     */
+    removeRecipe(id: string, recipeId: string): Observable<void>;
+}
 
-    [key: string]: any;
+@Injectable({
+    providedIn: 'root'
+})
+export class CookbooksClient implements ICookbooksClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
 
-    constructor(data?: IAcceptMealSuggestionDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
     }
 
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.date = _data["date"];
-            this.mealType = _data["mealType"];
-            this.course = _data["course"];
-            if (Array.isArray(_data["attendeeIds"])) {
-                this.attendeeIds = [] as any;
-                for (let item of _data["attendeeIds"])
-                    this.attendeeIds!.push(item);
-            }
-            this.recipeId = _data["recipeId"];
-            this.dishName = _data["dishName"];
-            this.freezyItemRef = _data["freezyItemRef"];
-            this.freezyItemQuantity = _data["freezyItemQuantity"];
-            this.sourceUrl = _data["sourceUrl"];
-        }
+    /**
+     * @return OK
+     */
+    getCookbooks(): Observable<CookbookDto[]> {
+        let url_ = this.baseUrl + "/api/cookbooks";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetCookbooks(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetCookbooks(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<CookbookDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<CookbookDto[]>;
+        }));
     }
 
-    static fromJS(data: any): AcceptMealSuggestionDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AcceptMealSuggestionDto();
-        result.init(data);
-        return result;
+    protected processGetCookbooks(response: HttpResponseBase): Observable<CookbookDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as CookbookDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
     }
 
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
+    /**
+     * @return Created
+     */
+    createCookbook(body: CreateCookbookDto): Observable<CookbookDto> {
+        let url_ = this.baseUrl + "/api/cookbooks";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processCreateCookbook(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processCreateCookbook(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<CookbookDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<CookbookDto>;
+        }));
+    }
+
+    protected processCreateCookbook(response: HttpResponseBase): Observable<CookbookDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 201) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as CookbookDto;
+            return _observableOf(result201);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
         }
-        data["id"] = this.id;
-        data["date"] = this.date;
-        data["mealType"] = this.mealType;
-        data["course"] = this.course;
-        if (Array.isArray(this.attendeeIds)) {
-            data["attendeeIds"] = [];
-            for (let item of this.attendeeIds)
-                data["attendeeIds"].push(item);
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getAutoCollections(): Observable<AutoCollectionDto[]> {
+        let url_ = this.baseUrl + "/api/cookbooks/auto-collections";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetAutoCollections(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetAutoCollections(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<AutoCollectionDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<AutoCollectionDto[]>;
+        }));
+    }
+
+    protected processGetAutoCollections(response: HttpResponseBase): Observable<AutoCollectionDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AutoCollectionDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
         }
-        data["recipeId"] = this.recipeId;
-        data["dishName"] = this.dishName;
-        data["freezyItemRef"] = this.freezyItemRef;
-        data["freezyItemQuantity"] = this.freezyItemQuantity;
-        data["sourceUrl"] = this.sourceUrl;
-        return data;
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    setAutoCollectionEnabled(id: string, body: ToggleAutoCollectionDto): Observable<void> {
+        let url_ = this.baseUrl + "/api/cookbooks/auto-collections/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processSetAutoCollectionEnabled(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processSetAutoCollectionEnabled(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processSetAutoCollectionEnabled(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getCookbookRecipes(id: string): Observable<RecipeListItemDto[]> {
+        let url_ = this.baseUrl + "/api/cookbooks/{id}/recipes";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetCookbookRecipes(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetCookbookRecipes(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeListItemDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeListItemDto[]>;
+        }));
+    }
+
+    protected processGetCookbookRecipes(response: HttpResponseBase): Observable<RecipeListItemDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeListItemDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    addRecipes(id: string, body: CookbookRecipesRequestDto): Observable<CookbookDto> {
+        let url_ = this.baseUrl + "/api/cookbooks/{id}/recipes";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processAddRecipes(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processAddRecipes(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<CookbookDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<CookbookDto>;
+        }));
+    }
+
+    protected processAddRecipes(response: HttpResponseBase): Observable<CookbookDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as CookbookDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    updateCookbook(id: string, body: UpdateCookbookDto): Observable<CookbookDto> {
+        let url_ = this.baseUrl + "/api/cookbooks/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processUpdateCookbook(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processUpdateCookbook(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<CookbookDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<CookbookDto>;
+        }));
+    }
+
+    protected processUpdateCookbook(response: HttpResponseBase): Observable<CookbookDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as CookbookDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    deleteCookbook(id: string): Observable<void> {
+        let url_ = this.baseUrl + "/api/cookbooks/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("delete", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processDeleteCookbook(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processDeleteCookbook(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processDeleteCookbook(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    removeRecipe(id: string, recipeId: string): Observable<void> {
+        let url_ = this.baseUrl + "/api/cookbooks/{id}/recipes/{recipeId}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (recipeId === undefined || recipeId === null)
+            throw new globalThis.Error("The parameter 'recipeId' must be defined.");
+        url_ = url_.replace("{recipeId}", encodeURIComponent("" + recipeId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("delete", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processRemoveRecipe(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processRemoveRecipe(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processRemoveRecipe(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
     }
 }
 
-export interface IAcceptMealSuggestionDto {
-    id?: string;
-    date?: string;
-    mealType?: number;
-    course?: number;
-    attendeeIds?: string[];
-    recipeId?: string | undefined;
+export interface IDietaryTagsClient {
+    /**
+     * @return OK
+     */
+    getTags(): Observable<DietaryTagDto[]>;
+    /**
+     * @param name (optional)
+     * @param kind (optional)
+     * @return OK
+     */
+    getPreset(name?: string | undefined, kind?: DietaryTagKind | undefined): Observable<DietaryTagPresetDto>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class DietaryTagsClient implements IDietaryTagsClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @return OK
+     */
+    getTags(): Observable<DietaryTagDto[]> {
+        let url_ = this.baseUrl + "/api/dietarytags";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetTags(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetTags(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<DietaryTagDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<DietaryTagDto[]>;
+        }));
+    }
+
+    protected processGetTags(response: HttpResponseBase): Observable<DietaryTagDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DietaryTagDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @param name (optional)
+     * @param kind (optional)
+     * @return OK
+     */
+    getPreset(name?: string | undefined, kind?: DietaryTagKind | undefined): Observable<DietaryTagPresetDto> {
+        let url_ = this.baseUrl + "/api/dietarytags/preset?";
+        if (name === null)
+            throw new globalThis.Error("The parameter 'name' cannot be null.");
+        else if (name !== undefined)
+            url_ += "name=" + encodeURIComponent("" + name) + "&";
+        if (kind === null)
+            throw new globalThis.Error("The parameter 'kind' cannot be null.");
+        else if (kind !== undefined)
+            url_ += "kind=" + encodeURIComponent("" + kind) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetPreset(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetPreset(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<DietaryTagPresetDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<DietaryTagPresetDto>;
+        }));
+    }
+
+    protected processGetPreset(response: HttpResponseBase): Observable<DietaryTagPresetDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DietaryTagPresetDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface IFamilyMembersClient {
+    /**
+     * @param includeInactive (optional)
+     * @return OK
+     */
+    getMembers(includeInactive?: boolean | undefined): Observable<FamilyMemberDto[]>;
+    /**
+     * @return Created
+     */
+    createMember(body: CreateFamilyMemberDto): Observable<FamilyMemberDto>;
+    /**
+     * @return OK
+     */
+    getMember(id: string): Observable<FamilyMemberDto>;
+    /**
+     * @return OK
+     */
+    updateMember(id: string, body: UpdateFamilyMemberDto): Observable<FamilyMemberDto>;
+    /**
+     * @return No Content
+     */
+    deleteMember(id: string): Observable<void>;
+    /**
+     * @return OK
+     */
+    getFavorites(id: string): Observable<FamilyMemberFavoriteDto[]>;
+    /**
+     * @return Created
+     */
+    addFavorite(id: string, body: CreateFamilyMemberFavoriteDto): Observable<FamilyMemberFavoriteDto>;
+    /**
+     * @return No Content
+     */
+    deleteFavorite(id: string, favoriteId: string): Observable<void>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class FamilyMembersClient implements IFamilyMembersClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @param includeInactive (optional)
+     * @return OK
+     */
+    getMembers(includeInactive?: boolean | undefined): Observable<FamilyMemberDto[]> {
+        let url_ = this.baseUrl + "/api/familymembers?";
+        if (includeInactive === null)
+            throw new globalThis.Error("The parameter 'includeInactive' cannot be null.");
+        else if (includeInactive !== undefined)
+            url_ += "includeInactive=" + encodeURIComponent("" + includeInactive) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetMembers(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetMembers(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<FamilyMemberDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<FamilyMemberDto[]>;
+        }));
+    }
+
+    protected processGetMembers(response: HttpResponseBase): Observable<FamilyMemberDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as FamilyMemberDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return Created
+     */
+    createMember(body: CreateFamilyMemberDto): Observable<FamilyMemberDto> {
+        let url_ = this.baseUrl + "/api/familymembers";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processCreateMember(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processCreateMember(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<FamilyMemberDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<FamilyMemberDto>;
+        }));
+    }
+
+    protected processCreateMember(response: HttpResponseBase): Observable<FamilyMemberDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 201) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as FamilyMemberDto;
+            return _observableOf(result201);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getMember(id: string): Observable<FamilyMemberDto> {
+        let url_ = this.baseUrl + "/api/familymembers/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetMember(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetMember(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<FamilyMemberDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<FamilyMemberDto>;
+        }));
+    }
+
+    protected processGetMember(response: HttpResponseBase): Observable<FamilyMemberDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as FamilyMemberDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    updateMember(id: string, body: UpdateFamilyMemberDto): Observable<FamilyMemberDto> {
+        let url_ = this.baseUrl + "/api/familymembers/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processUpdateMember(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processUpdateMember(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<FamilyMemberDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<FamilyMemberDto>;
+        }));
+    }
+
+    protected processUpdateMember(response: HttpResponseBase): Observable<FamilyMemberDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as FamilyMemberDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    deleteMember(id: string): Observable<void> {
+        let url_ = this.baseUrl + "/api/familymembers/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("delete", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processDeleteMember(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processDeleteMember(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processDeleteMember(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getFavorites(id: string): Observable<FamilyMemberFavoriteDto[]> {
+        let url_ = this.baseUrl + "/api/familymembers/{id}/favorites";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetFavorites(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetFavorites(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<FamilyMemberFavoriteDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<FamilyMemberFavoriteDto[]>;
+        }));
+    }
+
+    protected processGetFavorites(response: HttpResponseBase): Observable<FamilyMemberFavoriteDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as FamilyMemberFavoriteDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return Created
+     */
+    addFavorite(id: string, body: CreateFamilyMemberFavoriteDto): Observable<FamilyMemberFavoriteDto> {
+        let url_ = this.baseUrl + "/api/familymembers/{id}/favorites";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processAddFavorite(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processAddFavorite(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<FamilyMemberFavoriteDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<FamilyMemberFavoriteDto>;
+        }));
+    }
+
+    protected processAddFavorite(response: HttpResponseBase): Observable<FamilyMemberFavoriteDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 201) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as FamilyMemberFavoriteDto;
+            return _observableOf(result201);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    deleteFavorite(id: string, favoriteId: string): Observable<void> {
+        let url_ = this.baseUrl + "/api/familymembers/{id}/favorites/{favoriteId}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (favoriteId === undefined || favoriteId === null)
+            throw new globalThis.Error("The parameter 'favoriteId' must be defined.");
+        url_ = url_.replace("{favoriteId}", encodeURIComponent("" + favoriteId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("delete", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processDeleteFavorite(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processDeleteFavorite(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processDeleteFavorite(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface IFreezerClient {
+    /**
+     * @return OK
+     */
+    getReservations(): Observable<FreezerReconciliationDto>;
+    /**
+     * @return No Content
+     */
+    resolveReservation(id: string, body: ResolveFreezerReservationDto): Observable<void>;
+    /**
+     * @return OK
+     */
+    getSuggestions(): Observable<FreezerSuggestionsDto>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class FreezerClient implements IFreezerClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @return OK
+     */
+    getReservations(): Observable<FreezerReconciliationDto> {
+        let url_ = this.baseUrl + "/api/freezer/reservations";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetReservations(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetReservations(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<FreezerReconciliationDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<FreezerReconciliationDto>;
+        }));
+    }
+
+    protected processGetReservations(response: HttpResponseBase): Observable<FreezerReconciliationDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as FreezerReconciliationDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    resolveReservation(id: string, body: ResolveFreezerReservationDto): Observable<void> {
+        let url_ = this.baseUrl + "/api/freezer/reservations/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processResolveReservation(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processResolveReservation(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processResolveReservation(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 409) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result409: any = null;
+            result409 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Conflict", status, _responseText, _headers, result409);
+            }));
+        } else if (status === 503) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("Service Unavailable", status, _responseText, _headers);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getSuggestions(): Observable<FreezerSuggestionsDto> {
+        let url_ = this.baseUrl + "/api/freezer/suggestions";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetSuggestions(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetSuggestions(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<FreezerSuggestionsDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<FreezerSuggestionsDto>;
+        }));
+    }
+
+    protected processGetSuggestions(response: HttpResponseBase): Observable<FreezerSuggestionsDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as FreezerSuggestionsDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface IIntegrationsClient {
+    /**
+     * @return OK
+     */
+    getStatus(): Observable<IntegrationStatusResponseDto>;
+    /**
+     * @return OK
+     */
+    getScraperVersion(): Observable<ScraperVersionCheckDto>;
+    /**
+     * @return Accepted
+     */
+    updateScraper(body: ScraperUpdateRequestDto): Observable<ScraperUpdateResponseDto>;
+    /**
+     * @return OK
+     */
+    getAiModelTest(): Observable<AiModelTestStatusDto>;
+    /**
+     * @return Accepted
+     */
+    runAiModelTest(): Observable<AiModelTestStatusDto>;
+    /**
+     * @param count (optional)
+     * @param from (optional)
+     * @param task (optional)
+     * @param model (optional)
+     * @param fingerprint (optional)
+     * @param outcome (optional)
+     * @param operationId (optional)
+     * @return OK
+     */
+    getAiPlanningRuns(count?: number | undefined, from?: string | undefined, task?: string | undefined, model?: string | undefined, fingerprint?: string | undefined, outcome?: string | undefined, operationId?: string | undefined): Observable<AiPlanningMetricsResponseDto>;
+    /**
+     * @return OK
+     */
+    getScraperUpdateStatus(): Observable<ScraperUpdateStatusDto>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class IntegrationsClient implements IIntegrationsClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @return OK
+     */
+    getStatus(): Observable<IntegrationStatusResponseDto> {
+        let url_ = this.baseUrl + "/api/integrations/status";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetStatus(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetStatus(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<IntegrationStatusResponseDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<IntegrationStatusResponseDto>;
+        }));
+    }
+
+    protected processGetStatus(response: HttpResponseBase): Observable<IntegrationStatusResponseDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as IntegrationStatusResponseDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getScraperVersion(): Observable<ScraperVersionCheckDto> {
+        let url_ = this.baseUrl + "/api/integrations/scraper/version";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetScraperVersion(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetScraperVersion(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<ScraperVersionCheckDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<ScraperVersionCheckDto>;
+        }));
+    }
+
+    protected processGetScraperVersion(response: HttpResponseBase): Observable<ScraperVersionCheckDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ScraperVersionCheckDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 503) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("Service Unavailable", status, _responseText, _headers);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return Accepted
+     */
+    updateScraper(body: ScraperUpdateRequestDto): Observable<ScraperUpdateResponseDto> {
+        let url_ = this.baseUrl + "/api/integrations/scraper/update";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processUpdateScraper(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processUpdateScraper(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<ScraperUpdateResponseDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<ScraperUpdateResponseDto>;
+        }));
+    }
+
+    protected processUpdateScraper(response: HttpResponseBase): Observable<ScraperUpdateResponseDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 202) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result202: any = null;
+            result202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ScraperUpdateResponseDto;
+            return _observableOf(result202);
+            }));
+        } else if (status === 502) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("Bad Gateway", status, _responseText, _headers);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getAiModelTest(): Observable<AiModelTestStatusDto> {
+        let url_ = this.baseUrl + "/api/integrations/ai/test";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetAiModelTest(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetAiModelTest(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<AiModelTestStatusDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<AiModelTestStatusDto>;
+        }));
+    }
+
+    protected processGetAiModelTest(response: HttpResponseBase): Observable<AiModelTestStatusDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AiModelTestStatusDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return Accepted
+     */
+    runAiModelTest(): Observable<AiModelTestStatusDto> {
+        let url_ = this.baseUrl + "/api/integrations/ai/test";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processRunAiModelTest(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processRunAiModelTest(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<AiModelTestStatusDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<AiModelTestStatusDto>;
+        }));
+    }
+
+    protected processRunAiModelTest(response: HttpResponseBase): Observable<AiModelTestStatusDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 202) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result202: any = null;
+            result202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AiModelTestStatusDto;
+            return _observableOf(result202);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @param count (optional)
+     * @param from (optional)
+     * @param task (optional)
+     * @param model (optional)
+     * @param fingerprint (optional)
+     * @param outcome (optional)
+     * @param operationId (optional)
+     * @return OK
+     */
+    getAiPlanningRuns(count?: number | undefined, from?: string | undefined, task?: string | undefined, model?: string | undefined, fingerprint?: string | undefined, outcome?: string | undefined, operationId?: string | undefined): Observable<AiPlanningMetricsResponseDto> {
+        let url_ = this.baseUrl + "/api/integrations/ai/planning-runs?";
+        if (count === null)
+            throw new globalThis.Error("The parameter 'count' cannot be null.");
+        else if (count !== undefined)
+            url_ += "count=" + encodeURIComponent("" + count) + "&";
+        if (from === null)
+            throw new globalThis.Error("The parameter 'from' cannot be null.");
+        else if (from !== undefined)
+            url_ += "from=" + encodeURIComponent("" + from) + "&";
+        if (task === null)
+            throw new globalThis.Error("The parameter 'task' cannot be null.");
+        else if (task !== undefined)
+            url_ += "task=" + encodeURIComponent("" + task) + "&";
+        if (model === null)
+            throw new globalThis.Error("The parameter 'model' cannot be null.");
+        else if (model !== undefined)
+            url_ += "model=" + encodeURIComponent("" + model) + "&";
+        if (fingerprint === null)
+            throw new globalThis.Error("The parameter 'fingerprint' cannot be null.");
+        else if (fingerprint !== undefined)
+            url_ += "fingerprint=" + encodeURIComponent("" + fingerprint) + "&";
+        if (outcome === null)
+            throw new globalThis.Error("The parameter 'outcome' cannot be null.");
+        else if (outcome !== undefined)
+            url_ += "outcome=" + encodeURIComponent("" + outcome) + "&";
+        if (operationId === null)
+            throw new globalThis.Error("The parameter 'operationId' cannot be null.");
+        else if (operationId !== undefined)
+            url_ += "operationId=" + encodeURIComponent("" + operationId) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetAiPlanningRuns(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetAiPlanningRuns(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<AiPlanningMetricsResponseDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<AiPlanningMetricsResponseDto>;
+        }));
+    }
+
+    protected processGetAiPlanningRuns(response: HttpResponseBase): Observable<AiPlanningMetricsResponseDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AiPlanningMetricsResponseDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getScraperUpdateStatus(): Observable<ScraperUpdateStatusDto> {
+        let url_ = this.baseUrl + "/api/integrations/scraper/update-status";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetScraperUpdateStatus(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetScraperUpdateStatus(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<ScraperUpdateStatusDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<ScraperUpdateStatusDto>;
+        }));
+    }
+
+    protected processGetScraperUpdateStatus(response: HttpResponseBase): Observable<ScraperUpdateStatusDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ScraperUpdateStatusDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 503) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("Service Unavailable", status, _responseText, _headers);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface IOnboardingClient {
+    /**
+     * @return OK
+     */
+    start(): Observable<OnboardingStatusDto>;
+    /**
+     * @return OK
+     */
+    complete(body: CompleteOnboardingDto): Observable<OnboardingStatusDto>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class OnboardingClient implements IOnboardingClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @return OK
+     */
+    start(): Observable<OnboardingStatusDto> {
+        let url_ = this.baseUrl + "/api/onboarding/start";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processStart(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processStart(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<OnboardingStatusDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<OnboardingStatusDto>;
+        }));
+    }
+
+    protected processStart(response: HttpResponseBase): Observable<OnboardingStatusDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as OnboardingStatusDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    complete(body: CompleteOnboardingDto): Observable<OnboardingStatusDto> {
+        let url_ = this.baseUrl + "/api/onboarding/complete";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processComplete(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processComplete(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<OnboardingStatusDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<OnboardingStatusDto>;
+        }));
+    }
+
+    protected processComplete(response: HttpResponseBase): Observable<OnboardingStatusDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as OnboardingStatusDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface IPlannedMealsClient {
+    /**
+     * @param from (optional)
+     * @param to (optional)
+     * @return OK
+     */
+    getMeals(from?: string | undefined, to?: string | undefined): Observable<PlannedMealDto[]>;
+    /**
+     * @return Created
+     */
+    createMeal(body: CreatePlannedMealDto): Observable<PlannedMealDto>;
+    /**
+     * @return OK
+     */
+    getMeal(id: string): Observable<PlannedMealDto>;
+    /**
+     * @return OK
+     */
+    updateMeal(id: string, body: UpdatePlannedMealDto): Observable<PlannedMealDto>;
+    /**
+     * @return No Content
+     */
+    deleteMeal(id: string): Observable<void>;
+    /**
+     * @return OK
+     */
+    setRecipe(id: string, body: SetMealRecipeDto): Observable<PlannedMealDto>;
+    /**
+     * @return OK
+     */
+    getSuggestionStatus(): Observable<SuggestionStatusDto>;
+    /**
+     * @return OK
+     */
+    suggestWeek(body: SuggestWeekRequestDto): Observable<MealSuggestionsDto>;
+    /**
+     * @return OK
+     */
+    acceptSuggestions(body: AcceptMealSuggestionsRequestDto): Observable<AcceptMealSuggestionsResponseDto>;
+    /**
+     * @return OK
+     */
+    setEaten(id: string, body: SetEatenDto): Observable<PlannedMealDto>;
+    /**
+     * @return OK
+     */
+    setRating(id: string, memberId: string, body: SetRatingDto): Observable<PlannedMealDto>;
+    /**
+     * @return No Content
+     */
+    deleteRating(id: string, memberId: string): Observable<void>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class PlannedMealsClient implements IPlannedMealsClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @param from (optional)
+     * @param to (optional)
+     * @return OK
+     */
+    getMeals(from?: string | undefined, to?: string | undefined): Observable<PlannedMealDto[]> {
+        let url_ = this.baseUrl + "/api/plannedmeals?";
+        if (from === null)
+            throw new globalThis.Error("The parameter 'from' cannot be null.");
+        else if (from !== undefined)
+            url_ += "from=" + encodeURIComponent("" + from) + "&";
+        if (to === null)
+            throw new globalThis.Error("The parameter 'to' cannot be null.");
+        else if (to !== undefined)
+            url_ += "to=" + encodeURIComponent("" + to) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetMeals(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetMeals(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<PlannedMealDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<PlannedMealDto[]>;
+        }));
+    }
+
+    protected processGetMeals(response: HttpResponseBase): Observable<PlannedMealDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PlannedMealDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return Created
+     */
+    createMeal(body: CreatePlannedMealDto): Observable<PlannedMealDto> {
+        let url_ = this.baseUrl + "/api/plannedmeals";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processCreateMeal(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processCreateMeal(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<PlannedMealDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<PlannedMealDto>;
+        }));
+    }
+
+    protected processCreateMeal(response: HttpResponseBase): Observable<PlannedMealDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 201) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PlannedMealDto;
+            return _observableOf(result201);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getMeal(id: string): Observable<PlannedMealDto> {
+        let url_ = this.baseUrl + "/api/plannedmeals/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetMeal(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetMeal(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<PlannedMealDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<PlannedMealDto>;
+        }));
+    }
+
+    protected processGetMeal(response: HttpResponseBase): Observable<PlannedMealDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PlannedMealDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    updateMeal(id: string, body: UpdatePlannedMealDto): Observable<PlannedMealDto> {
+        let url_ = this.baseUrl + "/api/plannedmeals/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processUpdateMeal(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processUpdateMeal(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<PlannedMealDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<PlannedMealDto>;
+        }));
+    }
+
+    protected processUpdateMeal(response: HttpResponseBase): Observable<PlannedMealDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PlannedMealDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    deleteMeal(id: string): Observable<void> {
+        let url_ = this.baseUrl + "/api/plannedmeals/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("delete", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processDeleteMeal(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processDeleteMeal(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processDeleteMeal(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    setRecipe(id: string, body: SetMealRecipeDto): Observable<PlannedMealDto> {
+        let url_ = this.baseUrl + "/api/plannedmeals/{id}/recipe";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processSetRecipe(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processSetRecipe(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<PlannedMealDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<PlannedMealDto>;
+        }));
+    }
+
+    protected processSetRecipe(response: HttpResponseBase): Observable<PlannedMealDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PlannedMealDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getSuggestionStatus(): Observable<SuggestionStatusDto> {
+        let url_ = this.baseUrl + "/api/plannedmeals/suggestions/status";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetSuggestionStatus(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetSuggestionStatus(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<SuggestionStatusDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<SuggestionStatusDto>;
+        }));
+    }
+
+    protected processGetSuggestionStatus(response: HttpResponseBase): Observable<SuggestionStatusDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as SuggestionStatusDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    suggestWeek(body: SuggestWeekRequestDto): Observable<MealSuggestionsDto> {
+        let url_ = this.baseUrl + "/api/plannedmeals/suggestions";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processSuggestWeek(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processSuggestWeek(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<MealSuggestionsDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<MealSuggestionsDto>;
+        }));
+    }
+
+    protected processSuggestWeek(response: HttpResponseBase): Observable<MealSuggestionsDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as MealSuggestionsDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    acceptSuggestions(body: AcceptMealSuggestionsRequestDto): Observable<AcceptMealSuggestionsResponseDto> {
+        let url_ = this.baseUrl + "/api/plannedmeals/suggestions/accept";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processAcceptSuggestions(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processAcceptSuggestions(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<AcceptMealSuggestionsResponseDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<AcceptMealSuggestionsResponseDto>;
+        }));
+    }
+
+    protected processAcceptSuggestions(response: HttpResponseBase): Observable<AcceptMealSuggestionsResponseDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AcceptMealSuggestionsResponseDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    setEaten(id: string, body: SetEatenDto): Observable<PlannedMealDto> {
+        let url_ = this.baseUrl + "/api/plannedmeals/{id}/eaten";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processSetEaten(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processSetEaten(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<PlannedMealDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<PlannedMealDto>;
+        }));
+    }
+
+    protected processSetEaten(response: HttpResponseBase): Observable<PlannedMealDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PlannedMealDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    setRating(id: string, memberId: string, body: SetRatingDto): Observable<PlannedMealDto> {
+        let url_ = this.baseUrl + "/api/plannedmeals/{id}/ratings/{memberId}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (memberId === undefined || memberId === null)
+            throw new globalThis.Error("The parameter 'memberId' must be defined.");
+        url_ = url_.replace("{memberId}", encodeURIComponent("" + memberId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processSetRating(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processSetRating(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<PlannedMealDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<PlannedMealDto>;
+        }));
+    }
+
+    protected processSetRating(response: HttpResponseBase): Observable<PlannedMealDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PlannedMealDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    deleteRating(id: string, memberId: string): Observable<void> {
+        let url_ = this.baseUrl + "/api/plannedmeals/{id}/ratings/{memberId}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (memberId === undefined || memberId === null)
+            throw new globalThis.Error("The parameter 'memberId' must be defined.");
+        url_ = url_.replace("{memberId}", encodeURIComponent("" + memberId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("delete", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processDeleteRating(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processDeleteRating(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processDeleteRating(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface IRecipesClient {
+    /**
+     * @param search (optional)
+     * @param category (optional)
+     * @param tags (optional)
+     * @param cookbookId (optional)
+     * @param page (optional)
+     * @param pageSize (optional)
+     * @return OK
+     */
+    getRecipes(search?: string | undefined, category?: string | undefined, tags?: string | undefined, cookbookId?: string | undefined, page?: number | undefined, pageSize?: number | undefined): Observable<RecipeListItemDto[]>;
+    /**
+     * @return Created
+     */
+    createRecipe(body: CreateRecipeDto): Observable<RecipeDto>;
+    /**
+     * @param search (optional)
+     * @param category (optional)
+     * @param tags (optional)
+     * @param cookbookId (optional)
+     * @param page (optional)
+     * @param pageSize (optional)
+     * @return OK
+     */
+    getRecipesPage(search?: string | undefined, category?: string | undefined, tags?: string | undefined, cookbookId?: string | undefined, page?: number | undefined, pageSize?: number | undefined): Observable<RecipePageDto>;
+    /**
+     * @return OK
+     */
+    getCategories(): Observable<string[]>;
+    /**
+     * @return OK
+     */
+    getIngredientNames(): Observable<string[]>;
+    /**
+     * @return OK
+     */
+    getRecipeImage(id: string): Observable<void>;
+    /**
+     * @param file (optional)
+     * @return No Content
+     */
+    setRecipeImage(id: string, file?: FileParameter | undefined): Observable<void>;
+    /**
+     * @return No Content
+     */
+    deleteRecipeImage(id: string): Observable<void>;
+    /**
+     * @return OK
+     */
+    getRecipe(id: string): Observable<RecipeDto>;
+    /**
+     * @return OK
+     */
+    updateRecipe(id: string, body: UpdateRecipeDto): Observable<RecipeDto>;
+    /**
+     * @return No Content
+     */
+    deleteRecipe(id: string): Observable<void>;
+    /**
+     * @return OK
+     */
+    setRecipeCookbooks(id: string, body: RecipeCookbooksRequestDto): Observable<string[]>;
+    /**
+     * @return Created
+     */
+    importRecipe(body: ImportRecipeRequestDto): Observable<RecipeDto>;
+    /**
+     * @return OK
+     */
+    setRecipeFacts(id: string, body: UpdateRecipeFactsDto): Observable<RecipeDietaryFactsDto>;
+    /**
+     * @return OK
+     */
+    getFactsStatus(): Observable<RecipeFactsStatusDto>;
+    /**
+     * @param includeAssessed (optional)
+     * @return OK
+     */
+    backfillFacts(includeAssessed?: boolean | undefined): Observable<RecipeFactsBackfillResultDto>;
+    /**
+     * @return OK
+     */
+    getSources(): Observable<RecipeSourceDto[]>;
+    /**
+     * @return OK
+     */
+    exportRecipes(): Observable<void>;
+    /**
+     * @param file (optional)
+     * @return OK
+     */
+    importRecipesFile(file?: FileParameter | undefined): Observable<RecipeFileImportResultDto>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class RecipesClient implements IRecipesClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @param search (optional)
+     * @param category (optional)
+     * @param tags (optional)
+     * @param cookbookId (optional)
+     * @param page (optional)
+     * @param pageSize (optional)
+     * @return OK
+     */
+    getRecipes(search?: string | undefined, category?: string | undefined, tags?: string | undefined, cookbookId?: string | undefined, page?: number | undefined, pageSize?: number | undefined): Observable<RecipeListItemDto[]> {
+        let url_ = this.baseUrl + "/api/recipes?";
+        if (search === null)
+            throw new globalThis.Error("The parameter 'search' cannot be null.");
+        else if (search !== undefined)
+            url_ += "search=" + encodeURIComponent("" + search) + "&";
+        if (category === null)
+            throw new globalThis.Error("The parameter 'category' cannot be null.");
+        else if (category !== undefined)
+            url_ += "category=" + encodeURIComponent("" + category) + "&";
+        if (tags === null)
+            throw new globalThis.Error("The parameter 'tags' cannot be null.");
+        else if (tags !== undefined)
+            url_ += "tags=" + encodeURIComponent("" + tags) + "&";
+        if (cookbookId === null)
+            throw new globalThis.Error("The parameter 'cookbookId' cannot be null.");
+        else if (cookbookId !== undefined)
+            url_ += "cookbookId=" + encodeURIComponent("" + cookbookId) + "&";
+        if (page === null)
+            throw new globalThis.Error("The parameter 'page' cannot be null.");
+        else if (page !== undefined)
+            url_ += "page=" + encodeURIComponent("" + page) + "&";
+        if (pageSize === null)
+            throw new globalThis.Error("The parameter 'pageSize' cannot be null.");
+        else if (pageSize !== undefined)
+            url_ += "pageSize=" + encodeURIComponent("" + pageSize) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetRecipes(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetRecipes(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeListItemDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeListItemDto[]>;
+        }));
+    }
+
+    protected processGetRecipes(response: HttpResponseBase): Observable<RecipeListItemDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeListItemDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return Created
+     */
+    createRecipe(body: CreateRecipeDto): Observable<RecipeDto> {
+        let url_ = this.baseUrl + "/api/recipes";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processCreateRecipe(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processCreateRecipe(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeDto>;
+        }));
+    }
+
+    protected processCreateRecipe(response: HttpResponseBase): Observable<RecipeDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 201) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeDto;
+            return _observableOf(result201);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @param search (optional)
+     * @param category (optional)
+     * @param tags (optional)
+     * @param cookbookId (optional)
+     * @param page (optional)
+     * @param pageSize (optional)
+     * @return OK
+     */
+    getRecipesPage(search?: string | undefined, category?: string | undefined, tags?: string | undefined, cookbookId?: string | undefined, page?: number | undefined, pageSize?: number | undefined): Observable<RecipePageDto> {
+        let url_ = this.baseUrl + "/api/recipes/page?";
+        if (search === null)
+            throw new globalThis.Error("The parameter 'search' cannot be null.");
+        else if (search !== undefined)
+            url_ += "search=" + encodeURIComponent("" + search) + "&";
+        if (category === null)
+            throw new globalThis.Error("The parameter 'category' cannot be null.");
+        else if (category !== undefined)
+            url_ += "category=" + encodeURIComponent("" + category) + "&";
+        if (tags === null)
+            throw new globalThis.Error("The parameter 'tags' cannot be null.");
+        else if (tags !== undefined)
+            url_ += "tags=" + encodeURIComponent("" + tags) + "&";
+        if (cookbookId === null)
+            throw new globalThis.Error("The parameter 'cookbookId' cannot be null.");
+        else if (cookbookId !== undefined)
+            url_ += "cookbookId=" + encodeURIComponent("" + cookbookId) + "&";
+        if (page === null)
+            throw new globalThis.Error("The parameter 'page' cannot be null.");
+        else if (page !== undefined)
+            url_ += "page=" + encodeURIComponent("" + page) + "&";
+        if (pageSize === null)
+            throw new globalThis.Error("The parameter 'pageSize' cannot be null.");
+        else if (pageSize !== undefined)
+            url_ += "pageSize=" + encodeURIComponent("" + pageSize) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetRecipesPage(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetRecipesPage(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipePageDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipePageDto>;
+        }));
+    }
+
+    protected processGetRecipesPage(response: HttpResponseBase): Observable<RecipePageDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipePageDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getCategories(): Observable<string[]> {
+        let url_ = this.baseUrl + "/api/recipes/categories";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetCategories(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetCategories(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<string[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<string[]>;
+        }));
+    }
+
+    protected processGetCategories(response: HttpResponseBase): Observable<string[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as string[];
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getIngredientNames(): Observable<string[]> {
+        let url_ = this.baseUrl + "/api/recipes/ingredients";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetIngredientNames(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetIngredientNames(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<string[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<string[]>;
+        }));
+    }
+
+    protected processGetIngredientNames(response: HttpResponseBase): Observable<string[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as string[];
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getRecipeImage(id: string): Observable<void> {
+        let url_ = this.baseUrl + "/api/recipes/{id}/image";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetRecipeImage(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetRecipeImage(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processGetRecipeImage(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @param file (optional)
+     * @return No Content
+     */
+    setRecipeImage(id: string, file?: FileParameter | undefined): Observable<void> {
+        let url_ = this.baseUrl + "/api/recipes/{id}/image";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = new FormData();
+        if (file === null || file === undefined)
+            throw new globalThis.Error("The parameter 'file' cannot be null.");
+        else
+            content_.append("file", file.data, file.fileName ? file.fileName : "file");
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processSetRecipeImage(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processSetRecipeImage(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processSetRecipeImage(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status === 413) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result413: any = null;
+            result413 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Payload Too Large", status, _responseText, _headers, result413);
+            }));
+        } else if (status === 422) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result422: any = null;
+            result422 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Unprocessable Entity", status, _responseText, _headers, result422);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    deleteRecipeImage(id: string): Observable<void> {
+        let url_ = this.baseUrl + "/api/recipes/{id}/image";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("delete", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processDeleteRecipeImage(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processDeleteRecipeImage(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processDeleteRecipeImage(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getRecipe(id: string): Observable<RecipeDto> {
+        let url_ = this.baseUrl + "/api/recipes/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetRecipe(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetRecipe(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeDto>;
+        }));
+    }
+
+    protected processGetRecipe(response: HttpResponseBase): Observable<RecipeDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    updateRecipe(id: string, body: UpdateRecipeDto): Observable<RecipeDto> {
+        let url_ = this.baseUrl + "/api/recipes/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processUpdateRecipe(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processUpdateRecipe(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeDto>;
+        }));
+    }
+
+    protected processUpdateRecipe(response: HttpResponseBase): Observable<RecipeDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    deleteRecipe(id: string): Observable<void> {
+        let url_ = this.baseUrl + "/api/recipes/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("delete", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processDeleteRecipe(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processDeleteRecipe(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processDeleteRecipe(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    setRecipeCookbooks(id: string, body: RecipeCookbooksRequestDto): Observable<string[]> {
+        let url_ = this.baseUrl + "/api/recipes/{id}/cookbooks";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processSetRecipeCookbooks(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processSetRecipeCookbooks(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<string[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<string[]>;
+        }));
+    }
+
+    protected processSetRecipeCookbooks(response: HttpResponseBase): Observable<string[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as string[];
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return Created
+     */
+    importRecipe(body: ImportRecipeRequestDto): Observable<RecipeDto> {
+        let url_ = this.baseUrl + "/api/recipes/import";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processImportRecipe(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processImportRecipe(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeDto>;
+        }));
+    }
+
+    protected processImportRecipe(response: HttpResponseBase): Observable<RecipeDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 201) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeDto;
+            return _observableOf(result201);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 422) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result422: any = null;
+            result422 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Unprocessable Entity", status, _responseText, _headers, result422);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    setRecipeFacts(id: string, body: UpdateRecipeFactsDto): Observable<RecipeDietaryFactsDto> {
+        let url_ = this.baseUrl + "/api/recipes/{id}/facts";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processSetRecipeFacts(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processSetRecipeFacts(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeDietaryFactsDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeDietaryFactsDto>;
+        }));
+    }
+
+    protected processSetRecipeFacts(response: HttpResponseBase): Observable<RecipeDietaryFactsDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeDietaryFactsDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getFactsStatus(): Observable<RecipeFactsStatusDto> {
+        let url_ = this.baseUrl + "/api/recipes/facts/status";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetFactsStatus(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetFactsStatus(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeFactsStatusDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeFactsStatusDto>;
+        }));
+    }
+
+    protected processGetFactsStatus(response: HttpResponseBase): Observable<RecipeFactsStatusDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeFactsStatusDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @param includeAssessed (optional)
+     * @return OK
+     */
+    backfillFacts(includeAssessed?: boolean | undefined): Observable<RecipeFactsBackfillResultDto> {
+        let url_ = this.baseUrl + "/api/recipes/facts/backfill?";
+        if (includeAssessed === null)
+            throw new globalThis.Error("The parameter 'includeAssessed' cannot be null.");
+        else if (includeAssessed !== undefined)
+            url_ += "includeAssessed=" + encodeURIComponent("" + includeAssessed) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processBackfillFacts(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processBackfillFacts(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeFactsBackfillResultDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeFactsBackfillResultDto>;
+        }));
+    }
+
+    protected processBackfillFacts(response: HttpResponseBase): Observable<RecipeFactsBackfillResultDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeFactsBackfillResultDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getSources(): Observable<RecipeSourceDto[]> {
+        let url_ = this.baseUrl + "/api/recipes/sources";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetSources(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetSources(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeSourceDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeSourceDto[]>;
+        }));
+    }
+
+    protected processGetSources(response: HttpResponseBase): Observable<RecipeSourceDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeSourceDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    exportRecipes(): Observable<void> {
+        let url_ = this.baseUrl + "/api/recipes/export";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processExportRecipes(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processExportRecipes(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processExportRecipes(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @param file (optional)
+     * @return OK
+     */
+    importRecipesFile(file?: FileParameter | undefined): Observable<RecipeFileImportResultDto> {
+        let url_ = this.baseUrl + "/api/recipes/import/file";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = new FormData();
+        if (file === null || file === undefined)
+            throw new globalThis.Error("The parameter 'file' cannot be null.");
+        else
+            content_.append("file", file.data, file.fileName ? file.fileName : "file");
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processImportRecipesFile(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processImportRecipesFile(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeFileImportResultDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeFileImportResultDto>;
+        }));
+    }
+
+    protected processImportRecipesFile(response: HttpResponseBase): Observable<RecipeFileImportResultDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeFileImportResultDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status === 422) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result422: any = null;
+            result422 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Unprocessable Entity", status, _responseText, _headers, result422);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface IRecipeTagsClient {
+    /**
+     * @return OK
+     */
+    getTags(): Observable<RecipeTagDto[]>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class RecipeTagsClient implements IRecipeTagsClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @return OK
+     */
+    getTags(): Observable<RecipeTagDto[]> {
+        let url_ = this.baseUrl + "/api/recipetags";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetTags(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetTags(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeTagDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeTagDto[]>;
+        }));
+    }
+
+    protected processGetTags(response: HttpResponseBase): Observable<RecipeTagDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeTagDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface ISettingsClient {
+    /**
+     * @return OK
+     */
+    getPreferences(): Observable<UserPreferencesDto>;
+    /**
+     * @return OK
+     */
+    updatePreference(body: UpdateUserPreferencesDto): Observable<UserPreferencesDto>;
+    /**
+     * @return OK
+     */
+    getSupportedLanguages(): Observable<SupportedLanguageDto[]>;
+    /**
+     * @return OK
+     */
+    getAiPrompt(): Observable<AiPromptDto>;
+    /**
+     * @return OK
+     */
+    setAiPrompt(body: UpdateAiPromptDto): Observable<AiPromptDto>;
+    /**
+     * @return OK
+     */
+    resetAiPrompt(): Observable<AiPromptDto>;
+    /**
+     * @return OK
+     */
+    getSetting(key: string): Observable<UserSettingDto>;
+    /**
+     * @return OK
+     */
+    setSetting(key: string, body: UpsertUserSettingDto): Observable<UserSettingDto>;
+    /**
+     * @return No Content
+     */
+    deleteSetting(key: string): Observable<void>;
+    /**
+     * @return OK
+     */
+    getAllSettings(): Observable<UserSettingDto[]>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class SettingsClient implements ISettingsClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @return OK
+     */
+    getPreferences(): Observable<UserPreferencesDto> {
+        let url_ = this.baseUrl + "/api/settings/preferences";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetPreferences(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetPreferences(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<UserPreferencesDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<UserPreferencesDto>;
+        }));
+    }
+
+    protected processGetPreferences(response: HttpResponseBase): Observable<UserPreferencesDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as UserPreferencesDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    updatePreference(body: UpdateUserPreferencesDto): Observable<UserPreferencesDto> {
+        let url_ = this.baseUrl + "/api/settings/preferences";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("patch", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processUpdatePreference(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processUpdatePreference(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<UserPreferencesDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<UserPreferencesDto>;
+        }));
+    }
+
+    protected processUpdatePreference(response: HttpResponseBase): Observable<UserPreferencesDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as UserPreferencesDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getSupportedLanguages(): Observable<SupportedLanguageDto[]> {
+        let url_ = this.baseUrl + "/api/settings/languages";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetSupportedLanguages(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetSupportedLanguages(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<SupportedLanguageDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<SupportedLanguageDto[]>;
+        }));
+    }
+
+    protected processGetSupportedLanguages(response: HttpResponseBase): Observable<SupportedLanguageDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as SupportedLanguageDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getAiPrompt(): Observable<AiPromptDto> {
+        let url_ = this.baseUrl + "/api/settings/ai-prompt";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetAiPrompt(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetAiPrompt(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<AiPromptDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<AiPromptDto>;
+        }));
+    }
+
+    protected processGetAiPrompt(response: HttpResponseBase): Observable<AiPromptDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AiPromptDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    setAiPrompt(body: UpdateAiPromptDto): Observable<AiPromptDto> {
+        let url_ = this.baseUrl + "/api/settings/ai-prompt";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processSetAiPrompt(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processSetAiPrompt(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<AiPromptDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<AiPromptDto>;
+        }));
+    }
+
+    protected processSetAiPrompt(response: HttpResponseBase): Observable<AiPromptDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AiPromptDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    resetAiPrompt(): Observable<AiPromptDto> {
+        let url_ = this.baseUrl + "/api/settings/ai-prompt";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("delete", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processResetAiPrompt(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processResetAiPrompt(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<AiPromptDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<AiPromptDto>;
+        }));
+    }
+
+    protected processResetAiPrompt(response: HttpResponseBase): Observable<AiPromptDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AiPromptDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getSetting(key: string): Observable<UserSettingDto> {
+        let url_ = this.baseUrl + "/api/settings/{key}";
+        if (key === undefined || key === null)
+            throw new globalThis.Error("The parameter 'key' must be defined.");
+        url_ = url_.replace("{key}", encodeURIComponent("" + key));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetSetting(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetSetting(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<UserSettingDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<UserSettingDto>;
+        }));
+    }
+
+    protected processGetSetting(response: HttpResponseBase): Observable<UserSettingDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as UserSettingDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    setSetting(key: string, body: UpsertUserSettingDto): Observable<UserSettingDto> {
+        let url_ = this.baseUrl + "/api/settings/{key}";
+        if (key === undefined || key === null)
+            throw new globalThis.Error("The parameter 'key' must be defined.");
+        url_ = url_.replace("{key}", encodeURIComponent("" + key));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("put", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processSetSetting(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processSetSetting(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<UserSettingDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<UserSettingDto>;
+        }));
+    }
+
+    protected processSetSetting(response: HttpResponseBase): Observable<UserSettingDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as UserSettingDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 201) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as UserSettingDto;
+            return _observableOf(result201);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    deleteSetting(key: string): Observable<void> {
+        let url_ = this.baseUrl + "/api/settings/{key}";
+        if (key === undefined || key === null)
+            throw new globalThis.Error("The parameter 'key' must be defined.");
+        url_ = url_.replace("{key}", encodeURIComponent("" + key));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+            })
+        };
+
+        return this.http.request("delete", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processDeleteSetting(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processDeleteSetting(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<void>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<void>;
+        }));
+    }
+
+    protected processDeleteSetting(response: HttpResponseBase): Observable<void> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return _observableOf(null as any);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getAllSettings(): Observable<UserSettingDto[]> {
+        let url_ = this.baseUrl + "/api/settings";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetAllSettings(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetAllSettings(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<UserSettingDto[]>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<UserSettingDto[]>;
+        }));
+    }
+
+    protected processGetAllSettings(response: HttpResponseBase): Observable<UserSettingDto[]> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as UserSettingDto[];
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface IShoppingListClient {
+    /**
+     * @param from (optional)
+     * @param to (optional)
+     * @return OK
+     */
+    getShoppingList(from?: string | undefined, to?: string | undefined): Observable<ShoppingListDto>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class ShoppingListClient implements IShoppingListClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @param from (optional)
+     * @param to (optional)
+     * @return OK
+     */
+    getShoppingList(from?: string | undefined, to?: string | undefined): Observable<ShoppingListDto> {
+        let url_ = this.baseUrl + "/api/shoppinglist?";
+        if (from === null)
+            throw new globalThis.Error("The parameter 'from' cannot be null.");
+        else if (from !== undefined)
+            url_ += "from=" + encodeURIComponent("" + from) + "&";
+        if (to === null)
+            throw new globalThis.Error("The parameter 'to' cannot be null.");
+        else if (to !== undefined)
+            url_ += "to=" + encodeURIComponent("" + to) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetShoppingList(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetShoppingList(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<ShoppingListDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<ShoppingListDto>;
+        }));
+    }
+
+    protected processGetShoppingList(response: HttpResponseBase): Observable<ShoppingListDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ShoppingListDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 400) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface IStatisticsClient {
+    /**
+     * @param from (optional)
+     * @param to (optional)
+     * @return OK
+     */
+    getDishStatistics(from?: string | undefined, to?: string | undefined): Observable<DishStatisticsDto>;
+    /**
+     * @return OK
+     */
+    getMemberStatistics(id: string): Observable<MemberStatisticsDto>;
+}
+
+@Injectable({
+    providedIn: 'root'
+})
+export class StatisticsClient implements IStatisticsClient {
+    private http: HttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
+        this.http = http;
+        this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @param from (optional)
+     * @param to (optional)
+     * @return OK
+     */
+    getDishStatistics(from?: string | undefined, to?: string | undefined): Observable<DishStatisticsDto> {
+        let url_ = this.baseUrl + "/api/statistics/dishes?";
+        if (from === null)
+            throw new globalThis.Error("The parameter 'from' cannot be null.");
+        else if (from !== undefined)
+            url_ += "from=" + encodeURIComponent("" + from) + "&";
+        if (to === null)
+            throw new globalThis.Error("The parameter 'to' cannot be null.");
+        else if (to !== undefined)
+            url_ += "to=" + encodeURIComponent("" + to) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetDishStatistics(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetDishStatistics(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<DishStatisticsDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<DishStatisticsDto>;
+        }));
+    }
+
+    protected processGetDishStatistics(response: HttpResponseBase): Observable<DishStatisticsDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DishStatisticsDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    getMemberStatistics(id: string): Observable<MemberStatisticsDto> {
+        let url_ = this.baseUrl + "/api/statistics/members/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetMemberStatistics(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetMemberStatistics(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<MemberStatisticsDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<MemberStatisticsDto>;
+        }));
+    }
+
+    protected processGetMemberStatistics(response: HttpResponseBase): Observable<MemberStatisticsDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as MemberStatisticsDto;
+            return _observableOf(result200);
+            }));
+        } else if (status === 404) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+}
+
+export interface AcceptMealSuggestionDto {
+    id: string;
+    date: string;
+    mealType: MealType;
+    course: Course;
+    attendeeIds: string[];
+    recipeId?: string | null;
     dishName: string;
-    freezyItemRef?: string | undefined;
-    freezyItemQuantity?: number;
-    sourceUrl?: string | undefined;
-
-    [key: string]: any;
+    freezyItemRef?: string | null;
+    freezyItemQuantity: number;
+    sourceUrl?: string | null;
+    candidateVersion?: string | null;
 }
 
-export class AcceptMealSuggestionResultDto implements IAcceptMealSuggestionResultDto {
-    suggestionId?: string;
-    status?: string;
-    dishName?: string;
-    plannedMealId?: string | undefined;
-    recipeId?: string | undefined;
-    error?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IAcceptMealSuggestionResultDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.suggestionId = _data["suggestionId"];
-            this.status = _data["status"];
-            this.dishName = _data["dishName"];
-            this.plannedMealId = _data["plannedMealId"];
-            this.recipeId = _data["recipeId"];
-            this.error = _data["error"];
-        }
-    }
-
-    static fromJS(data: any): AcceptMealSuggestionResultDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AcceptMealSuggestionResultDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["suggestionId"] = this.suggestionId;
-        data["status"] = this.status;
-        data["dishName"] = this.dishName;
-        data["plannedMealId"] = this.plannedMealId;
-        data["recipeId"] = this.recipeId;
-        data["error"] = this.error;
-        return data;
-    }
+export interface AcceptMealSuggestionResultDto {
+    code?: string | null;
+    suggestionId: string;
+    status: string;
+    dishName: string;
+    plannedMealId?: string | null;
+    recipeId?: string | null;
+    error?: string | null;
 }
 
-export interface IAcceptMealSuggestionResultDto {
-    suggestionId?: string;
-    status?: string;
-    dishName?: string;
-    plannedMealId?: string | undefined;
-    recipeId?: string | undefined;
-    error?: string | undefined;
-
-    [key: string]: any;
+export interface AcceptMealSuggestionsRequestDto {
+    batchId: string;
+    rejectedSuggestionIds: string[];
+    suggestions: AcceptMealSuggestionDto[];
 }
 
-export class AcceptMealSuggestionsRequestDto implements IAcceptMealSuggestionsRequestDto {
-    batchId?: string;
-    suggestions?: AcceptMealSuggestionDto[];
-
-    [key: string]: any;
-
-    constructor(data?: IAcceptMealSuggestionsRequestDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.batchId = _data["batchId"];
-            if (Array.isArray(_data["suggestions"])) {
-                this.suggestions = [] as any;
-                for (let item of _data["suggestions"])
-                    this.suggestions!.push(AcceptMealSuggestionDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): AcceptMealSuggestionsRequestDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AcceptMealSuggestionsRequestDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["batchId"] = this.batchId;
-        if (Array.isArray(this.suggestions)) {
-            data["suggestions"] = [];
-            for (let item of this.suggestions)
-                data["suggestions"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
+export interface AcceptMealSuggestionsResponseDto {
+    results: AcceptMealSuggestionResultDto[];
 }
 
-export interface IAcceptMealSuggestionsRequestDto {
-    batchId?: string;
-    suggestions?: AcceptMealSuggestionDto[];
-
-    [key: string]: any;
+export interface AiInputRevisionDto {
+    kind: string;
+    id: string;
+    revision: number | null;
+    confirmationVersion: number | null;
+    fingerprint: string;
 }
 
-export class AcceptMealSuggestionsResponseDto implements IAcceptMealSuggestionsResponseDto {
-    results?: AcceptMealSuggestionResultDto[];
-
-    [key: string]: any;
-
-    constructor(data?: IAcceptMealSuggestionsResponseDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            if (Array.isArray(_data["results"])) {
-                this.results = [] as any;
-                for (let item of _data["results"])
-                    this.results!.push(AcceptMealSuggestionResultDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): AcceptMealSuggestionsResponseDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AcceptMealSuggestionsResponseDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        if (Array.isArray(this.results)) {
-            data["results"] = [];
-            for (let item of this.results)
-                data["results"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
-}
-
-export interface IAcceptMealSuggestionsResponseDto {
-    results?: AcceptMealSuggestionResultDto[];
-
-    [key: string]: any;
-}
-
-export class AiIntegrationStatusDto implements IAiIntegrationStatusDto {
-    configured!: boolean;
-    reachable!: boolean;
-    provider!: string | undefined;
-    model!: string | undefined;
-    baseUrl!: string | undefined;
-    statsEnabled!: boolean;
-    modelTestState!: string;
-    modelTestVerdict!: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IAiIntegrationStatusDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.configured = _data["configured"];
-            this.reachable = _data["reachable"];
-            this.provider = _data["provider"];
-            this.model = _data["model"];
-            this.baseUrl = _data["baseUrl"];
-            this.statsEnabled = _data["statsEnabled"];
-            this.modelTestState = _data["modelTestState"];
-            this.modelTestVerdict = _data["modelTestVerdict"];
-        }
-    }
-
-    static fromJS(data: any): AiIntegrationStatusDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiIntegrationStatusDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["configured"] = this.configured;
-        data["reachable"] = this.reachable;
-        data["provider"] = this.provider;
-        data["model"] = this.model;
-        data["baseUrl"] = this.baseUrl;
-        data["statsEnabled"] = this.statsEnabled;
-        data["modelTestState"] = this.modelTestState;
-        data["modelTestVerdict"] = this.modelTestVerdict;
-        return data;
-    }
-}
-
-export interface IAiIntegrationStatusDto {
+export interface AiIntegrationStatusDto {
     configured: boolean;
     reachable: boolean;
-    provider: string | undefined;
-    model: string | undefined;
-    baseUrl: string | undefined;
+    provider: string | null;
+    model: string | null;
+    baseUrl: string | null;
     statsEnabled: boolean;
     modelTestState: string;
-    modelTestVerdict: string | undefined;
-
-    [key: string]: any;
+    modelTestVerdict: string | null;
 }
 
-export class AiModelTestCheckDto implements IAiModelTestCheckDto {
-    name!: string;
-    passed!: boolean;
-    detail!: string;
-
-    [key: string]: any;
-
-    constructor(data?: IAiModelTestCheckDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.name = _data["name"];
-            this.passed = _data["passed"];
-            this.detail = _data["detail"];
-        }
-    }
-
-    static fromJS(data: any): AiModelTestCheckDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiModelTestCheckDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["name"] = this.name;
-        data["passed"] = this.passed;
-        data["detail"] = this.detail;
-        return data;
-    }
-}
-
-export interface IAiModelTestCheckDto {
+export interface AiModelTestCheckDto {
     name: string;
     passed: boolean;
     detail: string;
-
-    [key: string]: any;
 }
 
-export class AiModelTestResultDto implements IAiModelTestResultDto {
-    testedAt!: string;
-    verdict!: string;
-    responseMode!: string;
-    evaluationPassed!: boolean | undefined;
-    tokensPerSecond!: number | undefined;
-    elapsedMs!: number;
-    checks!: AiModelTestCheckDto[];
-
-    [key: string]: any;
-
-    constructor(data?: IAiModelTestResultDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-        if (!data) {
-            this.checks = [];
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.testedAt = _data["testedAt"];
-            this.verdict = _data["verdict"];
-            this.responseMode = _data["responseMode"];
-            this.evaluationPassed = _data["evaluationPassed"];
-            this.tokensPerSecond = _data["tokensPerSecond"];
-            this.elapsedMs = _data["elapsedMs"];
-            if (Array.isArray(_data["checks"])) {
-                this.checks = [] as any;
-                for (let item of _data["checks"])
-                    this.checks!.push(AiModelTestCheckDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): AiModelTestResultDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiModelTestResultDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["testedAt"] = this.testedAt;
-        data["verdict"] = this.verdict;
-        data["responseMode"] = this.responseMode;
-        data["evaluationPassed"] = this.evaluationPassed;
-        data["tokensPerSecond"] = this.tokensPerSecond;
-        data["elapsedMs"] = this.elapsedMs;
-        if (Array.isArray(this.checks)) {
-            data["checks"] = [];
-            for (let item of this.checks)
-                data["checks"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
-}
-
-export interface IAiModelTestResultDto {
+export interface AiModelTestResultDto {
     testedAt: string;
     verdict: string;
     responseMode: string;
-    evaluationPassed: boolean | undefined;
-    tokensPerSecond: number | undefined;
+    endpointReachable: boolean;
+    modelListed: boolean | null;
+    formatCompatible: boolean;
+    evaluationPassed: boolean | null;
+    planningQualityPassed: boolean | null;
+    tokensPerSecond: number | null;
     elapsedMs: number;
     checks: AiModelTestCheckDto[];
-
-    [key: string]: any;
+    planningEligible: boolean;
 }
 
-export class AiModelTestStatusDto implements IAiModelTestStatusDto {
-    state!: string;
-    result!: AiModelTestResultDto | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IAiModelTestStatusDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.state = _data["state"];
-            this.result = _data["result"] ? AiModelTestResultDto.fromJS(_data["result"]) : undefined as any;
-        }
-    }
-
-    static fromJS(data: any): AiModelTestStatusDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiModelTestStatusDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["state"] = this.state;
-        data["result"] = this.result ? this.result.toJSON() : undefined as any;
-        return data;
-    }
-}
-
-export interface IAiModelTestStatusDto {
+export interface AiModelTestStatusDto {
     state: string;
-    result: AiModelTestResultDto | undefined;
-
-    [key: string]: any;
+    result: AiModelTestResultDto | null;
 }
 
-export class AiPlanningMetricsDto implements IAiPlanningMetricsDto {
-    runCount!: number;
-    successfulRuns!: number;
-    partialFallbackRuns!: number;
-    fallbackRuns!: number;
-    averageTotalDurationMs!: number;
-    averageCompletionDurationMs!: number;
-    p95TotalDurationMs!: number;
-    totalInputTokens!: number;
-    totalOutputTokens!: number;
-    totalReasoningTokens!: number;
-    totalSearches!: number;
-    totalEmptySearches!: number;
-    totalRecipeResolutions!: number;
-    totalResolutionFailures!: number;
-    totalParseFailures!: number;
-
-    [key: string]: any;
-
-    constructor(data?: IAiPlanningMetricsDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.runCount = _data["runCount"];
-            this.successfulRuns = _data["successfulRuns"];
-            this.partialFallbackRuns = _data["partialFallbackRuns"];
-            this.fallbackRuns = _data["fallbackRuns"];
-            this.averageTotalDurationMs = _data["averageTotalDurationMs"];
-            this.averageCompletionDurationMs = _data["averageCompletionDurationMs"];
-            this.p95TotalDurationMs = _data["p95TotalDurationMs"];
-            this.totalInputTokens = _data["totalInputTokens"];
-            this.totalOutputTokens = _data["totalOutputTokens"];
-            this.totalReasoningTokens = _data["totalReasoningTokens"];
-            this.totalSearches = _data["totalSearches"];
-            this.totalEmptySearches = _data["totalEmptySearches"];
-            this.totalRecipeResolutions = _data["totalRecipeResolutions"];
-            this.totalResolutionFailures = _data["totalResolutionFailures"];
-            this.totalParseFailures = _data["totalParseFailures"];
-        }
-    }
-
-    static fromJS(data: any): AiPlanningMetricsDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiPlanningMetricsDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["runCount"] = this.runCount;
-        data["successfulRuns"] = this.successfulRuns;
-        data["partialFallbackRuns"] = this.partialFallbackRuns;
-        data["fallbackRuns"] = this.fallbackRuns;
-        data["averageTotalDurationMs"] = this.averageTotalDurationMs;
-        data["averageCompletionDurationMs"] = this.averageCompletionDurationMs;
-        data["p95TotalDurationMs"] = this.p95TotalDurationMs;
-        data["totalInputTokens"] = this.totalInputTokens;
-        data["totalOutputTokens"] = this.totalOutputTokens;
-        data["totalReasoningTokens"] = this.totalReasoningTokens;
-        data["totalSearches"] = this.totalSearches;
-        data["totalEmptySearches"] = this.totalEmptySearches;
-        data["totalRecipeResolutions"] = this.totalRecipeResolutions;
-        data["totalResolutionFailures"] = this.totalResolutionFailures;
-        data["totalParseFailures"] = this.totalParseFailures;
-        return data;
-    }
-}
-
-export interface IAiPlanningMetricsDto {
+export interface AiPlanningMetricsDto {
     runCount: number;
     successfulRuns: number;
     partialFallbackRuns: number;
@@ -652,237 +5151,27 @@ export interface IAiPlanningMetricsDto {
     totalRecipeResolutions: number;
     totalResolutionFailures: number;
     totalParseFailures: number;
-
-    [key: string]: any;
 }
 
-export class AiPlanningMetricsResponseDto implements IAiPlanningMetricsResponseDto {
-    summary!: AiPlanningMetricsDto;
-    runs!: AiPlanningRunDto[];
-    taskMetrics!: AiTaskMetricsDto;
-    calls!: AiTaskRunDto[];
-
-    [key: string]: any;
-
-    constructor(data?: IAiPlanningMetricsResponseDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-        if (!data) {
-            this.summary = new AiPlanningMetricsDto();
-            this.runs = [];
-            this.taskMetrics = new AiTaskMetricsDto();
-            this.calls = [];
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.summary = _data["summary"] ? AiPlanningMetricsDto.fromJS(_data["summary"]) : new AiPlanningMetricsDto();
-            if (Array.isArray(_data["runs"])) {
-                this.runs = [] as any;
-                for (let item of _data["runs"])
-                    this.runs!.push(AiPlanningRunDto.fromJS(item));
-            }
-            this.taskMetrics = _data["taskMetrics"] ? AiTaskMetricsDto.fromJS(_data["taskMetrics"]) : new AiTaskMetricsDto();
-            if (Array.isArray(_data["calls"])) {
-                this.calls = [] as any;
-                for (let item of _data["calls"])
-                    this.calls!.push(AiTaskRunDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): AiPlanningMetricsResponseDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiPlanningMetricsResponseDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["summary"] = this.summary ? this.summary.toJSON() : undefined as any;
-        if (Array.isArray(this.runs)) {
-            data["runs"] = [];
-            for (let item of this.runs)
-                data["runs"].push(item ? item.toJSON() : undefined as any);
-        }
-        data["taskMetrics"] = this.taskMetrics ? this.taskMetrics.toJSON() : undefined as any;
-        if (Array.isArray(this.calls)) {
-            data["calls"] = [];
-            for (let item of this.calls)
-                data["calls"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
-}
-
-export interface IAiPlanningMetricsResponseDto {
+export interface AiPlanningMetricsResponseDto {
     summary: AiPlanningMetricsDto;
     runs: AiPlanningRunDto[];
     taskMetrics: AiTaskMetricsDto;
     calls: AiTaskRunDto[];
-
-    [key: string]: any;
+    reviews?: AiReviewMetricsDto | null;
 }
 
-export class AiPlanningRunDto implements IAiPlanningRunDto {
-    id!: string;
-    requestId!: string;
-    startedAt!: string;
-    outcome!: string;
-    provider!: string;
-    model!: string;
-    instructions!: string | undefined;
-    normalizedIntentJson!: string | undefined;
-    error!: string | undefined;
-    requestedDays!: number;
-    suggestedItems!: number;
-    externalSuggestions!: number;
-    fallbackSuggestions!: number;
-    usedExternalResearch!: boolean;
-    completionAttempts!: number;
-    parseFailures!: number;
-    modelTurns!: number;
-    inputTokens!: number;
-    outputTokens!: number;
-    reasoningTokens!: number;
-    totalTokens!: number;
-    researchCalls!: number;
-    searchCount!: number;
-    emptySearchCount!: number;
-    searchResultCount!: number;
-    recipeResolutionCount!: number;
-    recipeResolutionFailureCount!: number;
-    capabilityWaitMs!: number;
-    completionDurationMs!: number;
-    searchDurationMs!: number;
-    recipeResolutionDurationMs!: number;
-    totalDurationMs!: number;
-
-    [key: string]: any;
-
-    constructor(data?: IAiPlanningRunDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.requestId = _data["requestId"];
-            this.startedAt = _data["startedAt"];
-            this.outcome = _data["outcome"];
-            this.provider = _data["provider"];
-            this.model = _data["model"];
-            this.instructions = _data["instructions"];
-            this.normalizedIntentJson = _data["normalizedIntentJson"];
-            this.error = _data["error"];
-            this.requestedDays = _data["requestedDays"];
-            this.suggestedItems = _data["suggestedItems"];
-            this.externalSuggestions = _data["externalSuggestions"];
-            this.fallbackSuggestions = _data["fallbackSuggestions"];
-            this.usedExternalResearch = _data["usedExternalResearch"];
-            this.completionAttempts = _data["completionAttempts"];
-            this.parseFailures = _data["parseFailures"];
-            this.modelTurns = _data["modelTurns"];
-            this.inputTokens = _data["inputTokens"];
-            this.outputTokens = _data["outputTokens"];
-            this.reasoningTokens = _data["reasoningTokens"];
-            this.totalTokens = _data["totalTokens"];
-            this.researchCalls = _data["researchCalls"];
-            this.searchCount = _data["searchCount"];
-            this.emptySearchCount = _data["emptySearchCount"];
-            this.searchResultCount = _data["searchResultCount"];
-            this.recipeResolutionCount = _data["recipeResolutionCount"];
-            this.recipeResolutionFailureCount = _data["recipeResolutionFailureCount"];
-            this.capabilityWaitMs = _data["capabilityWaitMs"];
-            this.completionDurationMs = _data["completionDurationMs"];
-            this.searchDurationMs = _data["searchDurationMs"];
-            this.recipeResolutionDurationMs = _data["recipeResolutionDurationMs"];
-            this.totalDurationMs = _data["totalDurationMs"];
-        }
-    }
-
-    static fromJS(data: any): AiPlanningRunDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiPlanningRunDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["requestId"] = this.requestId;
-        data["startedAt"] = this.startedAt;
-        data["outcome"] = this.outcome;
-        data["provider"] = this.provider;
-        data["model"] = this.model;
-        data["instructions"] = this.instructions;
-        data["normalizedIntentJson"] = this.normalizedIntentJson;
-        data["error"] = this.error;
-        data["requestedDays"] = this.requestedDays;
-        data["suggestedItems"] = this.suggestedItems;
-        data["externalSuggestions"] = this.externalSuggestions;
-        data["fallbackSuggestions"] = this.fallbackSuggestions;
-        data["usedExternalResearch"] = this.usedExternalResearch;
-        data["completionAttempts"] = this.completionAttempts;
-        data["parseFailures"] = this.parseFailures;
-        data["modelTurns"] = this.modelTurns;
-        data["inputTokens"] = this.inputTokens;
-        data["outputTokens"] = this.outputTokens;
-        data["reasoningTokens"] = this.reasoningTokens;
-        data["totalTokens"] = this.totalTokens;
-        data["researchCalls"] = this.researchCalls;
-        data["searchCount"] = this.searchCount;
-        data["emptySearchCount"] = this.emptySearchCount;
-        data["searchResultCount"] = this.searchResultCount;
-        data["recipeResolutionCount"] = this.recipeResolutionCount;
-        data["recipeResolutionFailureCount"] = this.recipeResolutionFailureCount;
-        data["capabilityWaitMs"] = this.capabilityWaitMs;
-        data["completionDurationMs"] = this.completionDurationMs;
-        data["searchDurationMs"] = this.searchDurationMs;
-        data["recipeResolutionDurationMs"] = this.recipeResolutionDurationMs;
-        data["totalDurationMs"] = this.totalDurationMs;
-        return data;
-    }
-}
-
-export interface IAiPlanningRunDto {
+export interface AiPlanningRunDto {
     id: string;
     requestId: string;
     startedAt: string;
     outcome: string;
     provider: string;
     model: string;
-    instructions: string | undefined;
-    normalizedIntentJson: string | undefined;
-    error: string | undefined;
+    configFingerprint: string;
+    instructions: string | null;
+    normalizedIntentJson: string | null;
+    error: string | null;
     requestedDays: number;
     suggestedItems: number;
     externalSuggestions: number;
@@ -906,280 +5195,60 @@ export interface IAiPlanningRunDto {
     searchDurationMs: number;
     recipeResolutionDurationMs: number;
     totalDurationMs: number;
-
-    [key: string]: any;
 }
 
-export class AiPromptDto implements IAiPromptDto {
-    editablePrompt!: string;
-    defaultPrompt!: string;
-    protectedPrompt!: string;
-    isCustomized!: boolean;
-    defaultChangedSinceCustomized!: boolean;
-
-    [key: string]: any;
-
-    constructor(data?: IAiPromptDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.editablePrompt = _data["editablePrompt"];
-            this.defaultPrompt = _data["defaultPrompt"];
-            this.protectedPrompt = _data["protectedPrompt"];
-            this.isCustomized = _data["isCustomized"];
-            this.defaultChangedSinceCustomized = _data["defaultChangedSinceCustomized"];
-        }
-    }
-
-    static fromJS(data: any): AiPromptDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiPromptDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["editablePrompt"] = this.editablePrompt;
-        data["defaultPrompt"] = this.defaultPrompt;
-        data["protectedPrompt"] = this.protectedPrompt;
-        data["isCustomized"] = this.isCustomized;
-        data["defaultChangedSinceCustomized"] = this.defaultChangedSinceCustomized;
-        return data;
-    }
-}
-
-export interface IAiPromptDto {
+export interface AiPromptDto {
     editablePrompt: string;
     defaultPrompt: string;
     protectedPrompt: string;
     isCustomized: boolean;
     defaultChangedSinceCustomized: boolean;
-
-    [key: string]: any;
 }
 
-export class AiTaskMetricsDto implements IAiTaskMetricsDto {
-    runCount!: number;
-    successfulRuns!: number;
-    failedRuns!: number;
-    averageDurationMs!: number;
-    p95DurationMs!: number;
-    totalInputTokens!: number;
-    totalOutputTokens!: number;
-    totalReasoningTokens!: number;
-    tasks!: AiTaskSummaryDto[];
-
-    [key: string]: any;
-
-    constructor(data?: IAiTaskMetricsDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-        if (!data) {
-            this.tasks = [];
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.runCount = _data["runCount"];
-            this.successfulRuns = _data["successfulRuns"];
-            this.failedRuns = _data["failedRuns"];
-            this.averageDurationMs = _data["averageDurationMs"];
-            this.p95DurationMs = _data["p95DurationMs"];
-            this.totalInputTokens = _data["totalInputTokens"];
-            this.totalOutputTokens = _data["totalOutputTokens"];
-            this.totalReasoningTokens = _data["totalReasoningTokens"];
-            if (Array.isArray(_data["tasks"])) {
-                this.tasks = [] as any;
-                for (let item of _data["tasks"])
-                    this.tasks!.push(AiTaskSummaryDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): AiTaskMetricsDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiTaskMetricsDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["runCount"] = this.runCount;
-        data["successfulRuns"] = this.successfulRuns;
-        data["failedRuns"] = this.failedRuns;
-        data["averageDurationMs"] = this.averageDurationMs;
-        data["p95DurationMs"] = this.p95DurationMs;
-        data["totalInputTokens"] = this.totalInputTokens;
-        data["totalOutputTokens"] = this.totalOutputTokens;
-        data["totalReasoningTokens"] = this.totalReasoningTokens;
-        if (Array.isArray(this.tasks)) {
-            data["tasks"] = [];
-            for (let item of this.tasks)
-                data["tasks"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
+export interface AiReviewEventDto {
+    id: string;
+    occurredAt: string;
+    task: string;
+    kind: string;
+    operationId: string | null;
+    recipeId: string | null;
+    batchId: string | null;
+    suggestionId: string | null;
+    outcome: string | null;
+    sourceRevision: number | null;
+    observedRevision: number | null;
+    sourceConfirmationVersion: number | null;
+    observedConfirmationVersion: number | null;
+    changedFields: string[];
+    inputChanges: string[];
 }
 
-export interface IAiTaskMetricsDto {
+export interface AiReviewMetricsDto {
+    reviewActions: number;
+    factsReviews: number;
+    factsCorrections: number;
+    textEditsAfterTranslation: number;
+    reviewedSuggestions: number;
+    editedSuggestions: number;
+    suggestionsWithChangedInputs: number;
+    events: AiReviewEventDto[];
+}
+
+export interface AiTaskMetricsDto {
     runCount: number;
     successfulRuns: number;
     failedRuns: number;
+    cancelledRuns: number;
+    incompleteRuns: number;
     averageDurationMs: number;
     p95DurationMs: number;
     totalInputTokens: number;
     totalOutputTokens: number;
     totalReasoningTokens: number;
     tasks: AiTaskSummaryDto[];
-
-    [key: string]: any;
 }
 
-export class AiTaskRunDto implements IAiTaskRunDto {
-    id!: string;
-    operationId!: string;
-    task!: string;
-    provider!: string;
-    model!: string;
-    configFingerprint!: string;
-    contractVersion!: string;
-    startedAt!: string;
-    outcome!: string;
-    responseMode!: string;
-    finishReason!: string | undefined;
-    error!: string | undefined;
-    attempt!: number;
-    maxOutputTokens!: number;
-    temperature!: number;
-    reasoningDisabled!: boolean;
-    schemaRequested!: boolean;
-    schemaApplied!: boolean;
-    promptCharacters!: number;
-    outputCharacters!: number;
-    inputTokens!: number;
-    outputTokens!: number;
-    reasoningTokens!: number;
-    totalTokens!: number;
-    durationMs!: number;
-
-    [key: string]: any;
-
-    constructor(data?: IAiTaskRunDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.operationId = _data["operationId"];
-            this.task = _data["task"];
-            this.provider = _data["provider"];
-            this.model = _data["model"];
-            this.configFingerprint = _data["configFingerprint"];
-            this.contractVersion = _data["contractVersion"];
-            this.startedAt = _data["startedAt"];
-            this.outcome = _data["outcome"];
-            this.responseMode = _data["responseMode"];
-            this.finishReason = _data["finishReason"];
-            this.error = _data["error"];
-            this.attempt = _data["attempt"];
-            this.maxOutputTokens = _data["maxOutputTokens"];
-            this.temperature = _data["temperature"];
-            this.reasoningDisabled = _data["reasoningDisabled"];
-            this.schemaRequested = _data["schemaRequested"];
-            this.schemaApplied = _data["schemaApplied"];
-            this.promptCharacters = _data["promptCharacters"];
-            this.outputCharacters = _data["outputCharacters"];
-            this.inputTokens = _data["inputTokens"];
-            this.outputTokens = _data["outputTokens"];
-            this.reasoningTokens = _data["reasoningTokens"];
-            this.totalTokens = _data["totalTokens"];
-            this.durationMs = _data["durationMs"];
-        }
-    }
-
-    static fromJS(data: any): AiTaskRunDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiTaskRunDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["operationId"] = this.operationId;
-        data["task"] = this.task;
-        data["provider"] = this.provider;
-        data["model"] = this.model;
-        data["configFingerprint"] = this.configFingerprint;
-        data["contractVersion"] = this.contractVersion;
-        data["startedAt"] = this.startedAt;
-        data["outcome"] = this.outcome;
-        data["responseMode"] = this.responseMode;
-        data["finishReason"] = this.finishReason;
-        data["error"] = this.error;
-        data["attempt"] = this.attempt;
-        data["maxOutputTokens"] = this.maxOutputTokens;
-        data["temperature"] = this.temperature;
-        data["reasoningDisabled"] = this.reasoningDisabled;
-        data["schemaRequested"] = this.schemaRequested;
-        data["schemaApplied"] = this.schemaApplied;
-        data["promptCharacters"] = this.promptCharacters;
-        data["outputCharacters"] = this.outputCharacters;
-        data["inputTokens"] = this.inputTokens;
-        data["outputTokens"] = this.outputTokens;
-        data["reasoningTokens"] = this.reasoningTokens;
-        data["totalTokens"] = this.totalTokens;
-        data["durationMs"] = this.durationMs;
-        return data;
-    }
-}
-
-export interface IAiTaskRunDto {
+export interface AiTaskRunDto {
     id: string;
     operationId: string;
     task: string;
@@ -1190,8 +5259,8 @@ export interface IAiTaskRunDto {
     startedAt: string;
     outcome: string;
     responseMode: string;
-    finishReason: string | undefined;
-    error: string | undefined;
+    finishReason: string | null;
+    error: string | null;
     attempt: number;
     maxOutputTokens: number;
     temperature: number;
@@ -1199,1297 +5268,189 @@ export interface IAiTaskRunDto {
     schemaRequested: boolean;
     schemaApplied: boolean;
     promptCharacters: number;
+    inputBudgetTokens: number;
+    queueWaitMs: number;
+    promptHash: string;
     outputCharacters: number;
     inputTokens: number;
     outputTokens: number;
     reasoningTokens: number;
     totalTokens: number;
     durationMs: number;
-
-    [key: string]: any;
+    operationAttempt?: number | null;
+    inputFingerprint?: string | null;
+    inputRevisions?: AiInputRevisionDto[] | null;
 }
 
-export class AiTaskSummaryDto implements IAiTaskSummaryDto {
-    task!: string;
-    runCount!: number;
-    successfulRuns!: number;
-    failedRuns!: number;
-    averageDurationMs!: number;
-    p95DurationMs!: number;
-    totalTokens!: number;
-
-    [key: string]: any;
-
-    constructor(data?: IAiTaskSummaryDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.task = _data["task"];
-            this.runCount = _data["runCount"];
-            this.successfulRuns = _data["successfulRuns"];
-            this.failedRuns = _data["failedRuns"];
-            this.averageDurationMs = _data["averageDurationMs"];
-            this.p95DurationMs = _data["p95DurationMs"];
-            this.totalTokens = _data["totalTokens"];
-        }
-    }
-
-    static fromJS(data: any): AiTaskSummaryDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AiTaskSummaryDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["task"] = this.task;
-        data["runCount"] = this.runCount;
-        data["successfulRuns"] = this.successfulRuns;
-        data["failedRuns"] = this.failedRuns;
-        data["averageDurationMs"] = this.averageDurationMs;
-        data["p95DurationMs"] = this.p95DurationMs;
-        data["totalTokens"] = this.totalTokens;
-        return data;
-    }
-}
-
-export interface IAiTaskSummaryDto {
+export interface AiTaskSummaryDto {
     task: string;
+    provider: string;
+    model: string;
+    configFingerprint: string;
     runCount: number;
     successfulRuns: number;
     failedRuns: number;
     averageDurationMs: number;
     p95DurationMs: number;
     totalTokens: number;
-
-    [key: string]: any;
 }
 
-export class AutoCollectionDto implements IAutoCollectionDto {
-    id?: string;
-    name?: string;
-    recipeCount?: number;
-    enabled?: boolean;
-
-    [key: string]: any;
-
-    constructor(data?: IAutoCollectionDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.name = _data["name"];
-            this.recipeCount = _data["recipeCount"];
-            this.enabled = _data["enabled"];
-        }
-    }
-
-    static fromJS(data: any): AutoCollectionDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AutoCollectionDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["name"] = this.name;
-        data["recipeCount"] = this.recipeCount;
-        data["enabled"] = this.enabled;
-        return data;
-    }
+export interface AutoCollectionDto {
+    id: string;
+    name: string;
+    recipeCount: number;
+    enabled: boolean;
 }
 
-export interface IAutoCollectionDto {
-    id?: string;
-    name?: string;
-    recipeCount?: number;
-    enabled?: boolean;
-
-    [key: string]: any;
-}
-
-export class CompleteOnboardingDto implements ICompleteOnboardingDto {
-    skipped!: boolean;
-
-    [key: string]: any;
-
-    constructor(data?: ICompleteOnboardingDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.skipped = _data["skipped"];
-        }
-    }
-
-    static fromJS(data: any): CompleteOnboardingDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CompleteOnboardingDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["skipped"] = this.skipped;
-        return data;
-    }
-}
-
-export interface ICompleteOnboardingDto {
+export interface CompleteOnboardingDto {
     skipped: boolean;
-
-    [key: string]: any;
 }
 
-export class CookbookDto implements ICookbookDto {
-    id?: string;
-    name?: string;
-    kind?: string;
-    recipeCount?: number;
-
-    [key: string]: any;
-
-    constructor(data?: ICookbookDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.name = _data["name"];
-            this.kind = _data["kind"];
-            this.recipeCount = _data["recipeCount"];
-        }
-    }
-
-    static fromJS(data: any): CookbookDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CookbookDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["name"] = this.name;
-        data["kind"] = this.kind;
-        data["recipeCount"] = this.recipeCount;
-        return data;
-    }
+export interface CookbookDto {
+    id: string;
+    name: string;
+    kind: string;
+    recipeCount: number;
 }
 
-export interface ICookbookDto {
-    id?: string;
-    name?: string;
-    kind?: string;
-    recipeCount?: number;
-
-    [key: string]: any;
-}
-
-export class CookbookRecipesRequestDto implements ICookbookRecipesRequestDto {
-    recipeIds!: string[];
-
-    [key: string]: any;
-
-    constructor(data?: ICookbookRecipesRequestDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-        if (!data) {
-            this.recipeIds = [];
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            if (Array.isArray(_data["recipeIds"])) {
-                this.recipeIds = [] as any;
-                for (let item of _data["recipeIds"])
-                    this.recipeIds!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): CookbookRecipesRequestDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CookbookRecipesRequestDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        if (Array.isArray(this.recipeIds)) {
-            data["recipeIds"] = [];
-            for (let item of this.recipeIds)
-                data["recipeIds"].push(item);
-        }
-        return data;
-    }
-}
-
-export interface ICookbookRecipesRequestDto {
+export interface CookbookRecipesRequestDto {
     recipeIds: string[];
-
-    [key: string]: any;
 }
 
-export class CreateCookbookDto implements ICreateCookbookDto {
-    name!: string;
-
-    [key: string]: any;
-
-    constructor(data?: ICreateCookbookDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.name = _data["name"];
-        }
-    }
-
-    static fromJS(data: any): CreateCookbookDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CreateCookbookDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["name"] = this.name;
-        return data;
-    }
+export enum Course {
+    Main = 0,
+    Appetizer = 1,
+    Side = 2,
+    Dessert = 3,
 }
 
-export interface ICreateCookbookDto {
+export interface CreateCookbookDto {
     name: string;
-
-    [key: string]: any;
 }
 
-export class CreateFamilyMemberDto implements ICreateFamilyMemberDto {
-    name!: string;
-    isGuest?: boolean;
-    allergyTags?: DietaryTagEntryDto[];
-    dietTags?: DietaryTagEntryDto[];
-    preferenceNotes?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: ICreateFamilyMemberDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.name = _data["name"];
-            this.isGuest = _data["isGuest"];
-            if (Array.isArray(_data["allergyTags"])) {
-                this.allergyTags = [] as any;
-                for (let item of _data["allergyTags"])
-                    this.allergyTags!.push(DietaryTagEntryDto.fromJS(item));
-            }
-            if (Array.isArray(_data["dietTags"])) {
-                this.dietTags = [] as any;
-                for (let item of _data["dietTags"])
-                    this.dietTags!.push(DietaryTagEntryDto.fromJS(item));
-            }
-            this.preferenceNotes = _data["preferenceNotes"];
-        }
-    }
-
-    static fromJS(data: any): CreateFamilyMemberDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CreateFamilyMemberDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["name"] = this.name;
-        data["isGuest"] = this.isGuest;
-        if (Array.isArray(this.allergyTags)) {
-            data["allergyTags"] = [];
-            for (let item of this.allergyTags)
-                data["allergyTags"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.dietTags)) {
-            data["dietTags"] = [];
-            for (let item of this.dietTags)
-                data["dietTags"].push(item ? item.toJSON() : undefined as any);
-        }
-        data["preferenceNotes"] = this.preferenceNotes;
-        return data;
-    }
-}
-
-export interface ICreateFamilyMemberDto {
+export interface CreateFamilyMemberDto {
     name: string;
-    isGuest?: boolean;
-    allergyTags?: DietaryTagEntryDto[];
-    dietTags?: DietaryTagEntryDto[];
-    preferenceNotes?: string | undefined;
-
-    [key: string]: any;
+    isGuest: boolean;
+    allergyTags: DietaryTagEntryDto[];
+    dietTags: DietaryTagEntryDto[];
+    preferenceNotes?: string | null;
 }
 
-export class CreateFamilyMemberFavoriteDto implements ICreateFamilyMemberFavoriteDto {
-    recipeId?: string | undefined;
-    dishName?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: ICreateFamilyMemberFavoriteDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.recipeId = _data["recipeId"];
-            this.dishName = _data["dishName"];
-        }
-    }
-
-    static fromJS(data: any): CreateFamilyMemberFavoriteDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CreateFamilyMemberFavoriteDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["recipeId"] = this.recipeId;
-        data["dishName"] = this.dishName;
-        return data;
-    }
+export interface CreateFamilyMemberFavoriteDto {
+    recipeId?: string | null;
+    dishName?: string | null;
 }
 
-export interface ICreateFamilyMemberFavoriteDto {
-    recipeId?: string | undefined;
-    dishName?: string | undefined;
-
-    [key: string]: any;
-}
-
-export class CreatePlannedMealDto implements ICreatePlannedMealDto {
-    date!: string;
-    mealType?: number;
-    course?: number;
-    recipeId?: string | undefined;
-    dishName?: string | undefined;
-    vagueInstruction?: string | undefined;
-    freezyItemRef?: string | undefined;
-    freezyItemQuantity?: number;
-    notes?: string | undefined;
-    familyMemberIds?: string[];
-
-    [key: string]: any;
-
-    constructor(data?: ICreatePlannedMealDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.date = _data["date"];
-            this.mealType = _data["mealType"];
-            this.course = _data["course"];
-            this.recipeId = _data["recipeId"];
-            this.dishName = _data["dishName"];
-            this.vagueInstruction = _data["vagueInstruction"];
-            this.freezyItemRef = _data["freezyItemRef"];
-            this.freezyItemQuantity = _data["freezyItemQuantity"];
-            this.notes = _data["notes"];
-            if (Array.isArray(_data["familyMemberIds"])) {
-                this.familyMemberIds = [] as any;
-                for (let item of _data["familyMemberIds"])
-                    this.familyMemberIds!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): CreatePlannedMealDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CreatePlannedMealDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["date"] = this.date;
-        data["mealType"] = this.mealType;
-        data["course"] = this.course;
-        data["recipeId"] = this.recipeId;
-        data["dishName"] = this.dishName;
-        data["vagueInstruction"] = this.vagueInstruction;
-        data["freezyItemRef"] = this.freezyItemRef;
-        data["freezyItemQuantity"] = this.freezyItemQuantity;
-        data["notes"] = this.notes;
-        if (Array.isArray(this.familyMemberIds)) {
-            data["familyMemberIds"] = [];
-            for (let item of this.familyMemberIds)
-                data["familyMemberIds"].push(item);
-        }
-        return data;
-    }
-}
-
-export interface ICreatePlannedMealDto {
+export interface CreatePlannedMealDto {
     date: string;
-    mealType?: number;
-    course?: number;
-    recipeId?: string | undefined;
-    dishName?: string | undefined;
-    vagueInstruction?: string | undefined;
-    freezyItemRef?: string | undefined;
-    freezyItemQuantity?: number;
-    notes?: string | undefined;
-    familyMemberIds?: string[];
-
-    [key: string]: any;
+    mealType: MealType;
+    course: Course;
+    recipeId?: string | null;
+    dishName?: string | null;
+    vagueInstruction?: string | null;
+    freezyItemRef?: string | null;
+    freezyItemQuantity: number;
+    notes?: string | null;
+    familyMemberIds: string[];
 }
 
-export class CreateRecipeDto implements ICreateRecipeDto {
-    title!: string;
-    originalTitle?: string | undefined;
-    description?: string | undefined;
-    originalDescription?: string | undefined;
-    contentLanguage?: string | undefined;
-    servings?: number;
-    prepTimeMinutes?: number | undefined;
-    cookTimeMinutes?: number | undefined;
-    totalTimeMinutes?: number | undefined;
-    category?: string | undefined;
-    keywords?: string | undefined;
-    imageUrl?: string | undefined;
-    videoUrl?: string | undefined;
-    ingredients?: CreateRecipeIngredientDto[];
-    steps?: CreateRecipeStepDto[];
-    tags?: string[];
-    containsClasses?: string[] | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: ICreateRecipeDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.title = _data["title"];
-            this.originalTitle = _data["originalTitle"];
-            this.description = _data["description"];
-            this.originalDescription = _data["originalDescription"];
-            this.contentLanguage = _data["contentLanguage"];
-            this.servings = _data["servings"];
-            this.prepTimeMinutes = _data["prepTimeMinutes"];
-            this.cookTimeMinutes = _data["cookTimeMinutes"];
-            this.totalTimeMinutes = _data["totalTimeMinutes"];
-            this.category = _data["category"];
-            this.keywords = _data["keywords"];
-            this.imageUrl = _data["imageUrl"];
-            this.videoUrl = _data["videoUrl"];
-            if (Array.isArray(_data["ingredients"])) {
-                this.ingredients = [] as any;
-                for (let item of _data["ingredients"])
-                    this.ingredients!.push(CreateRecipeIngredientDto.fromJS(item));
-            }
-            if (Array.isArray(_data["steps"])) {
-                this.steps = [] as any;
-                for (let item of _data["steps"])
-                    this.steps!.push(CreateRecipeStepDto.fromJS(item));
-            }
-            if (Array.isArray(_data["tags"])) {
-                this.tags = [] as any;
-                for (let item of _data["tags"])
-                    this.tags!.push(item);
-            }
-            if (Array.isArray(_data["containsClasses"])) {
-                this.containsClasses = [] as any;
-                for (let item of _data["containsClasses"])
-                    this.containsClasses!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): CreateRecipeDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CreateRecipeDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["title"] = this.title;
-        data["originalTitle"] = this.originalTitle;
-        data["description"] = this.description;
-        data["originalDescription"] = this.originalDescription;
-        data["contentLanguage"] = this.contentLanguage;
-        data["servings"] = this.servings;
-        data["prepTimeMinutes"] = this.prepTimeMinutes;
-        data["cookTimeMinutes"] = this.cookTimeMinutes;
-        data["totalTimeMinutes"] = this.totalTimeMinutes;
-        data["category"] = this.category;
-        data["keywords"] = this.keywords;
-        data["imageUrl"] = this.imageUrl;
-        data["videoUrl"] = this.videoUrl;
-        if (Array.isArray(this.ingredients)) {
-            data["ingredients"] = [];
-            for (let item of this.ingredients)
-                data["ingredients"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.steps)) {
-            data["steps"] = [];
-            for (let item of this.steps)
-                data["steps"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.tags)) {
-            data["tags"] = [];
-            for (let item of this.tags)
-                data["tags"].push(item);
-        }
-        if (Array.isArray(this.containsClasses)) {
-            data["containsClasses"] = [];
-            for (let item of this.containsClasses)
-                data["containsClasses"].push(item);
-        }
-        return data;
-    }
-}
-
-export interface ICreateRecipeDto {
+export interface CreateRecipeDto {
     title: string;
-    originalTitle?: string | undefined;
-    description?: string | undefined;
-    originalDescription?: string | undefined;
-    contentLanguage?: string | undefined;
-    servings?: number;
-    prepTimeMinutes?: number | undefined;
-    cookTimeMinutes?: number | undefined;
-    totalTimeMinutes?: number | undefined;
-    category?: string | undefined;
-    keywords?: string | undefined;
-    imageUrl?: string | undefined;
-    videoUrl?: string | undefined;
-    ingredients?: CreateRecipeIngredientDto[];
-    steps?: CreateRecipeStepDto[];
-    tags?: string[];
-    containsClasses?: string[] | undefined;
-
-    [key: string]: any;
+    originalTitle?: string | null;
+    description?: string | null;
+    originalDescription?: string | null;
+    contentLanguage?: string | null;
+    servings: number;
+    prepTimeMinutes?: number | null;
+    cookTimeMinutes?: number | null;
+    totalTimeMinutes?: number | null;
+    category?: string | null;
+    keywords?: string | null;
+    imageUrl?: string | null;
+    videoUrl?: string | null;
+    ingredients: CreateRecipeIngredientDto[];
+    steps: CreateRecipeStepDto[];
+    tags: string[];
+    containsClasses?: string[] | null;
 }
 
-export class CreateRecipeIngredientDto implements ICreateRecipeIngredientDto {
-    name!: string;
-    quantity?: number | undefined;
-    unit?: string | undefined;
-    originalText?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: ICreateRecipeIngredientDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.name = _data["name"];
-            this.quantity = _data["quantity"];
-            this.unit = _data["unit"];
-            this.originalText = _data["originalText"];
-        }
-    }
-
-    static fromJS(data: any): CreateRecipeIngredientDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CreateRecipeIngredientDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["name"] = this.name;
-        data["quantity"] = this.quantity;
-        data["unit"] = this.unit;
-        data["originalText"] = this.originalText;
-        return data;
-    }
-}
-
-export interface ICreateRecipeIngredientDto {
+export interface CreateRecipeIngredientDto {
     name: string;
-    quantity?: number | undefined;
-    unit?: string | undefined;
-    originalText?: string | undefined;
-
-    [key: string]: any;
+    quantity?: number | null;
+    unit?: string | null;
+    originalText?: string | null;
 }
 
-export class CreateRecipeStepDto implements ICreateRecipeStepDto {
-    instruction!: string;
-    originalInstruction?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: ICreateRecipeStepDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.instruction = _data["instruction"];
-            this.originalInstruction = _data["originalInstruction"];
-        }
-    }
-
-    static fromJS(data: any): CreateRecipeStepDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CreateRecipeStepDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["instruction"] = this.instruction;
-        data["originalInstruction"] = this.originalInstruction;
-        return data;
-    }
-}
-
-export interface ICreateRecipeStepDto {
+export interface CreateRecipeStepDto {
     instruction: string;
-    originalInstruction?: string | undefined;
-
-    [key: string]: any;
+    originalInstruction?: string | null;
 }
 
-export class DietaryTagDto implements IDietaryTagDto {
-    id?: string;
-    name?: string;
-    kind?: number;
-
-    [key: string]: any;
-
-    constructor(data?: IDietaryTagDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.name = _data["name"];
-            this.kind = _data["kind"];
-        }
-    }
-
-    static fromJS(data: any): DietaryTagDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new DietaryTagDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["name"] = this.name;
-        data["kind"] = this.kind;
-        return data;
-    }
+export enum DietaryFactsStatus {
+    Unassessed = 0,
+    AiDetected = 1,
+    UserConfirmed = 2,
+    Stale = 3,
+    Pending = 4,
+    Failed = 5,
 }
 
-export interface IDietaryTagDto {
-    id?: string;
-    name?: string;
-    kind?: number;
-
-    [key: string]: any;
-}
-
-export class DietaryTagEntryDto implements IDietaryTagEntryDto {
-    name!: string;
-    excludedClasses?: string[] | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IDietaryTagEntryDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.name = _data["name"];
-            if (Array.isArray(_data["excludedClasses"])) {
-                this.excludedClasses = [] as any;
-                for (let item of _data["excludedClasses"])
-                    this.excludedClasses!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): DietaryTagEntryDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new DietaryTagEntryDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["name"] = this.name;
-        if (Array.isArray(this.excludedClasses)) {
-            data["excludedClasses"] = [];
-            for (let item of this.excludedClasses)
-                data["excludedClasses"].push(item);
-        }
-        return data;
-    }
-}
-
-export interface IDietaryTagEntryDto {
+export interface DietaryTagDto {
+    id: string;
     name: string;
-    excludedClasses?: string[] | undefined;
-
-    [key: string]: any;
+    kind: DietaryTagKind;
 }
 
-export class DietaryTagPresetDto implements IDietaryTagPresetDto {
-    excludedClasses?: string[];
-
-    [key: string]: any;
-
-    constructor(data?: IDietaryTagPresetDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            if (Array.isArray(_data["excludedClasses"])) {
-                this.excludedClasses = [] as any;
-                for (let item of _data["excludedClasses"])
-                    this.excludedClasses!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): DietaryTagPresetDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new DietaryTagPresetDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        if (Array.isArray(this.excludedClasses)) {
-            data["excludedClasses"] = [];
-            for (let item of this.excludedClasses)
-                data["excludedClasses"].push(item);
-        }
-        return data;
-    }
+export interface DietaryTagEntryDto {
+    name: string;
+    excludedClasses?: string[] | null;
 }
 
-export interface IDietaryTagPresetDto {
-    excludedClasses?: string[];
-
-    [key: string]: any;
+export enum DietaryTagKind {
+    Allergy = 0,
+    Diet = 1,
 }
 
-export class DishStatisticDto implements IDishStatisticDto {
-    dishName?: string;
-    timesPlanned?: number;
-    lastPlanned?: string;
-    timesEaten?: number;
-    averageRating?: number | undefined;
-    lovedCount?: number;
-
-    [key: string]: any;
-
-    constructor(data?: IDishStatisticDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.dishName = _data["dishName"];
-            this.timesPlanned = _data["timesPlanned"];
-            this.lastPlanned = _data["lastPlanned"];
-            this.timesEaten = _data["timesEaten"];
-            this.averageRating = _data["averageRating"];
-            this.lovedCount = _data["lovedCount"];
-        }
-    }
-
-    static fromJS(data: any): DishStatisticDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new DishStatisticDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["dishName"] = this.dishName;
-        data["timesPlanned"] = this.timesPlanned;
-        data["lastPlanned"] = this.lastPlanned;
-        data["timesEaten"] = this.timesEaten;
-        data["averageRating"] = this.averageRating;
-        data["lovedCount"] = this.lovedCount;
-        return data;
-    }
+export interface DietaryTagPresetDto {
+    excludedClasses: string[];
 }
 
-export interface IDishStatisticDto {
-    dishName?: string;
-    timesPlanned?: number;
-    lastPlanned?: string;
-    timesEaten?: number;
-    averageRating?: number | undefined;
-    lovedCount?: number;
-
-    [key: string]: any;
+export interface DishStatisticDto {
+    dishName: string;
+    timesPlanned: number;
+    lastPlanned: string;
+    timesEaten: number;
+    averageRating?: number | null;
+    lovedCount: number;
 }
 
-export class DishStatisticsDto implements IDishStatisticsDto {
-    dishes?: DishStatisticDto[];
-    unspecifiedCount?: number;
-
-    [key: string]: any;
-
-    constructor(data?: IDishStatisticsDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            if (Array.isArray(_data["dishes"])) {
-                this.dishes = [] as any;
-                for (let item of _data["dishes"])
-                    this.dishes!.push(DishStatisticDto.fromJS(item));
-            }
-            this.unspecifiedCount = _data["unspecifiedCount"];
-        }
-    }
-
-    static fromJS(data: any): DishStatisticsDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new DishStatisticsDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        if (Array.isArray(this.dishes)) {
-            data["dishes"] = [];
-            for (let item of this.dishes)
-                data["dishes"].push(item ? item.toJSON() : undefined as any);
-        }
-        data["unspecifiedCount"] = this.unspecifiedCount;
-        return data;
-    }
+export interface DishStatisticsDto {
+    dishes: DishStatisticDto[];
+    unspecifiedCount: number;
 }
 
-export interface IDishStatisticsDto {
-    dishes?: DishStatisticDto[];
-    unspecifiedCount?: number;
-
-    [key: string]: any;
+export enum EatenStatus {
+    Eaten = 0,
+    Skipped = 1,
 }
 
-export class FamilyMemberDto implements IFamilyMemberDto {
-    id?: string;
-    name?: string;
-    isGuest?: boolean;
-    allergyTags?: DietaryTagEntryDto[];
-    dietTags?: DietaryTagEntryDto[];
-    preferenceNotes?: string | undefined;
-    isActive?: boolean;
-    createdAt?: string;
-    updatedAt?: string;
-
-    [key: string]: any;
-
-    constructor(data?: IFamilyMemberDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.name = _data["name"];
-            this.isGuest = _data["isGuest"];
-            if (Array.isArray(_data["allergyTags"])) {
-                this.allergyTags = [] as any;
-                for (let item of _data["allergyTags"])
-                    this.allergyTags!.push(DietaryTagEntryDto.fromJS(item));
-            }
-            if (Array.isArray(_data["dietTags"])) {
-                this.dietTags = [] as any;
-                for (let item of _data["dietTags"])
-                    this.dietTags!.push(DietaryTagEntryDto.fromJS(item));
-            }
-            this.preferenceNotes = _data["preferenceNotes"];
-            this.isActive = _data["isActive"];
-            this.createdAt = _data["createdAt"];
-            this.updatedAt = _data["updatedAt"];
-        }
-    }
-
-    static fromJS(data: any): FamilyMemberDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new FamilyMemberDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["name"] = this.name;
-        data["isGuest"] = this.isGuest;
-        if (Array.isArray(this.allergyTags)) {
-            data["allergyTags"] = [];
-            for (let item of this.allergyTags)
-                data["allergyTags"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.dietTags)) {
-            data["dietTags"] = [];
-            for (let item of this.dietTags)
-                data["dietTags"].push(item ? item.toJSON() : undefined as any);
-        }
-        data["preferenceNotes"] = this.preferenceNotes;
-        data["isActive"] = this.isActive;
-        data["createdAt"] = this.createdAt;
-        data["updatedAt"] = this.updatedAt;
-        return data;
-    }
+export interface FamilyMemberDto {
+    id: string;
+    name: string;
+    isGuest: boolean;
+    allergyTags: DietaryTagEntryDto[];
+    dietTags: DietaryTagEntryDto[];
+    preferenceNotes?: string | null;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
 }
 
-export interface IFamilyMemberDto {
-    id?: string;
-    name?: string;
-    isGuest?: boolean;
-    allergyTags?: DietaryTagEntryDto[];
-    dietTags?: DietaryTagEntryDto[];
-    preferenceNotes?: string | undefined;
-    isActive?: boolean;
-    createdAt?: string;
-    updatedAt?: string;
-
-    [key: string]: any;
-}
-
-export class FamilyMemberFavoriteDto implements IFamilyMemberFavoriteDto {
-    id?: string;
-    familyMemberId?: string;
-    recipeId?: string | undefined;
-    dishName?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IFamilyMemberFavoriteDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.familyMemberId = _data["familyMemberId"];
-            this.recipeId = _data["recipeId"];
-            this.dishName = _data["dishName"];
-        }
-    }
-
-    static fromJS(data: any): FamilyMemberFavoriteDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new FamilyMemberFavoriteDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["familyMemberId"] = this.familyMemberId;
-        data["recipeId"] = this.recipeId;
-        data["dishName"] = this.dishName;
-        return data;
-    }
-}
-
-export interface IFamilyMemberFavoriteDto {
-    id?: string;
-    familyMemberId?: string;
-    recipeId?: string | undefined;
-    dishName?: string | undefined;
-
-    [key: string]: any;
+export interface FamilyMemberFavoriteDto {
+    id: string;
+    familyMemberId: string;
+    recipeId?: string | null;
+    dishName?: string | null;
 }
 
 export enum FirstDayOfWeek {
@@ -2497,578 +5458,109 @@ export enum FirstDayOfWeek {
     Sunday = "Sunday",
 }
 
-export class FreezerSuggestionsDto implements IFreezerSuggestionsDto {
-    enabled?: boolean;
-    items?: FrozenItem[];
-
-    [key: string]: any;
-
-    constructor(data?: IFreezerSuggestionsDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.enabled = _data["enabled"];
-            if (Array.isArray(_data["items"])) {
-                this.items = [] as any;
-                for (let item of _data["items"])
-                    this.items!.push(FrozenItem.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): FreezerSuggestionsDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new FreezerSuggestionsDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["enabled"] = this.enabled;
-        if (Array.isArray(this.items)) {
-            data["items"] = [];
-            for (let item of this.items)
-                data["items"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
+export interface FreezerReconciliationDto {
+    state: string;
+    checkedAt: string;
+    issues: FreezerReservationIssueDto[];
 }
 
-export interface IFreezerSuggestionsDto {
-    enabled?: boolean;
-    items?: FrozenItem[];
+export interface FreezerReservationIssueDto {
+    itemRef: string;
+    name: string | null;
+    fingerprint: string | null;
+    stockQuantity: number;
+    reservedQuantity: number;
+    shortage: number;
+    issue: string;
+    meals: FreezerReservationMealDto[];
+}
+
+export interface FreezerReservationMealDto {
+    id: string;
+    date: string;
+    dishName: string;
+    quantity: number;
+}
+
+export interface FreezerSuggestionsDto {
+    enabled: boolean;
+    items: FrozenItem[];
 
     [key: string]: any;
 }
 
-export class FreezyIntegrationStatusDto implements IFreezyIntegrationStatusDto {
-    configured!: boolean;
-    reachable!: boolean;
-    baseUrl!: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IFreezyIntegrationStatusDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.configured = _data["configured"];
-            this.reachable = _data["reachable"];
-            this.baseUrl = _data["baseUrl"];
-        }
-    }
-
-    static fromJS(data: any): FreezyIntegrationStatusDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new FreezyIntegrationStatusDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["configured"] = this.configured;
-        data["reachable"] = this.reachable;
-        data["baseUrl"] = this.baseUrl;
-        return data;
-    }
-}
-
-export interface IFreezyIntegrationStatusDto {
+export interface FreezyIntegrationStatusDto {
     configured: boolean;
     reachable: boolean;
-    baseUrl: string | undefined;
-
-    [key: string]: any;
+    baseUrl: string | null;
 }
 
-export class FrozenItem implements IFrozenItem {
-    id!: string;
-    name!: string;
-    quantity?: number;
-    unit?: string | undefined;
-    expirationDate?: string | undefined;
-    notes?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IFrozenItem) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.name = _data["name"];
-            this.quantity = _data["quantity"];
-            this.unit = _data["unit"];
-            this.expirationDate = _data["expirationDate"];
-            this.notes = _data["notes"];
-        }
-    }
-
-    static fromJS(data: any): FrozenItem {
-        data = typeof data === 'object' ? data : {};
-        let result = new FrozenItem();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["name"] = this.name;
-        data["quantity"] = this.quantity;
-        data["unit"] = this.unit;
-        data["expirationDate"] = this.expirationDate;
-        data["notes"] = this.notes;
-        return data;
-    }
-}
-
-export interface IFrozenItem {
+export interface FrozenItem {
     id: string;
     name: string;
-    quantity?: number;
-    unit?: string | undefined;
-    expirationDate?: string | undefined;
-    notes?: string | undefined;
+    quantity: number;
+    unit?: string | null;
+    expirationDate?: string | null;
+    notes?: string | null;
 
     [key: string]: any;
 }
 
-export class ImportRecipeRequestDto implements IImportRecipeRequestDto {
-    url!: string;
-
-    [key: string]: any;
-
-    constructor(data?: IImportRecipeRequestDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.url = _data["url"];
-        }
-    }
-
-    static fromJS(data: any): ImportRecipeRequestDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ImportRecipeRequestDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["url"] = this.url;
-        return data;
-    }
-}
-
-export interface IImportRecipeRequestDto {
+export interface ImportRecipeRequestDto {
     url: string;
-
-    [key: string]: any;
 }
 
-export class IntegrationStatusResponseDto implements IIntegrationStatusResponseDto {
-    ai!: AiIntegrationStatusDto;
-    freezy!: FreezyIntegrationStatusDto;
-    scraper!: ScraperIntegrationStatusDto;
-    webSearch!: WebSearchIntegrationStatusDto;
-
-    [key: string]: any;
-
-    constructor(data?: IIntegrationStatusResponseDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-        if (!data) {
-            this.ai = new AiIntegrationStatusDto();
-            this.freezy = new FreezyIntegrationStatusDto();
-            this.scraper = new ScraperIntegrationStatusDto();
-            this.webSearch = new WebSearchIntegrationStatusDto();
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.ai = _data["ai"] ? AiIntegrationStatusDto.fromJS(_data["ai"]) : new AiIntegrationStatusDto();
-            this.freezy = _data["freezy"] ? FreezyIntegrationStatusDto.fromJS(_data["freezy"]) : new FreezyIntegrationStatusDto();
-            this.scraper = _data["scraper"] ? ScraperIntegrationStatusDto.fromJS(_data["scraper"]) : new ScraperIntegrationStatusDto();
-            this.webSearch = _data["webSearch"] ? WebSearchIntegrationStatusDto.fromJS(_data["webSearch"]) : new WebSearchIntegrationStatusDto();
-        }
-    }
-
-    static fromJS(data: any): IntegrationStatusResponseDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new IntegrationStatusResponseDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["ai"] = this.ai ? this.ai.toJSON() : undefined as any;
-        data["freezy"] = this.freezy ? this.freezy.toJSON() : undefined as any;
-        data["scraper"] = this.scraper ? this.scraper.toJSON() : undefined as any;
-        data["webSearch"] = this.webSearch ? this.webSearch.toJSON() : undefined as any;
-        return data;
-    }
-}
-
-export interface IIntegrationStatusResponseDto {
+export interface IntegrationStatusResponseDto {
     ai: AiIntegrationStatusDto;
     freezy: FreezyIntegrationStatusDto;
     scraper: ScraperIntegrationStatusDto;
     webSearch: WebSearchIntegrationStatusDto;
-
-    [key: string]: any;
 }
 
-export class MealRatingDto implements IMealRatingDto {
-    familyMemberId?: string;
-    rating?: number;
-
-    [key: string]: any;
-
-    constructor(data?: IMealRatingDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.familyMemberId = _data["familyMemberId"];
-            this.rating = _data["rating"];
-        }
-    }
-
-    static fromJS(data: any): MealRatingDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new MealRatingDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["familyMemberId"] = this.familyMemberId;
-        data["rating"] = this.rating;
-        return data;
-    }
+export interface MealRatingDto {
+    familyMemberId: string;
+    rating: number;
 }
 
-export interface IMealRatingDto {
-    familyMemberId?: string;
-    rating?: number;
-
-    [key: string]: any;
+export interface MealSuggestionDto {
+    id: string;
+    date: string;
+    mealType: MealType;
+    course: Course;
+    attendeeIds: string[];
+    attendeeNames: string[];
+    recipeId?: string | null;
+    recipeTitle?: string | null;
+    dishName: string;
+    reason?: string | null;
+    fromFallback: boolean;
+    allergyWarning?: string | null;
+    dietWarning?: string | null;
+    freezyItemRef?: string | null;
+    freezyItemQuantity: number;
+    sourceUrl?: string | null;
+    sourceName?: string | null;
+    constraintIds: string[];
+    containsClasses: string[];
+    factsAssessed: boolean;
+    totalTimeMinutes?: number | null;
+    candidateVersion?: string | null;
 }
 
-export class MealSuggestionDto implements IMealSuggestionDto {
-    id?: string;
-    date?: string;
-    mealType?: number;
-    course?: number;
-    attendeeIds?: string[];
-    attendeeNames?: string[];
-    recipeId?: string | undefined;
-    recipeTitle?: string | undefined;
-    dishName?: string;
-    reason?: string | undefined;
-    fromFallback?: boolean;
-    allergyWarning?: string | undefined;
-    dietWarning?: string | undefined;
-    freezyItemRef?: string | undefined;
-    freezyItemQuantity?: number;
-    sourceUrl?: string | undefined;
-    sourceName?: string | undefined;
-    constraintIds?: string[];
-    containsClasses?: string[];
-    factsAssessed?: boolean;
-
-    [key: string]: any;
-
-    constructor(data?: IMealSuggestionDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.date = _data["date"];
-            this.mealType = _data["mealType"];
-            this.course = _data["course"];
-            if (Array.isArray(_data["attendeeIds"])) {
-                this.attendeeIds = [] as any;
-                for (let item of _data["attendeeIds"])
-                    this.attendeeIds!.push(item);
-            }
-            if (Array.isArray(_data["attendeeNames"])) {
-                this.attendeeNames = [] as any;
-                for (let item of _data["attendeeNames"])
-                    this.attendeeNames!.push(item);
-            }
-            this.recipeId = _data["recipeId"];
-            this.recipeTitle = _data["recipeTitle"];
-            this.dishName = _data["dishName"];
-            this.reason = _data["reason"];
-            this.fromFallback = _data["fromFallback"];
-            this.allergyWarning = _data["allergyWarning"];
-            this.dietWarning = _data["dietWarning"];
-            this.freezyItemRef = _data["freezyItemRef"];
-            this.freezyItemQuantity = _data["freezyItemQuantity"];
-            this.sourceUrl = _data["sourceUrl"];
-            this.sourceName = _data["sourceName"];
-            if (Array.isArray(_data["constraintIds"])) {
-                this.constraintIds = [] as any;
-                for (let item of _data["constraintIds"])
-                    this.constraintIds!.push(item);
-            }
-            if (Array.isArray(_data["containsClasses"])) {
-                this.containsClasses = [] as any;
-                for (let item of _data["containsClasses"])
-                    this.containsClasses!.push(item);
-            }
-            this.factsAssessed = _data["factsAssessed"];
-        }
-    }
-
-    static fromJS(data: any): MealSuggestionDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new MealSuggestionDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["date"] = this.date;
-        data["mealType"] = this.mealType;
-        data["course"] = this.course;
-        if (Array.isArray(this.attendeeIds)) {
-            data["attendeeIds"] = [];
-            for (let item of this.attendeeIds)
-                data["attendeeIds"].push(item);
-        }
-        if (Array.isArray(this.attendeeNames)) {
-            data["attendeeNames"] = [];
-            for (let item of this.attendeeNames)
-                data["attendeeNames"].push(item);
-        }
-        data["recipeId"] = this.recipeId;
-        data["recipeTitle"] = this.recipeTitle;
-        data["dishName"] = this.dishName;
-        data["reason"] = this.reason;
-        data["fromFallback"] = this.fromFallback;
-        data["allergyWarning"] = this.allergyWarning;
-        data["dietWarning"] = this.dietWarning;
-        data["freezyItemRef"] = this.freezyItemRef;
-        data["freezyItemQuantity"] = this.freezyItemQuantity;
-        data["sourceUrl"] = this.sourceUrl;
-        data["sourceName"] = this.sourceName;
-        if (Array.isArray(this.constraintIds)) {
-            data["constraintIds"] = [];
-            for (let item of this.constraintIds)
-                data["constraintIds"].push(item);
-        }
-        if (Array.isArray(this.containsClasses)) {
-            data["containsClasses"] = [];
-            for (let item of this.containsClasses)
-                data["containsClasses"].push(item);
-        }
-        data["factsAssessed"] = this.factsAssessed;
-        return data;
-    }
+export interface MealSuggestionsDto {
+    batchId: string;
+    enabled: boolean;
+    status: string;
+    unmetRequirements: UnmetPlanningRequirementDto[];
+    suggestions: MealSuggestionDto[];
+    excludedForAllergies: number;
 }
 
-export interface IMealSuggestionDto {
-    id?: string;
-    date?: string;
-    mealType?: number;
-    course?: number;
-    attendeeIds?: string[];
-    attendeeNames?: string[];
-    recipeId?: string | undefined;
-    recipeTitle?: string | undefined;
-    dishName?: string;
-    reason?: string | undefined;
-    fromFallback?: boolean;
-    allergyWarning?: string | undefined;
-    dietWarning?: string | undefined;
-    freezyItemRef?: string | undefined;
-    freezyItemQuantity?: number;
-    sourceUrl?: string | undefined;
-    sourceName?: string | undefined;
-    constraintIds?: string[];
-    containsClasses?: string[];
-    factsAssessed?: boolean;
-
-    [key: string]: any;
-}
-
-export class MealSuggestionsDto implements IMealSuggestionsDto {
-    batchId?: string;
-    enabled?: boolean;
-    suggestions?: MealSuggestionDto[];
-    excludedForAllergies?: number;
-
-    [key: string]: any;
-
-    constructor(data?: IMealSuggestionsDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.batchId = _data["batchId"];
-            this.enabled = _data["enabled"];
-            if (Array.isArray(_data["suggestions"])) {
-                this.suggestions = [] as any;
-                for (let item of _data["suggestions"])
-                    this.suggestions!.push(MealSuggestionDto.fromJS(item));
-            }
-            this.excludedForAllergies = _data["excludedForAllergies"];
-        }
-    }
-
-    static fromJS(data: any): MealSuggestionsDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new MealSuggestionsDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["batchId"] = this.batchId;
-        data["enabled"] = this.enabled;
-        if (Array.isArray(this.suggestions)) {
-            data["suggestions"] = [];
-            for (let item of this.suggestions)
-                data["suggestions"].push(item ? item.toJSON() : undefined as any);
-        }
-        data["excludedForAllergies"] = this.excludedForAllergies;
-        return data;
-    }
-}
-
-export interface IMealSuggestionsDto {
-    batchId?: string;
-    enabled?: boolean;
-    suggestions?: MealSuggestionDto[];
-    excludedForAllergies?: number;
-
-    [key: string]: any;
+export enum MealType {
+    Breakfast = 0,
+    Lunch = 1,
+    Dinner = 2,
+    Snack = 3,
 }
 
 export enum MeasurementSystem {
@@ -3076,2755 +5568,404 @@ export enum MeasurementSystem {
     Imperial = "Imperial",
 }
 
-export class MemberStatisticsDto implements IMemberStatisticsDto {
-    memberId?: string;
-    name?: string;
-    mealsAttended?: number;
-    mealsEaten?: number;
-    averageRatingGiven?: number | undefined;
-    topDishes?: DishStatisticDto[];
-
-    [key: string]: any;
-
-    constructor(data?: IMemberStatisticsDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.memberId = _data["memberId"];
-            this.name = _data["name"];
-            this.mealsAttended = _data["mealsAttended"];
-            this.mealsEaten = _data["mealsEaten"];
-            this.averageRatingGiven = _data["averageRatingGiven"];
-            if (Array.isArray(_data["topDishes"])) {
-                this.topDishes = [] as any;
-                for (let item of _data["topDishes"])
-                    this.topDishes!.push(DishStatisticDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): MemberStatisticsDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new MemberStatisticsDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["memberId"] = this.memberId;
-        data["name"] = this.name;
-        data["mealsAttended"] = this.mealsAttended;
-        data["mealsEaten"] = this.mealsEaten;
-        data["averageRatingGiven"] = this.averageRatingGiven;
-        if (Array.isArray(this.topDishes)) {
-            data["topDishes"] = [];
-            for (let item of this.topDishes)
-                data["topDishes"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
+export interface MemberStatisticsDto {
+    memberId: string;
+    name: string;
+    mealsAttended: number;
+    mealsEaten: number;
+    averageRatingGiven?: number | null;
+    topDishes: DishStatisticDto[];
 }
 
-export interface IMemberStatisticsDto {
-    memberId?: string;
-    name?: string;
-    mealsAttended?: number;
-    mealsEaten?: number;
-    averageRatingGiven?: number | undefined;
-    topDishes?: DishStatisticDto[];
-
-    [key: string]: any;
-}
-
-export class OnboardingStatusDto implements IOnboardingStatusDto {
-    shouldShow!: boolean;
-
-    [key: string]: any;
-
-    constructor(data?: IOnboardingStatusDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.shouldShow = _data["shouldShow"];
-        }
-    }
-
-    static fromJS(data: any): OnboardingStatusDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new OnboardingStatusDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["shouldShow"] = this.shouldShow;
-        return data;
-    }
-}
-
-export interface IOnboardingStatusDto {
+export interface OnboardingStatusDto {
     shouldShow: boolean;
+}
+
+export interface PlannedMealDto {
+    id: string;
+    date: string;
+    mealType: MealType;
+    course: Course;
+    recipeId?: string | null;
+    recipeTitle?: string | null;
+    dishName?: string | null;
+    vagueInstruction?: string | null;
+    freezyItemRef?: string | null;
+    freezyItemQuantity: number;
+    notes?: string | null;
+    eaten?: EatenStatus | null;
+    attendeeIds: string[];
+    ratings: MealRatingDto[];
+}
+
+export interface ProblemDetails {
+    type?: string | null;
+    title?: string | null;
+    status?: number | null;
+    detail?: string | null;
+    instance?: string | null;
 
     [key: string]: any;
 }
 
-export class PlannedMealDto implements IPlannedMealDto {
-    id?: string;
-    date?: string;
-    mealType?: number;
-    course?: number;
-    recipeId?: string | undefined;
-    recipeTitle?: string | undefined;
-    dishName?: string | undefined;
-    vagueInstruction?: string | undefined;
-    freezyItemRef?: string | undefined;
-    freezyItemQuantity?: number;
-    notes?: string | undefined;
-    eaten?: number | undefined;
-    attendeeIds?: string[];
-    ratings?: MealRatingDto[];
-
-    [key: string]: any;
-
-    constructor(data?: IPlannedMealDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.date = _data["date"];
-            this.mealType = _data["mealType"];
-            this.course = _data["course"];
-            this.recipeId = _data["recipeId"];
-            this.recipeTitle = _data["recipeTitle"];
-            this.dishName = _data["dishName"];
-            this.vagueInstruction = _data["vagueInstruction"];
-            this.freezyItemRef = _data["freezyItemRef"];
-            this.freezyItemQuantity = _data["freezyItemQuantity"];
-            this.notes = _data["notes"];
-            this.eaten = _data["eaten"];
-            if (Array.isArray(_data["attendeeIds"])) {
-                this.attendeeIds = [] as any;
-                for (let item of _data["attendeeIds"])
-                    this.attendeeIds!.push(item);
-            }
-            if (Array.isArray(_data["ratings"])) {
-                this.ratings = [] as any;
-                for (let item of _data["ratings"])
-                    this.ratings!.push(MealRatingDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): PlannedMealDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new PlannedMealDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["date"] = this.date;
-        data["mealType"] = this.mealType;
-        data["course"] = this.course;
-        data["recipeId"] = this.recipeId;
-        data["recipeTitle"] = this.recipeTitle;
-        data["dishName"] = this.dishName;
-        data["vagueInstruction"] = this.vagueInstruction;
-        data["freezyItemRef"] = this.freezyItemRef;
-        data["freezyItemQuantity"] = this.freezyItemQuantity;
-        data["notes"] = this.notes;
-        data["eaten"] = this.eaten;
-        if (Array.isArray(this.attendeeIds)) {
-            data["attendeeIds"] = [];
-            for (let item of this.attendeeIds)
-                data["attendeeIds"].push(item);
-        }
-        if (Array.isArray(this.ratings)) {
-            data["ratings"] = [];
-            for (let item of this.ratings)
-                data["ratings"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
-}
-
-export interface IPlannedMealDto {
-    id?: string;
-    date?: string;
-    mealType?: number;
-    course?: number;
-    recipeId?: string | undefined;
-    recipeTitle?: string | undefined;
-    dishName?: string | undefined;
-    vagueInstruction?: string | undefined;
-    freezyItemRef?: string | undefined;
-    freezyItemQuantity?: number;
-    notes?: string | undefined;
-    eaten?: number | undefined;
-    attendeeIds?: string[];
-    ratings?: MealRatingDto[];
-
-    [key: string]: any;
-}
-
-export class ProblemDetails implements IProblemDetails {
-    type?: string | undefined;
-    title?: string | undefined;
-    status?: number | undefined;
-    detail?: string | undefined;
-    instance?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IProblemDetails) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.type = _data["type"];
-            this.title = _data["title"];
-            this.status = _data["status"];
-            this.detail = _data["detail"];
-            this.instance = _data["instance"];
-        }
-    }
-
-    static fromJS(data: any): ProblemDetails {
-        data = typeof data === 'object' ? data : {};
-        let result = new ProblemDetails();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["type"] = this.type;
-        data["title"] = this.title;
-        data["status"] = this.status;
-        data["detail"] = this.detail;
-        data["instance"] = this.instance;
-        return data;
-    }
-}
-
-export interface IProblemDetails {
-    type?: string | undefined;
-    title?: string | undefined;
-    status?: number | undefined;
-    detail?: string | undefined;
-    instance?: string | undefined;
-
-    [key: string]: any;
-}
-
-export class RecipeCookbooksRequestDto implements IRecipeCookbooksRequestDto {
-    cookbookIds!: string[];
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeCookbooksRequestDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-        if (!data) {
-            this.cookbookIds = [];
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            if (Array.isArray(_data["cookbookIds"])) {
-                this.cookbookIds = [] as any;
-                for (let item of _data["cookbookIds"])
-                    this.cookbookIds!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): RecipeCookbooksRequestDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeCookbooksRequestDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        if (Array.isArray(this.cookbookIds)) {
-            data["cookbookIds"] = [];
-            for (let item of this.cookbookIds)
-                data["cookbookIds"].push(item);
-        }
-        return data;
-    }
-}
-
-export interface IRecipeCookbooksRequestDto {
+export interface RecipeCookbooksRequestDto {
     cookbookIds: string[];
-
-    [key: string]: any;
 }
 
-export class RecipeDietaryFactsDto implements IRecipeDietaryFactsDto {
-    contains?: string[];
-    status?: number;
-    assessedAt?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeDietaryFactsDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            if (Array.isArray(_data["contains"])) {
-                this.contains = [] as any;
-                for (let item of _data["contains"])
-                    this.contains!.push(item);
-            }
-            this.status = _data["status"];
-            this.assessedAt = _data["assessedAt"];
-        }
-    }
-
-    static fromJS(data: any): RecipeDietaryFactsDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeDietaryFactsDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        if (Array.isArray(this.contains)) {
-            data["contains"] = [];
-            for (let item of this.contains)
-                data["contains"].push(item);
-        }
-        data["status"] = this.status;
-        data["assessedAt"] = this.assessedAt;
-        return data;
-    }
+export interface RecipeDietaryFactsDto {
+    contains: string[];
+    status: DietaryFactsStatus;
+    assessedAt?: string | null;
+    assessedRevision?: number | null;
+    recipeRevision: number;
+    isCurrent: boolean;
+    history: RecipeDietaryFactsHistoryDto[];
 }
 
-export interface IRecipeDietaryFactsDto {
-    contains?: string[];
-    status?: number;
-    assessedAt?: string | undefined;
-
-    [key: string]: any;
+export interface RecipeDietaryFactsHistoryDto {
+    recipeRevision: number;
+    status: DietaryFactsStatus;
+    contains: string[];
+    assessedAt: string | null;
+    archivedAt: string;
 }
 
-export class RecipeDto implements IRecipeDto {
-    id?: string;
-    title?: string;
-    originalTitle?: string | undefined;
-    description?: string | undefined;
-    originalDescription?: string | undefined;
-    contentLanguage?: string | undefined;
-    servings?: number;
-    prepTimeMinutes?: number | undefined;
-    cookTimeMinutes?: number | undefined;
-    totalTimeMinutes?: number | undefined;
-    category?: string | undefined;
-    keywords?: string | undefined;
-    imageUrl?: string | undefined;
-    hasLocalImage?: boolean;
-    imageSourceUrl?: string | undefined;
-    videoUrl?: string | undefined;
-    sourceUrl?: string | undefined;
-    sourceProvider?: string | undefined;
-    createdAt?: string;
-    updatedAt?: string;
-    ingredients?: RecipeIngredientDto[];
-    steps?: RecipeStepDto[];
-    tags?: string[];
-    cookbookIds?: string[];
-    dietaryFacts?: RecipeDietaryFactsDto;
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.title = _data["title"];
-            this.originalTitle = _data["originalTitle"];
-            this.description = _data["description"];
-            this.originalDescription = _data["originalDescription"];
-            this.contentLanguage = _data["contentLanguage"];
-            this.servings = _data["servings"];
-            this.prepTimeMinutes = _data["prepTimeMinutes"];
-            this.cookTimeMinutes = _data["cookTimeMinutes"];
-            this.totalTimeMinutes = _data["totalTimeMinutes"];
-            this.category = _data["category"];
-            this.keywords = _data["keywords"];
-            this.imageUrl = _data["imageUrl"];
-            this.hasLocalImage = _data["hasLocalImage"];
-            this.imageSourceUrl = _data["imageSourceUrl"];
-            this.videoUrl = _data["videoUrl"];
-            this.sourceUrl = _data["sourceUrl"];
-            this.sourceProvider = _data["sourceProvider"];
-            this.createdAt = _data["createdAt"];
-            this.updatedAt = _data["updatedAt"];
-            if (Array.isArray(_data["ingredients"])) {
-                this.ingredients = [] as any;
-                for (let item of _data["ingredients"])
-                    this.ingredients!.push(RecipeIngredientDto.fromJS(item));
-            }
-            if (Array.isArray(_data["steps"])) {
-                this.steps = [] as any;
-                for (let item of _data["steps"])
-                    this.steps!.push(RecipeStepDto.fromJS(item));
-            }
-            if (Array.isArray(_data["tags"])) {
-                this.tags = [] as any;
-                for (let item of _data["tags"])
-                    this.tags!.push(item);
-            }
-            if (Array.isArray(_data["cookbookIds"])) {
-                this.cookbookIds = [] as any;
-                for (let item of _data["cookbookIds"])
-                    this.cookbookIds!.push(item);
-            }
-            this.dietaryFacts = _data["dietaryFacts"] ? RecipeDietaryFactsDto.fromJS(_data["dietaryFacts"]) : undefined as any;
-        }
-    }
-
-    static fromJS(data: any): RecipeDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["title"] = this.title;
-        data["originalTitle"] = this.originalTitle;
-        data["description"] = this.description;
-        data["originalDescription"] = this.originalDescription;
-        data["contentLanguage"] = this.contentLanguage;
-        data["servings"] = this.servings;
-        data["prepTimeMinutes"] = this.prepTimeMinutes;
-        data["cookTimeMinutes"] = this.cookTimeMinutes;
-        data["totalTimeMinutes"] = this.totalTimeMinutes;
-        data["category"] = this.category;
-        data["keywords"] = this.keywords;
-        data["imageUrl"] = this.imageUrl;
-        data["hasLocalImage"] = this.hasLocalImage;
-        data["imageSourceUrl"] = this.imageSourceUrl;
-        data["videoUrl"] = this.videoUrl;
-        data["sourceUrl"] = this.sourceUrl;
-        data["sourceProvider"] = this.sourceProvider;
-        data["createdAt"] = this.createdAt;
-        data["updatedAt"] = this.updatedAt;
-        if (Array.isArray(this.ingredients)) {
-            data["ingredients"] = [];
-            for (let item of this.ingredients)
-                data["ingredients"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.steps)) {
-            data["steps"] = [];
-            for (let item of this.steps)
-                data["steps"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.tags)) {
-            data["tags"] = [];
-            for (let item of this.tags)
-                data["tags"].push(item);
-        }
-        if (Array.isArray(this.cookbookIds)) {
-            data["cookbookIds"] = [];
-            for (let item of this.cookbookIds)
-                data["cookbookIds"].push(item);
-        }
-        data["dietaryFacts"] = this.dietaryFacts ? this.dietaryFacts.toJSON() : undefined as any;
-        return data;
-    }
+export interface RecipeDto {
+    id: string;
+    title: string;
+    originalTitle?: string | null;
+    description?: string | null;
+    originalDescription?: string | null;
+    contentLanguage?: string | null;
+    servings: number;
+    prepTimeMinutes?: number | null;
+    cookTimeMinutes?: number | null;
+    totalTimeMinutes?: number | null;
+    category?: string | null;
+    keywords?: string | null;
+    imageUrl?: string | null;
+    hasLocalImage: boolean;
+    imageSourceUrl?: string | null;
+    videoUrl?: string | null;
+    sourceUrl?: string | null;
+    sourceProvider?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    ingredients: RecipeIngredientDto[];
+    steps: RecipeStepDto[];
+    tags: string[];
+    cookbookIds: string[];
+    dietaryFacts: RecipeDietaryFactsDto;
 }
 
-export interface IRecipeDto {
-    id?: string;
-    title?: string;
-    originalTitle?: string | undefined;
-    description?: string | undefined;
-    originalDescription?: string | undefined;
-    contentLanguage?: string | undefined;
-    servings?: number;
-    prepTimeMinutes?: number | undefined;
-    cookTimeMinutes?: number | undefined;
-    totalTimeMinutes?: number | undefined;
-    category?: string | undefined;
-    keywords?: string | undefined;
-    imageUrl?: string | undefined;
-    hasLocalImage?: boolean;
-    imageSourceUrl?: string | undefined;
-    videoUrl?: string | undefined;
-    sourceUrl?: string | undefined;
-    sourceProvider?: string | undefined;
-    createdAt?: string;
-    updatedAt?: string;
-    ingredients?: RecipeIngredientDto[];
-    steps?: RecipeStepDto[];
-    tags?: string[];
-    cookbookIds?: string[];
-    dietaryFacts?: RecipeDietaryFactsDto;
-
-    [key: string]: any;
+export interface RecipeFactsBackfillResultDto {
+    enqueued: number;
 }
 
-export class RecipeFactsBackfillResultDto implements IRecipeFactsBackfillResultDto {
-    enqueued?: number;
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeFactsBackfillResultDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.enqueued = _data["enqueued"];
-        }
-    }
-
-    static fromJS(data: any): RecipeFactsBackfillResultDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeFactsBackfillResultDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["enqueued"] = this.enqueued;
-        return data;
-    }
+export interface RecipeFactsStatusDto {
+    unassessed: number;
+    aiDetected: number;
+    userConfirmed: number;
+    stale: number;
+    pending: number;
+    failed: number;
+    queueDepth: number;
+    running: boolean;
+    available: boolean;
+    lastError?: string | null;
 }
 
-export interface IRecipeFactsBackfillResultDto {
-    enqueued?: number;
-
-    [key: string]: any;
+export interface RecipeFileImportResultDto {
+    created: number;
+    updated: number;
+    skipped: number;
+    total: number;
+    skippedRecipes: RecipeFileImportSkippedDto[];
 }
 
-export class RecipeFactsStatusDto implements IRecipeFactsStatusDto {
-    unassessed?: number;
-    aiDetected?: number;
-    userConfirmed?: number;
-    queueDepth?: number;
-    running?: boolean;
-    available?: boolean;
-    lastError?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeFactsStatusDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.unassessed = _data["unassessed"];
-            this.aiDetected = _data["aiDetected"];
-            this.userConfirmed = _data["userConfirmed"];
-            this.queueDepth = _data["queueDepth"];
-            this.running = _data["running"];
-            this.available = _data["available"];
-            this.lastError = _data["lastError"];
-        }
-    }
-
-    static fromJS(data: any): RecipeFactsStatusDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeFactsStatusDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["unassessed"] = this.unassessed;
-        data["aiDetected"] = this.aiDetected;
-        data["userConfirmed"] = this.userConfirmed;
-        data["queueDepth"] = this.queueDepth;
-        data["running"] = this.running;
-        data["available"] = this.available;
-        data["lastError"] = this.lastError;
-        return data;
-    }
+export interface RecipeFileImportSkippedDto {
+    title: string;
+    reason: string;
 }
 
-export interface IRecipeFactsStatusDto {
-    unassessed?: number;
-    aiDetected?: number;
-    userConfirmed?: number;
-    queueDepth?: number;
-    running?: boolean;
-    available?: boolean;
-    lastError?: string | undefined;
-
-    [key: string]: any;
+export interface RecipeIngredientDto {
+    id: string;
+    sortOrder: number;
+    name: string;
+    quantity?: number | null;
+    unit?: string | null;
+    originalText: string;
+    originalQuantity?: number | null;
+    originalUnit?: string | null;
 }
 
-export class RecipeFileImportResultDto implements IRecipeFileImportResultDto {
-    created?: number;
-    updated?: number;
-    skipped?: number;
-    total?: number;
-    skippedRecipes?: RecipeFileImportSkippedDto[];
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeFileImportResultDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.created = _data["created"];
-            this.updated = _data["updated"];
-            this.skipped = _data["skipped"];
-            this.total = _data["total"];
-            if (Array.isArray(_data["skippedRecipes"])) {
-                this.skippedRecipes = [] as any;
-                for (let item of _data["skippedRecipes"])
-                    this.skippedRecipes!.push(RecipeFileImportSkippedDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): RecipeFileImportResultDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeFileImportResultDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["created"] = this.created;
-        data["updated"] = this.updated;
-        data["skipped"] = this.skipped;
-        data["total"] = this.total;
-        if (Array.isArray(this.skippedRecipes)) {
-            data["skippedRecipes"] = [];
-            for (let item of this.skippedRecipes)
-                data["skippedRecipes"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
+export interface RecipeListItemDto {
+    id: string;
+    title: string;
+    servings: number;
+    totalTimeMinutes?: number | null;
+    category?: string | null;
+    imageUrl?: string | null;
+    hasLocalImage: boolean;
+    sourceProvider?: string | null;
+    tags: string[];
+    cookbookIds: string[];
 }
 
-export interface IRecipeFileImportResultDto {
-    created?: number;
-    updated?: number;
-    skipped?: number;
-    total?: number;
-    skippedRecipes?: RecipeFileImportSkippedDto[];
-
-    [key: string]: any;
+export interface RecipePageDto {
+    items: RecipeListItemDto[];
+    totalCount: number;
+    page: number;
+    pageSize: number;
 }
 
-export class RecipeFileImportSkippedDto implements IRecipeFileImportSkippedDto {
-    title?: string;
-    reason?: string;
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeFileImportSkippedDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.title = _data["title"];
-            this.reason = _data["reason"];
-        }
-    }
-
-    static fromJS(data: any): RecipeFileImportSkippedDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeFileImportSkippedDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["title"] = this.title;
-        data["reason"] = this.reason;
-        return data;
-    }
-}
-
-export interface IRecipeFileImportSkippedDto {
-    title?: string;
-    reason?: string;
-
-    [key: string]: any;
-}
-
-export class RecipeIngredientDto implements IRecipeIngredientDto {
-    id?: string;
-    sortOrder?: number;
-    name?: string;
-    quantity?: number | undefined;
-    unit?: string | undefined;
-    originalText?: string;
-    originalQuantity?: number | undefined;
-    originalUnit?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeIngredientDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.sortOrder = _data["sortOrder"];
-            this.name = _data["name"];
-            this.quantity = _data["quantity"];
-            this.unit = _data["unit"];
-            this.originalText = _data["originalText"];
-            this.originalQuantity = _data["originalQuantity"];
-            this.originalUnit = _data["originalUnit"];
-        }
-    }
-
-    static fromJS(data: any): RecipeIngredientDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeIngredientDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["sortOrder"] = this.sortOrder;
-        data["name"] = this.name;
-        data["quantity"] = this.quantity;
-        data["unit"] = this.unit;
-        data["originalText"] = this.originalText;
-        data["originalQuantity"] = this.originalQuantity;
-        data["originalUnit"] = this.originalUnit;
-        return data;
-    }
-}
-
-export interface IRecipeIngredientDto {
-    id?: string;
-    sortOrder?: number;
-    name?: string;
-    quantity?: number | undefined;
-    unit?: string | undefined;
-    originalText?: string;
-    originalQuantity?: number | undefined;
-    originalUnit?: string | undefined;
-
-    [key: string]: any;
-}
-
-export class RecipeListItemDto implements IRecipeListItemDto {
-    id?: string;
-    title?: string;
-    servings?: number;
-    totalTimeMinutes?: number | undefined;
-    category?: string | undefined;
-    imageUrl?: string | undefined;
-    hasLocalImage?: boolean;
-    sourceProvider?: string | undefined;
-    tags?: string[];
-    cookbookIds?: string[];
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeListItemDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.title = _data["title"];
-            this.servings = _data["servings"];
-            this.totalTimeMinutes = _data["totalTimeMinutes"];
-            this.category = _data["category"];
-            this.imageUrl = _data["imageUrl"];
-            this.hasLocalImage = _data["hasLocalImage"];
-            this.sourceProvider = _data["sourceProvider"];
-            if (Array.isArray(_data["tags"])) {
-                this.tags = [] as any;
-                for (let item of _data["tags"])
-                    this.tags!.push(item);
-            }
-            if (Array.isArray(_data["cookbookIds"])) {
-                this.cookbookIds = [] as any;
-                for (let item of _data["cookbookIds"])
-                    this.cookbookIds!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): RecipeListItemDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeListItemDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["title"] = this.title;
-        data["servings"] = this.servings;
-        data["totalTimeMinutes"] = this.totalTimeMinutes;
-        data["category"] = this.category;
-        data["imageUrl"] = this.imageUrl;
-        data["hasLocalImage"] = this.hasLocalImage;
-        data["sourceProvider"] = this.sourceProvider;
-        if (Array.isArray(this.tags)) {
-            data["tags"] = [];
-            for (let item of this.tags)
-                data["tags"].push(item);
-        }
-        if (Array.isArray(this.cookbookIds)) {
-            data["cookbookIds"] = [];
-            for (let item of this.cookbookIds)
-                data["cookbookIds"].push(item);
-        }
-        return data;
-    }
-}
-
-export interface IRecipeListItemDto {
-    id?: string;
-    title?: string;
-    servings?: number;
-    totalTimeMinutes?: number | undefined;
-    category?: string | undefined;
-    imageUrl?: string | undefined;
-    hasLocalImage?: boolean;
-    sourceProvider?: string | undefined;
-    tags?: string[];
-    cookbookIds?: string[];
-
-    [key: string]: any;
-}
-
-export class RecipeSourceDto implements IRecipeSourceDto {
-    name!: string;
-    host!: string;
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeSourceDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.name = _data["name"];
-            this.host = _data["host"];
-        }
-    }
-
-    static fromJS(data: any): RecipeSourceDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeSourceDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["name"] = this.name;
-        data["host"] = this.host;
-        return data;
-    }
-}
-
-export interface IRecipeSourceDto {
+export interface RecipeSourceDto {
     name: string;
     host: string;
-
-    [key: string]: any;
 }
 
-export class RecipeStepDto implements IRecipeStepDto {
-    id?: string;
-    stepNumber?: number;
-    instruction?: string;
-    originalInstruction?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeStepDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.stepNumber = _data["stepNumber"];
-            this.instruction = _data["instruction"];
-            this.originalInstruction = _data["originalInstruction"];
-        }
-    }
-
-    static fromJS(data: any): RecipeStepDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeStepDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["stepNumber"] = this.stepNumber;
-        data["instruction"] = this.instruction;
-        data["originalInstruction"] = this.originalInstruction;
-        return data;
-    }
+export interface RecipeStepDto {
+    id: string;
+    stepNumber: number;
+    instruction: string;
+    originalInstruction?: string | null;
 }
 
-export interface IRecipeStepDto {
-    id?: string;
-    stepNumber?: number;
-    instruction?: string;
-    originalInstruction?: string | undefined;
-
-    [key: string]: any;
+export interface RecipeTagDto {
+    id: string;
+    name: string;
 }
 
-export class RecipeTagDto implements IRecipeTagDto {
-    id?: string;
-    name?: string;
-
-    [key: string]: any;
-
-    constructor(data?: IRecipeTagDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.id = _data["id"];
-            this.name = _data["name"];
-        }
-    }
-
-    static fromJS(data: any): RecipeTagDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new RecipeTagDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["id"] = this.id;
-        data["name"] = this.name;
-        return data;
-    }
+export interface ResolveFreezerReservationDto {
+    itemRef: string;
+    quantity: number;
+    action: string;
+    fingerprint?: string | null;
 }
 
-export interface IRecipeTagDto {
-    id?: string;
-    name?: string;
-
-    [key: string]: any;
-}
-
-export class ScraperIntegrationStatusDto implements IScraperIntegrationStatusDto {
-    configured!: boolean;
-    reachable!: boolean;
-    baseUrl!: string | undefined;
-    packageVersion!: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IScraperIntegrationStatusDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.configured = _data["configured"];
-            this.reachable = _data["reachable"];
-            this.baseUrl = _data["baseUrl"];
-            this.packageVersion = _data["packageVersion"];
-        }
-    }
-
-    static fromJS(data: any): ScraperIntegrationStatusDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ScraperIntegrationStatusDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["configured"] = this.configured;
-        data["reachable"] = this.reachable;
-        data["baseUrl"] = this.baseUrl;
-        data["packageVersion"] = this.packageVersion;
-        return data;
-    }
-}
-
-export interface IScraperIntegrationStatusDto {
+export interface ScraperIntegrationStatusDto {
     configured: boolean;
     reachable: boolean;
-    baseUrl: string | undefined;
-    packageVersion: string | undefined;
-
-    [key: string]: any;
+    baseUrl: string | null;
+    packageVersion: string | null;
 }
 
-export class ScraperUpdateRequestDto implements IScraperUpdateRequestDto {
-    version!: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IScraperUpdateRequestDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.version = _data["version"];
-        }
-    }
-
-    static fromJS(data: any): ScraperUpdateRequestDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ScraperUpdateRequestDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["version"] = this.version;
-        return data;
-    }
+export interface ScraperUpdateRequestDto {
+    version: string | null;
 }
 
-export interface IScraperUpdateRequestDto {
-    version: string | undefined;
-
-    [key: string]: any;
+export interface ScraperUpdateResponseDto {
+    targetVersion: string | null;
 }
 
-export class ScraperUpdateResponseDto implements IScraperUpdateResponseDto {
-    targetVersion!: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IScraperUpdateResponseDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.targetVersion = _data["targetVersion"];
-        }
-    }
-
-    static fromJS(data: any): ScraperUpdateResponseDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ScraperUpdateResponseDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["targetVersion"] = this.targetVersion;
-        return data;
-    }
+export interface ScraperUpdateStatusDto {
+    status: string;
+    activeVersion: string | null;
+    updatedAt: string | null;
+    error: string | null;
 }
 
-export interface IScraperUpdateResponseDto {
-    targetVersion: string | undefined;
-
-    [key: string]: any;
-}
-
-export class ScraperVersionCheckDto implements IScraperVersionCheckDto {
-    installedVersion!: string;
-    latestVersion!: string | undefined;
-    updateAvailable!: boolean;
-
-    [key: string]: any;
-
-    constructor(data?: IScraperVersionCheckDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.installedVersion = _data["installedVersion"];
-            this.latestVersion = _data["latestVersion"];
-            this.updateAvailable = _data["updateAvailable"];
-        }
-    }
-
-    static fromJS(data: any): ScraperVersionCheckDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ScraperVersionCheckDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["installedVersion"] = this.installedVersion;
-        data["latestVersion"] = this.latestVersion;
-        data["updateAvailable"] = this.updateAvailable;
-        return data;
-    }
-}
-
-export interface IScraperVersionCheckDto {
+export interface ScraperVersionCheckDto {
     installedVersion: string;
-    latestVersion: string | undefined;
+    latestVersion: string | null;
     updateAvailable: boolean;
-
-    [key: string]: any;
 }
 
-export class SetEatenDto implements ISetEatenDto {
-    status?: number | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: ISetEatenDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.status = _data["status"];
-        }
-    }
-
-    static fromJS(data: any): SetEatenDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new SetEatenDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["status"] = this.status;
-        return data;
-    }
+export interface SetEatenDto {
+    status?: EatenStatus | null;
 }
 
-export interface ISetEatenDto {
-    status?: number | undefined;
-
-    [key: string]: any;
-}
-
-export class SetMealRecipeDto implements ISetMealRecipeDto {
-    recipeId!: string;
-
-    [key: string]: any;
-
-    constructor(data?: ISetMealRecipeDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.recipeId = _data["recipeId"];
-        }
-    }
-
-    static fromJS(data: any): SetMealRecipeDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new SetMealRecipeDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["recipeId"] = this.recipeId;
-        return data;
-    }
-}
-
-export interface ISetMealRecipeDto {
+export interface SetMealRecipeDto {
     recipeId: string;
-
-    [key: string]: any;
 }
 
-export class SetRatingDto implements ISetRatingDto {
-    rating?: number;
-
-    [key: string]: any;
-
-    constructor(data?: ISetRatingDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.rating = _data["rating"];
-        }
-    }
-
-    static fromJS(data: any): SetRatingDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new SetRatingDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["rating"] = this.rating;
-        return data;
-    }
+export interface SetRatingDto {
+    rating: number;
 }
 
-export interface ISetRatingDto {
-    rating?: number;
-
-    [key: string]: any;
+export interface ShoppingListDto {
+    from: string;
+    to: string;
+    items: ShoppingListItemDto[];
+    reminders: ShoppingListReminderDto[];
 }
 
-export class ShoppingListDto implements IShoppingListDto {
-    from?: string;
-    to?: string;
-    items?: ShoppingListItemDto[];
-    reminders?: ShoppingListReminderDto[];
-
-    [key: string]: any;
-
-    constructor(data?: IShoppingListDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.from = _data["from"];
-            this.to = _data["to"];
-            if (Array.isArray(_data["items"])) {
-                this.items = [] as any;
-                for (let item of _data["items"])
-                    this.items!.push(ShoppingListItemDto.fromJS(item));
-            }
-            if (Array.isArray(_data["reminders"])) {
-                this.reminders = [] as any;
-                for (let item of _data["reminders"])
-                    this.reminders!.push(ShoppingListReminderDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): ShoppingListDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ShoppingListDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["from"] = this.from;
-        data["to"] = this.to;
-        if (Array.isArray(this.items)) {
-            data["items"] = [];
-            for (let item of this.items)
-                data["items"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.reminders)) {
-            data["reminders"] = [];
-            for (let item of this.reminders)
-                data["reminders"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
+export interface ShoppingListItemDto {
+    name: string;
+    quantity?: number | null;
+    unit?: string | null;
+    sourceRecipes: string[];
 }
 
-export interface IShoppingListDto {
-    from?: string;
-    to?: string;
-    items?: ShoppingListItemDto[];
-    reminders?: ShoppingListReminderDto[];
-
-    [key: string]: any;
+export interface ShoppingListReminderDto {
+    plannedMealId: string;
+    date: string;
+    text: string;
 }
 
-export class ShoppingListItemDto implements IShoppingListItemDto {
-    name?: string;
-    quantity?: number | undefined;
-    unit?: string | undefined;
-    sourceRecipes?: string[];
-
-    [key: string]: any;
-
-    constructor(data?: IShoppingListItemDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.name = _data["name"];
-            this.quantity = _data["quantity"];
-            this.unit = _data["unit"];
-            if (Array.isArray(_data["sourceRecipes"])) {
-                this.sourceRecipes = [] as any;
-                for (let item of _data["sourceRecipes"])
-                    this.sourceRecipes!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): ShoppingListItemDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ShoppingListItemDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["name"] = this.name;
-        data["quantity"] = this.quantity;
-        data["unit"] = this.unit;
-        if (Array.isArray(this.sourceRecipes)) {
-            data["sourceRecipes"] = [];
-            for (let item of this.sourceRecipes)
-                data["sourceRecipes"].push(item);
-        }
-        return data;
-    }
+export interface SuggestionStatusDto {
+    enabled: boolean;
 }
 
-export interface IShoppingListItemDto {
-    name?: string;
-    quantity?: number | undefined;
-    unit?: string | undefined;
-    sourceRecipes?: string[];
-
-    [key: string]: any;
-}
-
-export class ShoppingListReminderDto implements IShoppingListReminderDto {
-    plannedMealId?: string;
-    date?: string;
-    text?: string;
-
-    [key: string]: any;
-
-    constructor(data?: IShoppingListReminderDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.plannedMealId = _data["plannedMealId"];
-            this.date = _data["date"];
-            this.text = _data["text"];
-        }
-    }
-
-    static fromJS(data: any): ShoppingListReminderDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ShoppingListReminderDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["plannedMealId"] = this.plannedMealId;
-        data["date"] = this.date;
-        data["text"] = this.text;
-        return data;
-    }
-}
-
-export interface IShoppingListReminderDto {
-    plannedMealId?: string;
-    date?: string;
-    text?: string;
-
-    [key: string]: any;
-}
-
-export class SuggestionStatusDto implements ISuggestionStatusDto {
-    enabled?: boolean;
-
-    [key: string]: any;
-
-    constructor(data?: ISuggestionStatusDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.enabled = _data["enabled"];
-        }
-    }
-
-    static fromJS(data: any): SuggestionStatusDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new SuggestionStatusDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["enabled"] = this.enabled;
-        return data;
-    }
-}
-
-export interface ISuggestionStatusDto {
-    enabled?: boolean;
-
-    [key: string]: any;
-}
-
-export class SuggestWeekRequestDto implements ISuggestWeekRequestDto {
-    weekStart!: string;
-    attendeeIds?: string[];
-    selectedDates?: string[] | undefined;
-    instructions?: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: ISuggestWeekRequestDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.weekStart = _data["weekStart"];
-            if (Array.isArray(_data["attendeeIds"])) {
-                this.attendeeIds = [] as any;
-                for (let item of _data["attendeeIds"])
-                    this.attendeeIds!.push(item);
-            }
-            if (Array.isArray(_data["selectedDates"])) {
-                this.selectedDates = [] as any;
-                for (let item of _data["selectedDates"])
-                    this.selectedDates!.push(item);
-            }
-            this.instructions = _data["instructions"];
-        }
-    }
-
-    static fromJS(data: any): SuggestWeekRequestDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new SuggestWeekRequestDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["weekStart"] = this.weekStart;
-        if (Array.isArray(this.attendeeIds)) {
-            data["attendeeIds"] = [];
-            for (let item of this.attendeeIds)
-                data["attendeeIds"].push(item);
-        }
-        if (Array.isArray(this.selectedDates)) {
-            data["selectedDates"] = [];
-            for (let item of this.selectedDates)
-                data["selectedDates"].push(item);
-        }
-        data["instructions"] = this.instructions;
-        return data;
-    }
-}
-
-export interface ISuggestWeekRequestDto {
+export interface SuggestWeekRequestDto {
     weekStart: string;
-    attendeeIds?: string[];
-    selectedDates?: string[] | undefined;
-    instructions?: string | undefined;
-
-    [key: string]: any;
+    attendeeIds: string[];
+    selectedDates?: string[] | null;
+    instructions?: string | null;
 }
 
-export class SupportedLanguageDto implements ISupportedLanguageDto {
-    code!: string;
-    displayName!: string;
-
-    [key: string]: any;
-
-    constructor(data?: ISupportedLanguageDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.code = _data["code"];
-            this.displayName = _data["displayName"];
-        }
-    }
-
-    static fromJS(data: any): SupportedLanguageDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new SupportedLanguageDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["code"] = this.code;
-        data["displayName"] = this.displayName;
-        return data;
-    }
-}
-
-export interface ISupportedLanguageDto {
+export interface SupportedLanguageDto {
     code: string;
     displayName: string;
-
-    [key: string]: any;
 }
 
-export class ToggleAutoCollectionDto implements IToggleAutoCollectionDto {
-    enabled?: boolean;
-
-    [key: string]: any;
-
-    constructor(data?: IToggleAutoCollectionDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.enabled = _data["enabled"];
-        }
-    }
-
-    static fromJS(data: any): ToggleAutoCollectionDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ToggleAutoCollectionDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["enabled"] = this.enabled;
-        return data;
-    }
+export interface ToggleAutoCollectionDto {
+    enabled: boolean;
 }
 
-export interface IToggleAutoCollectionDto {
-    enabled?: boolean;
-
-    [key: string]: any;
+export interface UnmetPlanningRequirementDto {
+    id: string;
+    message: string;
 }
 
-export class UpdateAiPromptDto implements IUpdateAiPromptDto {
-    editablePrompt!: string;
-
-    [key: string]: any;
-
-    constructor(data?: IUpdateAiPromptDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.editablePrompt = _data["editablePrompt"];
-        }
-    }
-
-    static fromJS(data: any): UpdateAiPromptDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UpdateAiPromptDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["editablePrompt"] = this.editablePrompt;
-        return data;
-    }
-}
-
-export interface IUpdateAiPromptDto {
+export interface UpdateAiPromptDto {
     editablePrompt: string;
-
-    [key: string]: any;
 }
 
-export class UpdateCookbookDto implements IUpdateCookbookDto {
-    name!: string;
-
-    [key: string]: any;
-
-    constructor(data?: IUpdateCookbookDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.name = _data["name"];
-        }
-    }
-
-    static fromJS(data: any): UpdateCookbookDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UpdateCookbookDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["name"] = this.name;
-        return data;
-    }
-}
-
-export interface IUpdateCookbookDto {
+export interface UpdateCookbookDto {
     name: string;
-
-    [key: string]: any;
 }
 
-export class UpdateFamilyMemberDto implements IUpdateFamilyMemberDto {
-    name!: string;
-    isGuest?: boolean;
-    allergyTags?: DietaryTagEntryDto[];
-    dietTags?: DietaryTagEntryDto[];
-    preferenceNotes?: string | undefined;
-    isActive?: boolean;
-
-    [key: string]: any;
-
-    constructor(data?: IUpdateFamilyMemberDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.name = _data["name"];
-            this.isGuest = _data["isGuest"];
-            if (Array.isArray(_data["allergyTags"])) {
-                this.allergyTags = [] as any;
-                for (let item of _data["allergyTags"])
-                    this.allergyTags!.push(DietaryTagEntryDto.fromJS(item));
-            }
-            if (Array.isArray(_data["dietTags"])) {
-                this.dietTags = [] as any;
-                for (let item of _data["dietTags"])
-                    this.dietTags!.push(DietaryTagEntryDto.fromJS(item));
-            }
-            this.preferenceNotes = _data["preferenceNotes"];
-            this.isActive = _data["isActive"];
-        }
-    }
-
-    static fromJS(data: any): UpdateFamilyMemberDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UpdateFamilyMemberDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["name"] = this.name;
-        data["isGuest"] = this.isGuest;
-        if (Array.isArray(this.allergyTags)) {
-            data["allergyTags"] = [];
-            for (let item of this.allergyTags)
-                data["allergyTags"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.dietTags)) {
-            data["dietTags"] = [];
-            for (let item of this.dietTags)
-                data["dietTags"].push(item ? item.toJSON() : undefined as any);
-        }
-        data["preferenceNotes"] = this.preferenceNotes;
-        data["isActive"] = this.isActive;
-        return data;
-    }
-}
-
-export interface IUpdateFamilyMemberDto {
+export interface UpdateFamilyMemberDto {
     name: string;
-    isGuest?: boolean;
-    allergyTags?: DietaryTagEntryDto[];
-    dietTags?: DietaryTagEntryDto[];
-    preferenceNotes?: string | undefined;
-    isActive?: boolean;
-
-    [key: string]: any;
+    isGuest: boolean;
+    allergyTags: DietaryTagEntryDto[];
+    dietTags: DietaryTagEntryDto[];
+    preferenceNotes?: string | null;
+    isActive: boolean;
 }
 
-export class UpdatePlannedMealDto implements IUpdatePlannedMealDto {
-    date!: string;
-    mealType?: number;
-    course?: number;
-    recipeId?: string | undefined;
-    dishName?: string | undefined;
-    vagueInstruction?: string | undefined;
-    freezyItemRef?: string | undefined;
-    freezyItemQuantity?: number;
-    notes?: string | undefined;
-    familyMemberIds?: string[];
-
-    [key: string]: any;
-
-    constructor(data?: IUpdatePlannedMealDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.date = _data["date"];
-            this.mealType = _data["mealType"];
-            this.course = _data["course"];
-            this.recipeId = _data["recipeId"];
-            this.dishName = _data["dishName"];
-            this.vagueInstruction = _data["vagueInstruction"];
-            this.freezyItemRef = _data["freezyItemRef"];
-            this.freezyItemQuantity = _data["freezyItemQuantity"];
-            this.notes = _data["notes"];
-            if (Array.isArray(_data["familyMemberIds"])) {
-                this.familyMemberIds = [] as any;
-                for (let item of _data["familyMemberIds"])
-                    this.familyMemberIds!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): UpdatePlannedMealDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UpdatePlannedMealDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["date"] = this.date;
-        data["mealType"] = this.mealType;
-        data["course"] = this.course;
-        data["recipeId"] = this.recipeId;
-        data["dishName"] = this.dishName;
-        data["vagueInstruction"] = this.vagueInstruction;
-        data["freezyItemRef"] = this.freezyItemRef;
-        data["freezyItemQuantity"] = this.freezyItemQuantity;
-        data["notes"] = this.notes;
-        if (Array.isArray(this.familyMemberIds)) {
-            data["familyMemberIds"] = [];
-            for (let item of this.familyMemberIds)
-                data["familyMemberIds"].push(item);
-        }
-        return data;
-    }
-}
-
-export interface IUpdatePlannedMealDto {
+export interface UpdatePlannedMealDto {
     date: string;
-    mealType?: number;
-    course?: number;
-    recipeId?: string | undefined;
-    dishName?: string | undefined;
-    vagueInstruction?: string | undefined;
-    freezyItemRef?: string | undefined;
-    freezyItemQuantity?: number;
-    notes?: string | undefined;
-    familyMemberIds?: string[];
-
-    [key: string]: any;
+    mealType: MealType;
+    course: Course;
+    recipeId?: string | null;
+    dishName?: string | null;
+    vagueInstruction?: string | null;
+    freezyItemRef?: string | null;
+    freezyItemQuantity: number;
+    notes?: string | null;
+    familyMemberIds: string[];
 }
 
-export class UpdateRecipeDto implements IUpdateRecipeDto {
-    title!: string;
-    originalTitle?: string | undefined;
-    description?: string | undefined;
-    originalDescription?: string | undefined;
-    contentLanguage?: string | undefined;
-    servings?: number;
-    prepTimeMinutes?: number | undefined;
-    cookTimeMinutes?: number | undefined;
-    totalTimeMinutes?: number | undefined;
-    category?: string | undefined;
-    keywords?: string | undefined;
-    imageUrl?: string | undefined;
-    videoUrl?: string | undefined;
-    ingredients?: CreateRecipeIngredientDto[];
-    steps?: CreateRecipeStepDto[];
-    tags?: string[];
-    containsClasses?: string[] | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IUpdateRecipeDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.title = _data["title"];
-            this.originalTitle = _data["originalTitle"];
-            this.description = _data["description"];
-            this.originalDescription = _data["originalDescription"];
-            this.contentLanguage = _data["contentLanguage"];
-            this.servings = _data["servings"];
-            this.prepTimeMinutes = _data["prepTimeMinutes"];
-            this.cookTimeMinutes = _data["cookTimeMinutes"];
-            this.totalTimeMinutes = _data["totalTimeMinutes"];
-            this.category = _data["category"];
-            this.keywords = _data["keywords"];
-            this.imageUrl = _data["imageUrl"];
-            this.videoUrl = _data["videoUrl"];
-            if (Array.isArray(_data["ingredients"])) {
-                this.ingredients = [] as any;
-                for (let item of _data["ingredients"])
-                    this.ingredients!.push(CreateRecipeIngredientDto.fromJS(item));
-            }
-            if (Array.isArray(_data["steps"])) {
-                this.steps = [] as any;
-                for (let item of _data["steps"])
-                    this.steps!.push(CreateRecipeStepDto.fromJS(item));
-            }
-            if (Array.isArray(_data["tags"])) {
-                this.tags = [] as any;
-                for (let item of _data["tags"])
-                    this.tags!.push(item);
-            }
-            if (Array.isArray(_data["containsClasses"])) {
-                this.containsClasses = [] as any;
-                for (let item of _data["containsClasses"])
-                    this.containsClasses!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): UpdateRecipeDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UpdateRecipeDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["title"] = this.title;
-        data["originalTitle"] = this.originalTitle;
-        data["description"] = this.description;
-        data["originalDescription"] = this.originalDescription;
-        data["contentLanguage"] = this.contentLanguage;
-        data["servings"] = this.servings;
-        data["prepTimeMinutes"] = this.prepTimeMinutes;
-        data["cookTimeMinutes"] = this.cookTimeMinutes;
-        data["totalTimeMinutes"] = this.totalTimeMinutes;
-        data["category"] = this.category;
-        data["keywords"] = this.keywords;
-        data["imageUrl"] = this.imageUrl;
-        data["videoUrl"] = this.videoUrl;
-        if (Array.isArray(this.ingredients)) {
-            data["ingredients"] = [];
-            for (let item of this.ingredients)
-                data["ingredients"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.steps)) {
-            data["steps"] = [];
-            for (let item of this.steps)
-                data["steps"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.tags)) {
-            data["tags"] = [];
-            for (let item of this.tags)
-                data["tags"].push(item);
-        }
-        if (Array.isArray(this.containsClasses)) {
-            data["containsClasses"] = [];
-            for (let item of this.containsClasses)
-                data["containsClasses"].push(item);
-        }
-        return data;
-    }
-}
-
-export interface IUpdateRecipeDto {
+export interface UpdateRecipeDto {
     title: string;
-    originalTitle?: string | undefined;
-    description?: string | undefined;
-    originalDescription?: string | undefined;
-    contentLanguage?: string | undefined;
-    servings?: number;
-    prepTimeMinutes?: number | undefined;
-    cookTimeMinutes?: number | undefined;
-    totalTimeMinutes?: number | undefined;
-    category?: string | undefined;
-    keywords?: string | undefined;
-    imageUrl?: string | undefined;
-    videoUrl?: string | undefined;
-    ingredients?: CreateRecipeIngredientDto[];
-    steps?: CreateRecipeStepDto[];
-    tags?: string[];
-    containsClasses?: string[] | undefined;
-
-    [key: string]: any;
+    originalTitle?: string | null;
+    description?: string | null;
+    originalDescription?: string | null;
+    contentLanguage?: string | null;
+    servings: number;
+    prepTimeMinutes?: number | null;
+    cookTimeMinutes?: number | null;
+    totalTimeMinutes?: number | null;
+    category?: string | null;
+    keywords?: string | null;
+    imageUrl?: string | null;
+    videoUrl?: string | null;
+    ingredients: CreateRecipeIngredientDto[];
+    steps: CreateRecipeStepDto[];
+    tags: string[];
+    containsClasses?: string[] | null;
 }
 
-export class UpdateRecipeFactsDto implements IUpdateRecipeFactsDto {
-    contains!: string[];
-
-    [key: string]: any;
-
-    constructor(data?: IUpdateRecipeFactsDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-        if (!data) {
-            this.contains = [];
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            if (Array.isArray(_data["contains"])) {
-                this.contains = [] as any;
-                for (let item of _data["contains"])
-                    this.contains!.push(item);
-            }
-        }
-    }
-
-    static fromJS(data: any): UpdateRecipeFactsDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UpdateRecipeFactsDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        if (Array.isArray(this.contains)) {
-            data["contains"] = [];
-            for (let item of this.contains)
-                data["contains"].push(item);
-        }
-        return data;
-    }
-}
-
-export interface IUpdateRecipeFactsDto {
+export interface UpdateRecipeFactsDto {
     contains: string[];
-
-    [key: string]: any;
 }
 
-export class UpdateUserPreferencesDto implements IUpdateUserPreferencesDto {
-    measurementSystem?: MeasurementSystem | undefined;
-    firstDayOfWeek?: FirstDayOfWeek | undefined;
-    preferredLanguage?: string | undefined;
-    translateImportedRecipes?: boolean | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IUpdateUserPreferencesDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.measurementSystem = _data["measurementSystem"];
-            this.firstDayOfWeek = _data["firstDayOfWeek"];
-            this.preferredLanguage = _data["preferredLanguage"];
-            this.translateImportedRecipes = _data["translateImportedRecipes"];
-        }
-    }
-
-    static fromJS(data: any): UpdateUserPreferencesDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UpdateUserPreferencesDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["measurementSystem"] = this.measurementSystem;
-        data["firstDayOfWeek"] = this.firstDayOfWeek;
-        data["preferredLanguage"] = this.preferredLanguage;
-        data["translateImportedRecipes"] = this.translateImportedRecipes;
-        return data;
-    }
+export interface UpdateUserPreferencesDto {
+    measurementSystem?: MeasurementSystem | null;
+    firstDayOfWeek?: FirstDayOfWeek | null;
+    preferredLanguage?: string | null;
+    translateImportedRecipes?: boolean | null;
 }
 
-export interface IUpdateUserPreferencesDto {
-    measurementSystem?: MeasurementSystem | undefined;
-    firstDayOfWeek?: FirstDayOfWeek | undefined;
-    preferredLanguage?: string | undefined;
-    translateImportedRecipes?: boolean | undefined;
-
-    [key: string]: any;
-}
-
-export class UpsertUserSettingDto implements IUpsertUserSettingDto {
-    value!: string;
-
-    [key: string]: any;
-
-    constructor(data?: IUpsertUserSettingDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.value = _data["value"];
-        }
-    }
-
-    static fromJS(data: any): UpsertUserSettingDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UpsertUserSettingDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["value"] = this.value;
-        return data;
-    }
-}
-
-export interface IUpsertUserSettingDto {
+export interface UpsertUserSettingDto {
     value: string;
-
-    [key: string]: any;
 }
 
-export class UserPreferencesDto implements IUserPreferencesDto {
-    measurementSystem!: MeasurementSystem;
-    firstDayOfWeek!: FirstDayOfWeek;
-    preferredLanguage!: string;
-    translateImportedRecipes!: boolean;
-    supportedLanguages!: SupportedLanguageDto[];
-
-    [key: string]: any;
-
-    constructor(data?: IUserPreferencesDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-        if (!data) {
-            this.supportedLanguages = [];
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.measurementSystem = _data["measurementSystem"];
-            this.firstDayOfWeek = _data["firstDayOfWeek"];
-            this.preferredLanguage = _data["preferredLanguage"];
-            this.translateImportedRecipes = _data["translateImportedRecipes"];
-            if (Array.isArray(_data["supportedLanguages"])) {
-                this.supportedLanguages = [] as any;
-                for (let item of _data["supportedLanguages"])
-                    this.supportedLanguages!.push(SupportedLanguageDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): UserPreferencesDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UserPreferencesDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["measurementSystem"] = this.measurementSystem;
-        data["firstDayOfWeek"] = this.firstDayOfWeek;
-        data["preferredLanguage"] = this.preferredLanguage;
-        data["translateImportedRecipes"] = this.translateImportedRecipes;
-        if (Array.isArray(this.supportedLanguages)) {
-            data["supportedLanguages"] = [];
-            for (let item of this.supportedLanguages)
-                data["supportedLanguages"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
-}
-
-export interface IUserPreferencesDto {
+export interface UserPreferencesDto {
     measurementSystem: MeasurementSystem;
     firstDayOfWeek: FirstDayOfWeek;
     preferredLanguage: string;
     translateImportedRecipes: boolean;
     supportedLanguages: SupportedLanguageDto[];
-
-    [key: string]: any;
+    householdTimeZone: string;
 }
 
-export class UserSettingDto implements IUserSettingDto {
-    key?: string;
-    value?: string;
-    createdAt?: string;
-    updatedAt?: string;
-
-    [key: string]: any;
-
-    constructor(data?: IUserSettingDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.key = _data["key"];
-            this.value = _data["value"];
-            this.createdAt = _data["createdAt"];
-            this.updatedAt = _data["updatedAt"];
-        }
-    }
-
-    static fromJS(data: any): UserSettingDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UserSettingDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["key"] = this.key;
-        data["value"] = this.value;
-        data["createdAt"] = this.createdAt;
-        data["updatedAt"] = this.updatedAt;
-        return data;
-    }
+export interface UserSettingDto {
+    key: string;
+    value: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
-export interface IUserSettingDto {
-    key?: string;
-    value?: string;
-    createdAt?: string;
-    updatedAt?: string;
-
-    [key: string]: any;
-}
-
-export class WebSearchIntegrationStatusDto implements IWebSearchIntegrationStatusDto {
-    configured!: boolean;
-    reachable!: boolean;
-    operational!: boolean;
-    provider!: string | undefined;
-    baseUrl!: string | undefined;
-    error!: string | undefined;
-
-    [key: string]: any;
-
-    constructor(data?: IWebSearchIntegrationStatusDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            for (var property in _data) {
-                if (_data.hasOwnProperty(property))
-                    this[property] = _data[property];
-            }
-            this.configured = _data["configured"];
-            this.reachable = _data["reachable"];
-            this.operational = _data["operational"];
-            this.provider = _data["provider"];
-            this.baseUrl = _data["baseUrl"];
-            this.error = _data["error"];
-        }
-    }
-
-    static fromJS(data: any): WebSearchIntegrationStatusDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new WebSearchIntegrationStatusDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        for (var property in this) {
-            if (this.hasOwnProperty(property))
-                data[property] = this[property];
-        }
-        data["configured"] = this.configured;
-        data["reachable"] = this.reachable;
-        data["operational"] = this.operational;
-        data["provider"] = this.provider;
-        data["baseUrl"] = this.baseUrl;
-        data["error"] = this.error;
-        return data;
-    }
-}
-
-export interface IWebSearchIntegrationStatusDto {
+export interface WebSearchIntegrationStatusDto {
     configured: boolean;
     reachable: boolean;
     operational: boolean;
-    provider: string | undefined;
-    baseUrl: string | undefined;
-    error: string | undefined;
+    provider: string | null;
+    baseUrl: string | null;
+    error: string | null;
+}
 
-    [key: string]: any;
+export interface FileParameter {
+    data: any;
+    fileName: string;
+}
+
+export class ApiException extends Error {
+    override message: string;
+    status: number;
+    response: string;
+    headers: { [key: string]: any; };
+    result: any;
+
+    constructor(message: string, status: number, response: string, headers: { [key: string]: any; }, result: any) {
+        super();
+
+        this.message = message;
+        this.status = status;
+        this.response = response;
+        this.headers = headers;
+        this.result = result;
+    }
+
+    protected isApiException = true;
+
+    static isApiException(obj: any): obj is ApiException {
+        return obj.isApiException === true;
+    }
+}
+
+function throwException(message: string, status: number, response: string, headers: { [key: string]: any; }, result?: any): Observable<any> {
+    if (result !== null && result !== undefined)
+        return _observableThrow(result);
+    else
+        return _observableThrow(new ApiException(message, status, response, headers, null));
+}
+
+function blobToText(blob: any): Observable<string> {
+    return new Observable<string>((observer: any) => {
+        if (!blob) {
+            observer.next("");
+            observer.complete();
+        } else {
+            let reader = new FileReader();
+            reader.onload = event => {
+                observer.next((event.target as any).result);
+                observer.complete();
+            };
+            reader.readAsText(blob);
+        }
+    });
 }

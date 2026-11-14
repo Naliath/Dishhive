@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, output, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { inject, ChangeDetectionStrategy, Component, OnInit, output, signal } from '@angular/core';
 import { FormControl, FormGroup, FormGroupDirective, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -17,7 +18,7 @@ import { FamilyMember } from '../../models/family-member.model';
 import { FirstDayOfWeek, MeasurementSystem } from '../../models/user-setting.model';
 import { SupportedLanguage } from '../../models/user-setting.model';
 import { forkJoin } from 'rxjs';
-import { LanguageService, TranslatePipe } from '../../services/language.service';
+import { LanguageService, TranslatePipe, TranslatePluralPipe } from '../../services/language.service';
 import { FamilyMembersService } from '../../services/family-members.service';
 import { OnboardingService } from '../../services/onboarding.service';
 import { SettingsService } from '../../services/settings.service';
@@ -25,7 +26,7 @@ import { SettingsService } from '../../services/settings.service';
 @Component({
   selector: 'app-onboarding',
   standalone: true,
-  imports: [
+  imports: [TranslatePluralPipe,
     ReactiveFormsModule,
     MatButtonModule,
     MatCardModule,
@@ -46,6 +47,7 @@ import { SettingsService } from '../../services/settings.service';
   styleUrl: './onboarding.scss'
 })
 export class OnboardingComponent implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
   readonly finished = output<void>();
   readonly MeasurementSystem = MeasurementSystem;
   readonly FirstDayOfWeek = FirstDayOfWeek;
@@ -92,7 +94,7 @@ export class OnboardingComponent implements OnInit {
 
     this.familyMembersService.getMembers().subscribe({
       next: members => this.members.set(members),
-      error: () => this.errorMessage.set('Saved household members could not be loaded.')
+      error: () => this.errorMessage.set(this.uiLanguage.t('ui.savedHouseholdMembersCouldNotBeLoaded'))
     });
   }
 
@@ -118,7 +120,7 @@ export class OnboardingComponent implements OnInit {
       },
       error: () => {
         this.savingPreferences.set(false);
-        this.errorMessage.set('Your preferences could not be saved. Please try again.');
+        this.errorMessage.set(this.uiLanguage.t('ui.yourPreferencesCouldNotBeSavedPleaseTryAgain'));
       }
     });
   }
@@ -152,11 +154,11 @@ export class OnboardingComponent implements OnInit {
         this.memberSubmissionAttempted.set(false);
         formDirective.resetForm({ name: '', isGuest: false });
         this.addingMember.set(false);
-        this.snackBar.open(`${member.name} added`, 'Dismiss', { duration: 2500 });
+        this.snackBar.open(this.uiLanguage.t('ui.valueAdded', { p0: (member.name) }), this.uiLanguage.t('common.dismiss'), { duration: 2500 });
       },
       error: () => {
         this.addingMember.set(false);
-        this.errorMessage.set('That household member could not be added. Please try again.');
+        this.errorMessage.set(this.uiLanguage.t('ui.thatHouseholdMemberCouldNotBeAddedPleaseTryAgain'));
       }
     });
   }
@@ -180,7 +182,7 @@ export class OnboardingComponent implements OnInit {
       next: () => this.finished.emit(),
       error: () => {
         this.finishing.set(false);
-        this.errorMessage.set('Setup could not be closed. Please try again.');
+        this.errorMessage.set(this.uiLanguage.t('ui.setupCouldNotBeClosedPleaseTryAgain'));
       }
     });
   }

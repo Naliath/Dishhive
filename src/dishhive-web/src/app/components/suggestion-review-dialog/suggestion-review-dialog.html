@@ -71,17 +71,35 @@
       </div>
     }
     @case ('review') {
+      @if (saveFailed()) {
+        <p role="alert">{{ 'weekPlanner.suggestions.saveFailed' | translate }}</p>
+      }
       @if (failed()) {
         <div class="suggestion-empty">
           <mat-icon>error_outline</mat-icon>
           <p>{{ 'weekPlanner.suggestions.loadError' | translate }}</p>
         </div>
-      } @else if (suggestions().length === 0) {
+      } @else {
+        @if (unmetRequirements().length > 0) {
+          <div class="fallback-banner unmet-banner" role="status">
+            <mat-icon>rule</mat-icon>
+            <div>
+              <strong>{{ 'weekPlanner.suggestions.unmetRequirements' | translate }}</strong>
+              <ul>
+                @for (requirement of unmetRequirements(); track requirement.id + requirement.message) {
+                  <li>{{ requirement.message }}</li>
+                }
+              </ul>
+            </div>
+          </div>
+        }
+      }
+      @if (!failed() && suggestions().length === 0) {
         <div class="suggestion-empty">
           <mat-icon>event_available</mat-icon>
           <p>{{ 'weekPlanner.suggestions.nothingToSuggest' | translate }}</p>
         </div>
-      } @else {
+      } @else if (!failed()) {
         @if (allFromFallback()) {
           <div class="fallback-banner">
             <mat-icon>info</mat-icon>
@@ -108,10 +126,19 @@
                 <div class="suggestion-row" (click)="toggle(item.index)">
                   <mat-checkbox
                     [checked]="isSelected(item.index)"
+                    [disabled]="saving() || acceptanceResults()[item.suggestion.id]?.status === 'needsReview'"
                     (click)="$event.stopPropagation()"
                     (change)="toggle(item.index)">
                   </mat-checkbox>
                   <div class="suggestion-body">
+                    @if (acceptanceResults()[item.suggestion.id]; as result) {
+                      <p class="suggestion-allergy" role="status">{{ result.error }}</p>
+                      @if (result.recipeId) {
+                        <a mat-button [routerLink]="['/recipes', result.recipeId]" (click)="$event.stopPropagation(); closeReview()">
+                          {{ 'weekPlanner.suggestions.reviewSavedRecipe' | translate }}
+                        </a>
+                      }
+                    }
                     <span class="suggestion-dish">
                       {{ item.suggestion.dishName }}
                       @if (item.suggestion.recipeId) {
@@ -181,7 +208,7 @@
             </mat-autocomplete>
           </mat-form-field>
         }
-        <button mat-stroked-button type="button" [disabled]="selectedDayCount() === 0" (click)="fetch()">
+        <button mat-stroked-button type="button" [disabled]="saving() || selectedDayCount() === 0" (click)="fetch()">
           <mat-icon>refresh</mat-icon>
           {{ 'weekPlanner.suggestions.regenerate' | translate }}
         </button>
@@ -191,7 +218,7 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close>{{ 'weekPlanner.suggestions.cancel' | translate }}</button>
+  <button mat-button [disabled]="saving()" (click)="closeReview()">{{ 'weekPlanner.suggestions.cancel' | translate }}</button>
   @if (phase() === 'compose') {
     <button mat-flat-button [disabled]="selectedDayCount() === 0" (click)="fetch()">
       <mat-icon>auto_awesome</mat-icon>
@@ -199,8 +226,8 @@
     </button>
   }
   @if (phase() === 'review' && !failed() && suggestions().length > 0) {
-    <button mat-flat-button [disabled]="selectedCount() === 0" (click)="addSelected()">
-      {{ 'weekPlanner.suggestions.addToPlan' | translate:{ count: selectedCount() } }}
+    <button mat-flat-button [disabled]="saving()" (click)="addSelected()">
+      {{ (selectedCount() === 0 ? 'weekPlanner.suggestions.finishReview' : 'weekPlanner.suggestions.addToPlan') | translate:{ count: selectedCount() } }}
     </button>
   }
 </mat-dialog-actions>

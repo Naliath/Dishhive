@@ -1,5 +1,5 @@
 .prompt-tag {
-  font-size: 10px;
+  font: var(--mat-sys-label-small);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 1px 8px;
@@ -17,8 +17,7 @@
   margin-block-end: 12px;
   padding: 10px 12px;
   border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.4;
+  font: var(--mat-sys-body-small);
   background: color-mix(in srgb, var(--mat-sys-tertiary) 12%, transparent);
   color: var(--mat-sys-on-surface);
 
@@ -35,9 +34,8 @@
   width: 100%;
 
   textarea {
+    font: var(--mat-sys-body-medium);
     font-family: monospace;
-    font-size: 13px;
-    line-height: 1.5;
   }
 }
 
@@ -50,7 +48,7 @@
 }
 
 .prompt-save-hint {
-  font-size: 12px;
+  font: var(--mat-sys-body-small);
   color: var(--mat-sys-on-surface-variant);
 }
 
@@ -63,7 +61,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 14px;
+    font: var(--mat-sys-title-small);
 
     mat-icon {
       font-size: 18px;
@@ -76,8 +74,7 @@
 
 .protected-explain {
   margin: 0 0 8px;
-  font-size: 12px;
-  line-height: 1.5;
+  font: var(--mat-sys-body-small);
   color: var(--mat-sys-on-surface-variant);
 }
 
@@ -85,8 +82,7 @@
   margin: 0;
   padding: 12px;
   border-radius: 8px;
-  font-size: 12px;
-  line-height: 1.5;
+  font: var(--mat-sys-body-small);
   white-space: pre-wrap;
   overflow-x: auto;
   background: var(--mat-sys-surface-container);

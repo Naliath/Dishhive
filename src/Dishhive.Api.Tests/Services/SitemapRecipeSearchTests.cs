@@ -9,6 +9,55 @@ namespace Dishhive.Api.Tests.Services;
 public class SitemapRecipeSearchTests
 {
     [Fact]
+    public async Task Search_SegmentsUnseenCompoundsUsingSourceVocabularyRegardlessOfWordOrder()
+    {
+        const string host = "recipes.example";
+        const string root = $"https://{host}/sitemap.xml";
+        var fetcher = Substitute.For<ISafeHttpFetcher>();
+        fetcher.GetAsync($"https://{host}/robots.txt", Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Resource($"Sitemap: {root}"));
+        fetcher.GetAsync(root, Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Resource(UrlSet(
+            $"https://{host}/curry-met-linzen", $"https://{host}/rijst-met-kip")));
+        var search = new SitemapRecipeSearch(fetcher, NullLogger<SitemapRecipeSearch>.Instance);
+        var result = Assert.Single(await search.SearchAsync("linzencurry", host, 1));
+        Assert.EndsWith("curry-met-linzen", result.Url);
+        Assert.Empty(await search.SearchAsync("unseencompound", host, 1));
+    }
+
+    [Fact]
+    public async Task Search_PrioritizesDiscriminatingTermsOverCommonFoodWords()
+    {
+        const string host = "recipes.example";
+        const string root = $"https://{host}/sitemap.xml";
+        var fetcher = Substitute.For<ISafeHttpFetcher>();
+        fetcher.GetAsync($"https://{host}/robots.txt", Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Resource($"Sitemap: {root}"));
+        fetcher.GetAsync(root, Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Resource(UrlSet(
+            $"https://{host}/stoofpot-a", $"https://{host}/stoofpot-b",
+            $"https://{host}/stoofpot-c", $"https://{host}/vegan-curry")));
+        var result = await new SitemapRecipeSearch(fetcher, NullLogger<SitemapRecipeSearch>.Instance)
+            .SearchAsync("vegan stoofpot", host, 1);
+        Assert.EndsWith("vegan-curry", Assert.Single(result).Url);
+    }
+
+    [Fact]
+    public async Task Search_MatchesCompoundFoodNamesWithoutMatchingSharedCategoryPaths()
+    {
+        const string host = "recipes.example";
+        const string root = $"https://{host}/sitemap.xml";
+        var fetcher = Substitute.For<ISafeHttpFetcher>();
+        fetcher.GetAsync($"https://{host}/robots.txt", Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Resource($"Sitemap: {root}"));
+        fetcher.GetAsync(root, Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Resource(UrlSet(
+            $"https://{host}/gerechten/kaas-met-brood",
+            $"https://{host}/gerechten/linzen-stoofpot")));
+        var search = new SitemapRecipeSearch(fetcher, NullLogger<SitemapRecipeSearch>.Instance);
+        Assert.Empty(await search.SearchAsync("gerecht", host, 5));
+        var result = Assert.Single(await search.SearchAsync("linzenstoofpot", host, 5));
+        Assert.EndsWith("linzen-stoofpot", result.Url);
+    }
+
+    [Fact]
     public async Task Search_IndexesRecipeSitemapAndRanksUnicodeTermsWithoutLanguageMappings()
     {
         const string host = "recipes.example";

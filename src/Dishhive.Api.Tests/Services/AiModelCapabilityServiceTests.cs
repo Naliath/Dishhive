@@ -25,7 +25,7 @@ public class AiModelCapabilityServiceTests
 
         public StubTester(AiOptions options, AiModelTestResult result)
             : base(Gate(options), options,
-                Substitute.For<IHttpClientFactory>(), NullLogger<AiModelTester>.Instance)
+                Substitute.For<IHttpClientFactory>(), NullLogger<AiModelTester>.Instance, TestHouseholdClock.System)
             => _result = result;
 
         public override Task<AiModelTestResult> RunAsync(
@@ -45,7 +45,7 @@ public class AiModelCapabilityServiceTests
 
         public BlockingTester(AiOptions options)
             : base(Gate(options), options,
-                Substitute.For<IHttpClientFactory>(), NullLogger<AiModelTester>.Instance)
+                Substitute.For<IHttpClientFactory>(), NullLogger<AiModelTester>.Instance, TestHouseholdClock.System)
         {
         }
 
@@ -75,7 +75,9 @@ public class AiModelCapabilityServiceTests
         ModelListed = true,
         ResponseMode = AiResponseMode.PromptedJson,
         EvaluationPassed = true,
-        Checks = [new AiModelTestCheck("Endpoint", true, checkDetail)],
+        PlanningIntentPassed = true,
+        Checks = [new AiModelTestCheck("Endpoint", true, checkDetail),
+            new AiModelTestCheck("Multilingual planning instructions", true, "intent passed")],
         TokensPerSecond = 12.5,
         ElapsedMs = 1234
     };
@@ -160,7 +162,7 @@ public class AiModelCapabilityServiceTests
         var firstTester = new StubTester(options, warning);
         var first = new AiModelCapabilityService(
             firstTester, options, ScopeFactory(dbName), NullLogger<AiModelCapabilityService>.Instance);
-        (await first.EnsureTestedAsync()).Verdict.Should().Be("warnings");
+        (await first.EnsureTestedAsync()).Verdict.Should().Be("failed");
 
         var secondTester = new StubTester(options, ResultFor(options, "should not run"));
         var second = new AiModelCapabilityService(
@@ -169,7 +171,7 @@ public class AiModelCapabilityServiceTests
 
         secondTester.Runs.Should().Be(0);
         reloaded.PlanningIntentPassed.Should().BeFalse();
-        reloaded.Verdict.Should().Be("warnings");
+        reloaded.Verdict.Should().Be("failed");
     }
 
     [Fact]
@@ -250,5 +252,24 @@ public class AiModelCapabilityServiceTests
         var reloaded = await third.EnsureTestedAsync();
         thirdTester.Runs.Should().Be(0);
         reloaded.Checks.Should().ContainSingle(c => c.Detail == "re-test run");
+    }
+
+    [Fact]
+    public async Task FailedQuality_WithWorkingFormat_UsesFailureCooldownAcrossRestart()
+    {
+        var dbName = $"cap-{Guid.NewGuid()}";
+        var options = Options();
+        var result = ResultFor(options, "old") with
+        {
+            TestedAt = DateTimeOffset.UtcNow.AddSeconds(-options.CapabilityFailureCooldownSeconds - 5),
+            PlanningIntentPassed = false,
+            Checks = [new AiModelTestCheck("Multilingual planning instructions", false, "intent failed")]
+        };
+        var first = new AiModelCapabilityService(new StubTester(options, result), options,
+            ScopeFactory(dbName), NullLogger<AiModelCapabilityService>.Instance);
+        (await first.EnsureTestedAsync()).PlanningEligible.Should().BeFalse();
+        var (second, tester) = Create(dbName, options);
+        (await second.EnsureTestedAsync()).PlanningEligible.Should().BeTrue();
+        tester.Runs.Should().Be(1, "format success must not cache failed task quality for the success lifetime");
     }
 }

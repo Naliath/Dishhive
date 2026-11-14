@@ -33,7 +33,7 @@
       [value]="themeService.currentTheme()"
       (change)="setTheme($event.value)"
       hideSingleSelectionIndicator="true"
-      aria-label="Colour scheme">
+      [attr.aria-label]="'ui.colourScheme' | translate">
       <mat-button-toggle value="auto">
         <mat-icon>brightness_auto</mat-icon>
         {{ 'settings.auto' | translate }}
@@ -70,7 +70,7 @@
       class="measurement-group"
       [value]="settingsService.measurementSystem()"
       (change)="setMeasurementSystem($event.value)"
-      aria-label="onboarding.measurementSystem">
+      [attr.aria-label]="'onboarding.measurements' | translate">
       <mat-radio-button [value]="MeasurementSystem.Metric">{{ 'settings.metricDefault' | translate }}</mat-radio-button>
       <mat-radio-button [value]="MeasurementSystem.Imperial">{{ 'settings.imperialUnits' | translate }}</mat-radio-button>
     </mat-radio-group>
@@ -90,7 +90,7 @@
       class="first-day-group"
       [value]="settingsService.firstDayOfWeek()"
       (change)="setFirstDayOfWeek($event.value)"
-      aria-label="onboarding.firstDayOfTheWeek">
+      [attr.aria-label]="'onboarding.firstDayOfTheWeek' | translate">
       <mat-radio-button [value]="FirstDayOfWeek.Monday">{{ 'settings.mondayDefault' | translate }}</mat-radio-button>
       <mat-radio-button [value]="FirstDayOfWeek.Sunday">{{ 'common.sunday' | translate }}</mat-radio-button>
     </mat-radio-group>

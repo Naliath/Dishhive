@@ -1,4 +1,4 @@
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { AiPlanningMetricsResponse } from '../../models/integration-status.model';
 import { IntegrationsService } from '../../services/integrations.service';
@@ -15,16 +15,36 @@ describe('AiPlanningStatsPage', () => {
     ]
   } as unknown as AiPlanningMetricsResponse;
 
-  it('loads task metrics and filters recent calls by task', () => {
-    const service = { getAiPlanningMetrics: vi.fn(() => of(metrics)) };
+  it('keeps the selected task when older requests finish or fail later', () => {
+    const oldRequest = new Subject<AiPlanningMetricsResponse>();
+    const currentRequest = new Subject<AiPlanningMetricsResponse>();
+    const service = { getAiPlanningMetrics: vi.fn()
+      .mockReturnValueOnce(oldRequest).mockReturnValueOnce(currentRequest) };
+    const page = new AiPlanningStatsPage(service as unknown as IntegrationsService);
+    page.refresh();
+    page.selectTask('recipe.translate');
+    const current = { ...metrics, calls: [metrics.calls[1]] };
+    currentRequest.next(current);
+    oldRequest.next(metrics);
+    oldRequest.error(new Error('late failure'));
+    expect(page.metrics()).toBe(current);
+    expect(page.failed()).toBe(false);
+    page.ngOnDestroy();
+  });
+
+  it('requests task-filtered calls from the server', () => {
+    const service = { getAiPlanningMetrics: vi.fn((_count: number, filters?: { task?: string }) => of({
+      ...metrics,
+      calls: filters?.task ? metrics.calls.filter(call => call.task === filters.task) : metrics.calls
+    })) };
     const page = new AiPlanningStatsPage(service as unknown as IntegrationsService);
 
     page.refresh();
     page.selectTask('recipe.translate');
 
-    expect(page.metrics()).toBe(metrics);
-    expect(page.visibleCalls().map(call => call.id)).toEqual(['2']);
-    expect(page.isFailure(page.visibleCalls()[0].outcome)).toBe(true);
+    expect(service.getAiPlanningMetrics).toHaveBeenLastCalledWith(30, { task: 'recipe.translate' });
+    expect(page.metrics()!.calls.map(call => call.id)).toEqual(['2']);
+    expect(page.isFailure(page.metrics()!.calls[0].outcome)).toBe(true);
   });
 
   it('clears stale metrics and exposes a refresh failure', () => {
@@ -42,7 +62,12 @@ describe('AiPlanningStatsPage', () => {
     const page = new AiPlanningStatsPage({} as IntegrationsService);
 
     expect(page.taskLabel('recipe.import_extract')).toBe('aiStats.tasks.recipeImportExtraction');
+    expect(page.taskLabel('planning.research')).toBe('aiStats.tasks.planningResearch');
+    expect(page.taskLabel('recipe.dish_match')).toBe('aiStats.tasks.recipeDishMatch');
     expect(page.outcomeLabel('parseFailure')).toBe('aiStats.outcomes.parseFailure');
+    expect(page.outcomeLabel('rateLimited')).toBe('aiStats.outcomes.rateLimited');
+    expect(page.outcomeLabel('budgetExceeded')).toBe('aiStats.outcomes.budgetExceeded');
+    expect(page.isFailure('responseReceived')).toBe(false);
     expect(page.taskLabel('future.task')).toBe('future.task');
   });
 });

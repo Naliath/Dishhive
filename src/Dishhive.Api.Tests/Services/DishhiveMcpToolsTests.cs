@@ -26,7 +26,7 @@ public class DishhiveMcpToolsTests : IDisposable
             .UseInMemoryDatabase($"McpToolsTests_{Guid.NewGuid()}")
             .Options;
         _context = new DishhiveDbContext(options);
-        _tools = new DishhiveMcpTools(_context);
+        _tools = new DishhiveMcpTools(_context, TestHouseholdClock.System);
     }
 
     public void Dispose() => _context.Dispose();

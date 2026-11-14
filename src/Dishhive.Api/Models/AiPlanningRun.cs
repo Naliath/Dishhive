@@ -21,6 +21,8 @@ public class AiPlanningRun
 
     [MaxLength(200)]
     public string Model { get; set; } = string.Empty;
+    [MaxLength(500)]
+    public string ConfigFingerprint { get; set; } = string.Empty;
 
     [MaxLength(500)]
     public string? Instructions { get; set; }

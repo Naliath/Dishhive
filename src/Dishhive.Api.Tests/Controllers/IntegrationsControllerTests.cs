@@ -1,3 +1,4 @@
+using Dishhive.Api.Services.Ai;
 using System.Net;
 using Dishhive.Api.Controllers;
 using Dishhive.Api.Data;
@@ -32,6 +33,17 @@ public class IntegrationsControllerTests
         status.WebSearch.Operational.Should().BeFalse();
         status.WebSearch.Error.Should().Contain("JSON search is forbidden");
         status.WebSearch.Error.Should().Contain("search formats");
+    }
+
+    [Fact]
+    public async Task GetStatus_BlockedSearchEnginesReportsLimitedResultsWhileSourceFallbackRemainsAvailable()
+    {
+        var handler = new MockHttpMessageHandler().RespondWith(BaseUrl + "search",
+            """{"results":[],"unresponsive_engines":[["engine","CAPTCHA"]]}""", "application/json");
+        var status = await GetStatusAsync(handler);
+        Assert.True(status.WebSearch.Reachable);
+        Assert.True(status.WebSearch.Operational);
+        Assert.Contains("incomplete", status.WebSearch.Error);
     }
 
     [Fact]
@@ -70,15 +82,18 @@ public class IntegrationsControllerTests
             PlanningRun("success", now, 100, 80, 1),
             PlanningRun("partialFallback", now.AddMinutes(-1), 200, 120, 1),
             PlanningRun("rulesFallback", now.AddMinutes(-2), 300, 0, 0));
+        var attempted = TaskRun("recipe.facts", "success", now, 100, 10);
+        attempted.OperationAttempt = 3;
+        var notSent = TaskRun("recipe.facts", "parseFailure", now.AddSeconds(-1), 200, 20);
+        notSent.OperationAttempt = 0;
         context.AiTaskRuns.AddRange(
-            TaskRun("recipe.facts", "success", now, 100, 10),
-            TaskRun("recipe.facts", "parseFailure", now.AddSeconds(-1), 200, 20),
+            attempted, notSent,
             TaskRun("recipe.translate", "validationFailure", now.AddSeconds(-2), 300, 30));
         await context.SaveChangesAsync();
 
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         var controller = new IntegrationsController(httpClientFactory, new UserMessageLocalizer(context));
-        var response = await controller.GetAiPlanningRuns(context, cancellationToken: CancellationToken.None);
+        var response = await controller.GetAiPlanningRuns(context, new AiReviewMetricsService(context), cancellationToken: CancellationToken.None);
 
         var metrics = response.Result.Should().BeOfType<OkObjectResult>().Which.Value
             .Should().BeAssignableTo<Dishhive.Api.Models.DTOs.AiPlanningMetricsResponseDto>().Subject;
@@ -88,6 +103,7 @@ public class IntegrationsControllerTests
         metrics.Summary.AverageCompletionDurationMs.Should().Be(100);
         metrics.Summary.P95TotalDurationMs.Should().Be(300);
         metrics.TaskMetrics.RunCount.Should().Be(3);
+        metrics.Calls.Select(call => call.OperationAttempt).Should().Equal(3, 0, null);
         metrics.TaskMetrics.SuccessfulRuns.Should().Be(1);
         metrics.TaskMetrics.FailedRuns.Should().Be(2);
         metrics.TaskMetrics.P95DurationMs.Should().Be(300);
@@ -103,7 +119,7 @@ public class IntegrationsControllerTests
             });
 
         var limitedResponse = await controller.GetAiPlanningRuns(
-            context, count: 2, cancellationToken: CancellationToken.None);
+            context, new AiReviewMetricsService(context), count: 2, cancellationToken: CancellationToken.None);
         var limitedMetrics = limitedResponse.Result.Should().BeOfType<OkObjectResult>().Which.Value
             .Should().BeAssignableTo<Dishhive.Api.Models.DTOs.AiPlanningMetricsResponseDto>().Subject;
         limitedMetrics.Calls.Should().HaveCount(2);

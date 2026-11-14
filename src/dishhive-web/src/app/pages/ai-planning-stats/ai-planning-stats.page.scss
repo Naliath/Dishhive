@@ -30,20 +30,23 @@ section + section { margin-block-start: 28px; }
   margin-block-start: 12px;
 
   mat-card { padding: 12px; }
-  span { color: var(--mat-sys-on-surface-variant); font-size: 12px; }
-  strong { display: block; margin-block-start: 3px; font-size: 20px; }
+  span { color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-body-small); }
+  strong { display: block; margin-block-start: 4px; font: var(--mat-sys-title-large); }
 }
 
 .task-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 
 .task-card {
   min-width: 0;
-  height: auto;
   text-align: start;
-  justify-content: flex-start;
+  align-items: stretch;
 
   span { display: block; }
-  .task-name { color: var(--mat-sys-primary); font-weight: 600; overflow-wrap: anywhere; }
+  .task-filter {
+    justify-content: flex-start;
+    margin: -4px -8px 2px;
+    overflow-wrap: anywhere;
+  }
 }
 
 .task-card--selected { background: var(--mat-sys-secondary-container); }
@@ -58,7 +61,7 @@ details pre {
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font: var(--mat-sys-body-small);
   color: var(--mat-sys-on-surface-variant);
 }
 
@@ -68,7 +71,7 @@ details pre {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 7px 16px;
-  font-size: 12px;
+  font: var(--mat-sys-body-small);
   color: var(--mat-sys-on-surface-variant);
 
   strong { color: var(--mat-sys-on-surface); overflow-wrap: anywhere; }

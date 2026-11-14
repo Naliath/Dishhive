@@ -26,12 +26,12 @@ describe('MealSuggestionsService', () => {
     ).subscribe();
 
     const request = httpTesting.expectOne('/api/plannedmeals/suggestions');
-    expect(request.request.body).toEqual({
+    expect(JSON.parse(request.request.body)).toEqual({
       weekStart: '2026-07-13',
       attendeeIds: [],
       selectedDates: ['2026-07-15', '2026-07-17'],
       instructions: 'two quick meals'
     });
-    request.flush({ batchId: 'batch', enabled: true, suggestions: [] });
+    request.flush(null);
   });
 });

@@ -32,3 +32,17 @@
   place-items: center;
   background: var(--mat-sys-surface);
 }
+
+.saved-data-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-block-end: 16px;
+  padding: 16px;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+
+  mat-icon { flex-shrink: 0; }
+}

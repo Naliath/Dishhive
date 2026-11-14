@@ -76,7 +76,7 @@ public class AiModelTesterTests
             gate,
             options,
             HttpFactory(modelsJson ?? $$"""{"data":[{"id":"{{ModelName}}"}]}"""),
-            NullLogger<AiModelTester>.Instance);
+            NullLogger<AiModelTester>.Instance, TestHouseholdClock.System);
     }
 
     /// <summary>Runs the tester under the default composed production prompt</summary>
@@ -165,7 +165,8 @@ public class AiModelTesterTests
 
         result.Viable.Should().BeTrue();
         result.EvaluationPassed.Should().BeFalse();
-        result.Verdict.Should().Be("warnings");
+        result.PlanningEligible.Should().BeFalse();
+        result.Verdict.Should().Be("failed");
         result.Checks.Should().Contain(c => c.Name == "Collection day" && !c.Passed);
         result.Checks.Should().Contain(c => c.Name == "Specific dish" && !c.Passed);
         result.Checks.Should().Contain(c => c.Name == "Vegetarian days" && !c.Passed);
@@ -183,7 +184,8 @@ public class AiModelTesterTests
 
         result.Viable.Should().BeTrue();
         result.PlanningIntentPassed.Should().BeFalse();
-        result.Verdict.Should().Be("warnings");
+        result.PlanningEligible.Should().BeFalse();
+        result.Verdict.Should().Be("failed");
         result.Checks.Should().Contain(c => c.Name == "Multilingual planning instructions" && !c.Passed);
     }
 
@@ -209,8 +211,26 @@ public class AiModelTesterTests
         var fixture = AiModelTester.CreateFixture(new DateOnly(2026, 7, 2));
         var prompt = MealSuggestionPromptBuilder.BuildUserPrompt(fixture.Request, maxPromptTokens: 800);
 
-        prompt.Length.Should().BeGreaterThan(800 * 4 - 400); // within a line of the char budget
+        prompt.Length.Should().BeGreaterThan(800 * AiTokenBudget.ConservativeCharactersPerToken - 400);
         prompt.Should().Contain("Pasta pesto").And.Contain("Chicken curry");
         prompt.Should().Contain("Quick Pasta");
+    }
+
+    [Fact]
+    public void PromptBudget_AccountsForFixedMessagesAndCorrectiveTurn()
+    {
+        var systemPrompt = new string('s', 6_400);
+        var intentPrompt = new string('i', 1_600);
+
+        var budget = MealSuggestionPromptBuilder.FitUserPromptTokenBudget(
+            requestedTokens: 20_000,
+            maxInputTokens: 20_000,
+            systemPrompt,
+            intentPrompt);
+
+        budget.Should().Be(14_976);
+        ((long)budget * AiTokenBudget.PromptBuilderCharactersPerToken
+            + systemPrompt.Length + intentPrompt.Length)
+            .Should().BeLessThan(20_000L * AiTokenBudget.ConservativeCharactersPerToken);
     }
 }

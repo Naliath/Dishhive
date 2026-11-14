@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, Inject, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../services/language.service';
+import { inject, ChangeDetectionStrategy, Component, Inject, signal } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -20,12 +22,13 @@ export interface MealRatingDialogData {
 @Component({
   selector: 'app-meal-rating-dialog',
   standalone: true,
-  imports: [MatDialogModule, MatButtonModule, MatIconModule, MatSnackBarModule],
+  imports: [TranslatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatSnackBarModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './meal-rating-dialog.html',
   styleUrl: './meal-rating-dialog.scss'
 })
 export class MealRatingDialog {
+  readonly uiLanguage = inject(UiLanguageService);
   readonly meal;
 
   /** Attendees first, then the rest of the household */
@@ -77,6 +80,6 @@ export class MealRatingDialog {
   }
 
   private showError(): void {
-    this.snackBar.open('Could not save the rating', 'Dismiss', { duration: 4000 });
+    this.snackBar.open(this.uiLanguage.t('ui.couldNotSaveTheRating'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
   }
 }

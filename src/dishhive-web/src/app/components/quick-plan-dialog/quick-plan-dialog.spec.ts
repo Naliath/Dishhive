@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { FamilyMember } from '../../models/family-member.model';
 import { Course, MealType, PlannedMeal } from '../../models/planned-meal.model';
 import { QuickPlanDialog, QuickPlanDialogData, buildQuickPlanDays } from './quick-plan-dialog';
+import { TestBed } from '@angular/core/testing';
 
 describe('QuickPlanDialog', () => {
   it('builds seven consecutive days and keeps existing meals visible', () => {
@@ -34,7 +35,7 @@ describe('QuickPlanDialog', () => {
         { id: 'guest-1', isGuest: true }
       ] as FamilyMember[]
     };
-    const dialog = new QuickPlanDialog(data, dialogRef as never);
+    const dialog = TestBed.runInInjectionContext(() => new QuickPlanDialog(data, dialogRef as never, { today: () => '2026-07-13' } as never));
     dialog.course.set(Course.Dessert);
 
     dialog.plan(dialog.days[2]);

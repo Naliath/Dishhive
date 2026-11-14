@@ -22,7 +22,8 @@
           "/index.html",
           "/manifest.webmanifest",
           "/*.css",
-          "/*.js"
+          "/*.js",
+          "/i18n/*.json"
         ]
       }
     },
@@ -44,48 +45,15 @@
   ],
   "dataGroups": [
     {
-      "name": "api-recipe-images",
-      "urls": ["/api/recipes/*/image"],
+      "name": "versioned-recipe-images",
+      "version": 2,
+      "urls": [
+        "/api/recipes/*/image**"
+      ],
       "cacheConfig": {
         "strategy": "performance",
         "maxSize": 200,
         "maxAge": "7d"
-      }
-    },
-    {
-      "name": "api-week-plan",
-      "urls": ["/api/plannedmeals**"],
-      "cacheConfig": {
-        "strategy": "freshness",
-        "maxSize": 60,
-        "maxAge": "7d",
-        "timeout": "4s"
-      }
-    },
-    {
-      "name": "api-shopping-list",
-      "urls": ["/api/shoppinglist**"],
-      "cacheConfig": {
-        "strategy": "freshness",
-        "maxSize": 20,
-        "maxAge": "7d",
-        "timeout": "4s"
-      }
-    },
-    {
-      "name": "api-reference",
-      "urls": [
-        "/api/familymembers**",
-        "/api/settings**",
-        "/api/cookbooks**",
-        "/api/recipes**",
-        "/api/statistics**"
-      ],
-      "cacheConfig": {
-        "strategy": "freshness",
-        "maxSize": 300,
-        "maxAge": "7d",
-        "timeout": "4s"
       }
     }
   ]

@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { LanguageService as UiLanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../services/language.service';
+import { inject, ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -18,7 +20,7 @@ import { FamilyMember } from '../../models/family-member.model';
 @Component({
   selector: 'app-statistics-page',
   standalone: true,
-  imports: [
+  imports: [TranslatePipe,
     CookingLoaderComponent,
     DatePipe,
     DecimalPipe,
@@ -37,6 +39,7 @@ import { FamilyMember } from '../../models/family-member.model';
   styleUrl: './statistics.page.scss'
 })
 export class StatisticsPage implements OnInit {
+  readonly uiLanguage = inject(UiLanguageService);
   readonly statistics = signal<DishStatistics | null>(null);
   readonly members = signal<FamilyMember[]>([]);
   readonly loading = signal(true);
@@ -69,7 +72,7 @@ export class StatisticsPage implements OnInit {
       },
       error: () => {
         this.loading.set(false);
-        this.snackBar.open('Could not load statistics', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(this.uiLanguage.t('ui.couldNotLoadStatistics'), this.uiLanguage.t('common.dismiss'), { duration: 4000 });
       }
     });
 
@@ -83,8 +86,8 @@ export class StatisticsPage implements OnInit {
   markAsFavorite(dish: DishStatistic, member: FamilyMember): void {
     this.familyMembersService.addFavorite(member.id, { dishName: dish.dishName }).subscribe({
       next: () => this.snackBar.open(
-        `"${dish.dishName}" added to ${member.name}'s favorites`, 'Dismiss', { duration: 3000 }),
-      error: () => this.snackBar.open('Could not add the favorite', 'Dismiss', { duration: 4000 })
+        this.uiLanguage.t('ui.valueAddedToValueSFavorites', { p0: (dish.dishName), p1: (member.name) }), this.uiLanguage.t('common.dismiss'), { duration: 3000 }),
+      error: () => this.snackBar.open(this.uiLanguage.t('ui.couldNotAddTheFavorite'), this.uiLanguage.t('common.dismiss'), { duration: 4000 })
     });
   }
 }

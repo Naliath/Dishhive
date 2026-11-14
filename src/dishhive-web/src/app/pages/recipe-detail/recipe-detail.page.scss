@@ -105,8 +105,7 @@
   gap: 4px;
   padding: 2px 10px 2px 6px;
   border-radius: 14px;
-  font-size: 12px;
-  font-weight: 500;
+  font: var(--mat-sys-label-medium);
   background-color: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
   color: var(--mat-sys-primary);
 
@@ -153,6 +152,11 @@
   &--confirmed {
     background-color: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
     color: var(--mat-sys-primary);
+  }
+
+  &--stale {
+    background-color: color-mix(in srgb, var(--mat-sys-error) 10%, transparent);
+    color: var(--mat-sys-error);
   }
 }
 

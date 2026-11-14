@@ -1,13 +1,13 @@
+using System.Text.Json;
 using Dishhive.Api.Services.Import;
 using FluentAssertions;
 
 namespace Dishhive.Api.Tests.Services;
 
 /// <summary>
-/// Validates recipe extraction from Dagelijkse Kost against a stored HTML fixture of a real
-/// recipe page (Fixtures/dagelijkse-kost-recipe.html, captured June 10, 2026).
-/// These tests are offline: if the site changes its JSON-LD structure, re-capture the fixture
-/// and these tests will report exactly which fields broke.
+/// Validates recipe extraction from Dagelijkse Kost against stored HTML fixtures of real
+/// recipe pages, including both the legacy instruction map and current recipe-parts format.
+/// These tests are offline; add a fresh fixture when investigating a site format change.
 /// </summary>
 public class DagelijkseKostProviderTests
 {
@@ -16,9 +16,9 @@ public class DagelijkseKostProviderTests
 
     private readonly DagelijkseKostProvider _provider = new();
 
-    private static string LoadFixture()
+    private static string LoadFixture(string name = "dagelijkse-kost-recipe.html")
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "dagelijkse-kost-recipe.html");
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", name);
         return File.ReadAllText(path);
     }
 
@@ -105,6 +105,122 @@ public class DagelijkseKostProviderTests
         recipe.Steps[10].Should().Be(
             "Verkruimel er wat van de wafeltjes over. Werk af met rode bessen, braambessen en coulis.");
         recipe.Steps.Should().OnlyContain(s => !string.IsNullOrWhiteSpace(s));
+    }
+
+    [Fact]
+    public async Task Extract_AppeltaartFixture_ReturnsAll23StepsInOrder()
+    {
+        var recipe = await _provider.ExtractAsync(
+            LoadFixture("dagelijkse-kost-appeltaart-met-vanilleroom.html"),
+            new Uri("https://dagelijksekost.vrt.be/gerechten/appeltaart-met-vanilleroom"));
+
+        recipe.Title.Should().Be("Appeltaart met vanilleroom");
+        recipe.Steps.Should().Equal(
+            "Laat de oven voorverwarmen tot 175°C.",
+            "Schil de appelen, snij ze in blokjes en stoof ze in boter.",
+            "Voeg er de zestes en het sap van de sinaasappel, de peul van een vanillestok ( gebruik, de zaadjes voor de vanilleroom ), de suiker en de kaneelstokjes aan toe.",
+            "Zet een deksel op de pot en laat de appel platstoven.",
+            "Warm de melk voor het deeg licht op en laat de gist erin oplossen.",
+            "Meng het ei met de suiker in de keukenmachine.",
+            "Voeg er de melk met de gist aan toe, gevolgd door de bloem met het zout en het bakpoeder en als laatste de boter.",
+            "Laat het deeg mengen tot het van de randen van de kom loslaat.",
+            "Laat de appelmoes afkoelen.",
+            "Vet een taartvorm in en bestuif hem met bloem.",
+            "Rol het deeg dun uit en bekleed er de vorm mee.",
+            "Snij het overtollige deeg weg en maak met het overschot een nieuwe bol deeg.",
+            "Prik gaatjes in de bodem van deeg.",
+            "Rol de rest van het deeg ook dun uit.",
+            "Schep de afgekoelde appelmoes in de taartvorm en leg er de tweede lap deeg bovenop.",
+            "Duw de randen mooi aan en snij het overtollige deeg weg of ga met een deegrol over de randen.",
+            "Kluts de dooier met een scheutje melk en wrijf de hele bovenkant van de taart in.",
+            "Maak met een mes of een schaar enkele inkepingen in het deksel.",
+            "Strooi de suiker over de taart en bak de taart 45 minuten in de oven.",
+            "Voeg de zaadjes van de vanillepeul en de bloemsuiker toe aan de slagroom en klop de room half op.",
+            "Laat de taart voledig afkoelen.",
+            "Serveer de vanilleroom bij een stuk appeltaart.",
+            "Werk af met een snuifje kaneelpoeder op de vanilleroom.");
+    }
+
+    [Fact]
+    public async Task Extract_RecipePartsAcrossFlightChunks_ReturnsStepDescriptionsInPartOrder()
+    {
+        const string payload = """
+            1:{"instructions":{"title":"Instructies"},"recipeParts" : [
+              {"title":"De vulling","ingredients":[{"description":"Geen stap"}],"instructions":[
+                {"step":1,"description":" Meng \"appel\" met {suiker} [en kaneel]. ","tip":"Geen stap"},
+                {"step":2,"description":"Vul de taart."}
+              ]},
+              {"title":"Afwerking","instructions":[
+                {"step":3,"description":"Bak de taart."},
+                {"step":4,"description":"Serveer met room."}
+              ]}
+            ]}
+            """;
+        var recipe = await ExtractPayloadAsync(payload, payload.IndexOf("suiker", StringComparison.Ordinal));
+
+        recipe.Steps.Should().Equal(
+            "Meng \"appel\" met {suiker} [en kaneel].", "Vul de taart.", "Bak de taart.", "Serveer met room.");
+    }
+
+    [Fact]
+    public async Task Extract_LegacyInstructionsMap_ReturnsStepsInNumericOrder()
+    {
+        const string payload = """
+            1:{"instructions":{"0":"Meng het deeg.","10":"Serveer.","2":"Bak de taart."}}
+            """;
+        var recipe = await ExtractPayloadAsync(payload, payload.IndexOf("instructions", StringComparison.Ordinal) + 5);
+
+        recipe.Steps.Should().Equal("Meng het deeg.", "Bak de taart.", "Serveer.");
+    }
+
+    [Theory]
+    [InlineData("1:{\"recipeParts\":[{\"instructions\":[{\"description\":\"Onvolledig\"}")]
+    [InlineData("1:{\"recipeParts\":[invalid]}")]
+    [InlineData("1:{\"recipeParts\":[]}")]
+    [InlineData("1:{\"recipeParts\":[null,{}, {\"instructions\":null}]}")]
+    [InlineData("1:{\"recipeParts\":[{\"instructions\":[null,{}, {\"description\":42}, {\"description\":\" \"}]}]}")]
+    public async Task Extract_UnusableRecipeParts_FallsBackToJsonLdSteps(string payload)
+    {
+        var recipe = await ExtractPayloadAsync(payload);
+
+        recipe.Steps.Should().Equal("Kook het ei.", "Pel het ei.");
+    }
+
+    [Fact]
+    public async Task Extract_RecipePartsWithFewerSteps_KeepsMoreCompleteJsonLd()
+    {
+        var recipe = await ExtractPayloadAsync("""1:{"recipeParts":[{"instructions":[{"description":"Eén stap."}]}]}""");
+
+        recipe.Steps.Should().Equal("Kook het ei.", "Pel het ei.");
+    }
+
+    [Fact]
+    public async Task Extract_EmptyRecipePartsWithLegacyMap_FallsBackToLegacySteps()
+    {
+        const string payload = """
+            1:{"recipeParts":[],"instructions":{"0":"Meng het deeg.","1":"Bak de taart.","2":"Serveer."}}
+            """;
+        var recipe = await ExtractPayloadAsync(payload);
+
+        recipe.Steps.Should().Equal("Meng het deeg.", "Bak de taart.", "Serveer.");
+    }
+
+    private Task<ImportedRecipe> ExtractPayloadAsync(string payload, int? splitAt = null)
+    {
+        const string html = """
+            <script type="application/ld+json">
+            {"@type":"Recipe","name":"Testgerecht","recipeInstructions":[
+              {"@type":"HowToStep","text":"Kook het ei."},
+              {"@type":"HowToStep","text":"Pel het ei."}
+            ]}
+            </script>
+            """;
+        var chunks = splitAt.HasValue
+            ? new[] { payload[..splitAt.Value], payload[splitAt.Value..] }
+            : [payload];
+        var scripts = string.Concat(chunks.Select(chunk =>
+            $"<script>self.__next_f.push([1,{JsonSerializer.Serialize(chunk)}])</script>"));
+        return _provider.ExtractAsync(html + scripts, new Uri("https://dagelijksekost.vrt.be/gerechten/testgerecht"));
     }
 
     [Fact]

@@ -34,9 +34,10 @@ Findings:
 4. Recipe URLs follow `https://dagelijksekost.vrt.be/gerechten/{slug}`.
 5. **JSON-LD truncates the instruction list** (verified June 2026): `recipeInstructions`
    only contains the first two steps. The complete list lives in the page's Next.js flight
-   payload (`self.__next_f.push` script chunks) as an `"instructions"` map keyed by step
-   index. The provider decodes that payload for the full steps and falls back to the
-   JSON-LD steps when the payload structure changes.
+   payload (`self.__next_f.push` script chunks). Current pages expose the full list under
+   `recipeParts[].instructions[].description`; older payloads also contain an `"instructions"`
+   map keyed by step index. The provider decodes and joins the chunks, reads every recipe part
+   in order, and retains the legacy map and JSON-LD fallbacks.
 
 **Decision:** import = fetch a single user-supplied recipe URL on demand, extract the
 schema.org `Recipe` JSON-LD, map to Dishhive's model, and store the raw JSON-LD for
@@ -131,7 +132,7 @@ public interface IRecipeSourceProvider
 | Title | JSON-LD `name` |
 | Description | JSON-LD `description` |
 | Ingredients (raw lines) | JSON-LD `recipeIngredient[]` |
-| Steps | Next.js payload `instructions` map (complete); JSON-LD `recipeInstructions[].text` as fallback (truncated to 2 on this site) |
+| Steps | Next.js `recipeParts[].instructions[].description` in part/step order; legacy `instructions` map and JSON-LD `recipeInstructions[].text` as fallbacks (JSON-LD is truncated to 2 on this site) |
 | Servings | JSON-LD `recipeYield` |
 | ImageUrl | JSON-LD `image`; the image is downloaded, resized and stored locally while this URL is retained only as a reference (see recipe-store.md) |
 | VideoUrl | JSON-LD `video.contentUrl` when present, else null |
@@ -172,6 +173,10 @@ public interface IRecipeSourceProvider
 Automated provider test against a **stored HTML fixture** of a real Dagelijkse Kost page
 (`Fixtures/dagelijkse-kost-recipe.html`) validating: title, description, ingredients (count +
 known lines), steps, serving count, picture URL, video link mapping, and source link.
+The current-format fixture (`Fixtures/dagelijkse-kost-appeltaart-met-vanilleroom.html`,
+captured November 14, 2026) asserts all 23 appeltaart steps in order; an endpoint test also
+checks that all 23 are persisted and numbered. Focused cases cover multiple parts, split
+Flight chunks, escaped strings, legacy maps, and malformed/empty payload fallbacks.
 Plus `IngredientLineParser` unit tests. Tests are offline — no network dependency.
 
 ## Risks / Unknowns
@@ -179,7 +184,9 @@ Plus `IngredientLineParser` unit tests. Tests are offline — no network depende
 - Site redesign could drop or change JSON-LD → fixture tests detect drift; raw data allows
   re-parsing; provider isolation limits blast radius.
 - The Next.js payload structure (used for the full step list) is less stable than JSON-LD —
-  mitigated by the JSON-LD fallback and the fixture test asserting all 11 steps.
+  mitigated by the legacy/JSON-LD fallbacks and stored fixtures asserting all 11 and 23 steps.
+  Fixed fixtures catch regressions in supported formats; newly reported site changes need a
+  fresh capture to detect drift.
 - ~~Signed image URLs may expire eventually~~ Resolved: image bytes are downloaded at import
   time and stored locally; the source URL only remains as fallback/traceability.
 - Ingredient lines are Dutch and sometimes unit-less or vague ("0,5 bakje rode bessen") —
@@ -207,6 +214,8 @@ Plus `IngredientLineParser` unit tests. Tests are offline — no network depende
 - [x] `IngredientLineParser` unit tests
 - [x] `RecipeImportService` + `POST /api/recipes/import` + duplicate-URL update
 - [x] Full step extraction from Next.js payload (JSON-LD is truncated to 2 steps) + fixture test
+- [x] Current `recipeParts` instruction arrays + 23-step appeltaart fixture and persistence
+      regression, retaining legacy-map and JSON-LD compatibility
 - [x] Local image download at import (tolerant of failures; original URL kept as a reference,
       display never falls back remotely) + resize/normalization tests
 - [x] Import pipeline tests with mocked HTTP (`RecipeImportServiceTests`)

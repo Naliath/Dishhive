@@ -19,6 +19,8 @@ public class RecipeImportEndpointIntegrationTests : IDisposable
 {
     private const string FixtureUrl =
         "https://dagelijksekost.vrt.be/gerechten/cremeux-citroen-bodem-witte-chocolade-gepofte-rijst-rode-bessen";
+    private const string AppeltaartUrl =
+        "https://dagelijksekost.vrt.be/gerechten/appeltaart-met-vanilleroom";
 
     private readonly TestWebApplicationFactory _factory;
     private readonly HttpClient _client;
@@ -30,11 +32,32 @@ public class RecipeImportEndpointIntegrationTests : IDisposable
 
         var mockHandler = new MockHttpMessageHandler()
             .RespondWith(FixtureUrl, fixtureHtml)
+            .RespondWith(AppeltaartUrl, File.ReadAllText(Path.Combine(
+                AppContext.BaseDirectory, "Fixtures", "dagelijkse-kost-appeltaart-met-vanilleroom.html")))
             .RespondWith("https://storage.googleapis.com/", Convert.FromBase64String(
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="), "image/png");
 
         _factory = new ImportTestFactory(mockHandler);
         _client = _factory.CreateClient();
+    }
+
+    [Fact]
+    public async Task ImportEndpoint_AppeltaartWithRecipeParts_PersistsAll23Steps()
+    {
+        var response = await _client.PostAsJsonAsync("/api/recipes/import",
+            new ImportRecipeRequestDto { Url = AppeltaartUrl });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var imported = await response.Content.ReadFromJsonAsync<RecipeDto>();
+        var saved = await _client.GetFromJsonAsync<RecipeDto>($"/api/recipes/{imported!.Id}");
+
+        saved!.Title.Should().Be("Appeltaart met vanilleroom");
+        saved.SourceProvider.Should().Be("dagelijkse-kost");
+        saved.SourceUrl.Should().Be(AppeltaartUrl);
+        saved.Steps.Should().HaveCount(23);
+        saved.Steps.Select(s => s.StepNumber).Should().Equal(Enumerable.Range(1, 23));
+        saved.Steps[0].Instruction.Should().Be("Laat de oven voorverwarmen tot 175°C.");
+        saved.Steps[22].Instruction.Should().Be("Werk af met een snuifje kaneelpoeder op de vanilleroom.");
     }
 
     /// <summary>Factory that reroutes the import service's outbound HTTP to the mock handler</summary>

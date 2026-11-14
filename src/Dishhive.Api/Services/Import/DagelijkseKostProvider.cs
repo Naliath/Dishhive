@@ -15,8 +15,9 @@ namespace Dishhive.Api.Services.Import;
 ///
 /// Known site quirk: the JSON-LD recipeInstructions list is truncated (only the first two
 /// steps are published there). The complete instruction list lives in the page's Next.js
-/// flight payload (self.__next_f.push chunks) as an "instructions" map keyed by step index.
-/// This provider extracts that map and prefers it over the truncated JSON-LD steps,
+/// flight payload (self.__next_f.push chunks) under recipeParts[].instructions[].description.
+/// Older pages also expose an "instructions" map keyed by step index.
+/// This provider extracts the full list and prefers it over the truncated JSON-LD steps,
 /// falling back to JSON-LD when the payload cannot be parsed.
 ///
 /// Second quirk: the JSON-LD "name" duplicates the SEO description sentence
@@ -27,6 +28,9 @@ public partial class DagelijkseKostProvider : IRecipeSourceProvider
 {
     [GeneratedRegex("""self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)""", RegexOptions.Singleline)]
     private static partial Regex NextFlightChunkRegex();
+
+    [GeneratedRegex("\"recipeParts\"\\s*:\\s*\\[")]
+    private static partial Regex RecipePartsRegex();
 
     [GeneratedRegex(
         """<meta[^>]*property\s*=\s*["']og:title["'][^>]*content\s*=\s*["']([^"']+)["']|<meta[^>]*content\s*=\s*["']([^"']+)["'][^>]*property\s*=\s*["']og:title["']""",
@@ -90,7 +94,7 @@ public partial class DagelijkseKostProvider : IRecipeSourceProvider
     private static IReadOnlyList<string>? ExtractStepsFromNextData(string html)
     {
         // The flight payload is split across script chunks, each a JS string literal;
-        // decode and concatenate them so the instructions map can't be cut by a chunk boundary
+        // decode and concatenate them so instruction data can't be cut by a chunk boundary
         var builder = new StringBuilder();
         foreach (Match match in NextFlightChunkRegex().Matches(html))
         {
@@ -105,6 +109,13 @@ public partial class DagelijkseKostProvider : IRecipeSourceProvider
         }
 
         var payload = builder.ToString();
+        var partSteps = ExtractStepsFromRecipeParts(payload);
+        if (partSteps != null)
+        {
+            return partSteps;
+        }
+
+        // Legacy pages expose a flattened map instead of (or alongside) recipeParts.
         var markerIndex = payload.IndexOf(InstructionsMarker, StringComparison.Ordinal);
         if (markerIndex < 0)
         {
@@ -112,7 +123,7 @@ public partial class DagelijkseKostProvider : IRecipeSourceProvider
         }
 
         var objectStart = payload.IndexOf('{', markerIndex);
-        var objectJson = SliceJsonObject(payload, objectStart);
+        var objectJson = SliceJsonContainer(payload, objectStart);
         if (objectJson == null)
         {
             return null;
@@ -136,11 +147,62 @@ public partial class DagelijkseKostProvider : IRecipeSourceProvider
         }
     }
 
+    private static IReadOnlyList<string>? ExtractStepsFromRecipeParts(string payload)
+    {
+        foreach (Match match in RecipePartsRegex().Matches(payload))
+        {
+            var arrayJson = SliceJsonContainer(payload, match.Index + match.Length - 1);
+            if (arrayJson == null)
+            {
+                continue;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(arrayJson);
+                var steps = new List<string>();
+                foreach (var part in document.RootElement.EnumerateArray())
+                {
+                    if (part.ValueKind != JsonValueKind.Object
+                        || !part.TryGetProperty("instructions", out var instructions)
+                        || instructions.ValueKind != JsonValueKind.Array)
+                    {
+                        continue;
+                    }
+
+                    // Parts and their instruction arrays carry the cooking order. Read only
+                    // each instruction's description, excluding ingredient descriptions and tips.
+                    foreach (var instruction in instructions.EnumerateArray())
+                    {
+                        if (instruction.ValueKind == JsonValueKind.Object
+                            && instruction.TryGetProperty("description", out var description)
+                            && description.ValueKind == JsonValueKind.String
+                            && !string.IsNullOrWhiteSpace(description.GetString()))
+                        {
+                            steps.Add(description.GetString()!.Trim());
+                        }
+                    }
+                }
+
+                if (steps.Count > 0)
+                {
+                    return steps;
+                }
+            }
+            catch (JsonException)
+            {
+                // Keep looking; the legacy map or JSON-LD can still be usable.
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
-    /// Returns the balanced JSON object starting at <paramref name="start"/>,
-    /// or null when the text ends before the object closes
+    /// Returns the balanced JSON object or array starting at <paramref name="start"/>,
+    /// or null when the text ends before the container closes.
     /// </summary>
-    private static string? SliceJsonObject(string text, int start)
+    private static string? SliceJsonContainer(string text, int start)
     {
         var depth = 0;
         var inString = false;
@@ -163,11 +225,11 @@ public partial class DagelijkseKostProvider : IRecipeSourceProvider
             {
                 inString = true;
             }
-            else if (ch == '{')
+            else if (ch is '{' or '[')
             {
                 depth++;
             }
-            else if (ch == '}')
+            else if (ch is '}' or ']')
             {
                 depth--;
                 if (depth == 0)

@@ -16,6 +16,40 @@ namespace Dishhive.Api.Tests.Services;
 public class RecipeImportServiceTests : IDisposable
 {
     [Fact]
+    public void ApplyImport_CleansListMarkersBeforeParsingIngredientsAndStoringSteps()
+    {
+        const string rawData = "{\"recipeIngredient\":[\"▢ ¼ cup flour\"]}";
+        var recipe = new Dishhive.Api.Models.Recipe();
+
+        RecipeImportService.ApplyImportedRecipe(recipe, new ImportedRecipe
+        {
+            Title = "Test",
+            IngredientLines = [" ▢ ", " ▢ ¼ cup flour ", "▢ Sea salt"],
+            MetricIngredients = [new(999, "g", "ignored"), new(40, "g", "flour"), null],
+            Steps = [" ▢ ", " ▢ Mix the flour. ", "▢▢ Add salt."],
+            RawData = rawData
+        }, null, "file-import");
+
+        recipe.Ingredients.Should().HaveCount(2);
+        var flour = recipe.Ingredients.First();
+        flour.SortOrder.Should().Be(0);
+        flour.Name.Should().Be("flour");
+        flour.Quantity.Should().Be(40);
+        flour.Unit.Should().Be("g");
+        flour.OriginalText.Should().Be("¼ cup flour");
+        flour.OriginalQuantity.Should().Be(.25m);
+        flour.OriginalUnit.Should().Be("cup");
+        var salt = recipe.Ingredients.Last();
+        salt.SortOrder.Should().Be(1);
+        salt.Name.Should().Be("Sea salt");
+        salt.OriginalText.Should().Be("Sea salt");
+        salt.Quantity.Should().BeNull();
+        recipe.Steps.Select(step => step.Instruction).Should().Equal("Mix the flour.", "Add salt.");
+        recipe.Steps.Select(step => step.StepNumber).Should().Equal(1, 2);
+        recipe.SourceRawData.Should().Be(rawData);
+    }
+
+    [Fact]
     public void ApplyImport_PrefersPublishedMetricAndPreservesSourceFractions()
     {
         var recipe = new Dishhive.Api.Models.Recipe();

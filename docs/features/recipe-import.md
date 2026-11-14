@@ -86,6 +86,15 @@ IngredientLineParser (quantity/unit/name, locale-aware: "0,5" decimal comma)
 mapped to Recipe + RecipeIngredient + RecipeStep, SourceRawData = raw JSON-LD
 ```
 
+URL and file imports share `RecipeImportService.ApplyImportedRecipe`. Before parsing
+ingredients or saving steps, `ImportedRecipeLineCleaner` trims whitespace and leading
+list decorations such as `▢`, `•`, `☐`, and `✓`. Plain-text bullets (`-`, `+`, `*`,
+`–`, `—`) require following whitespace so signs and emphasis remain intact. Add future
+source symbols to its `LeadingListMarkers` collection. Symbols inside a line remain
+untouched, empty cleaned lines are skipped,
+and the raw source payload remains unchanged. Stored ingredient original text retains
+the source measurements with list decorations removed.
+
 All remote page and image reads go through `ISafeHttpFetcher`: only public HTTP(S)
 addresses are allowed, redirects are validated one hop at a time, production connections
 are made to a validated public address, and page/image byte limits are enforced before

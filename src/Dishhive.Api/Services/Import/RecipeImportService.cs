@@ -250,11 +250,14 @@ public class RecipeImportService : IRecipeImportService
         recipe.SourceRawData = imported.RawData;
 
         var sortOrder = 0;
-        foreach (var line in imported.IngredientLines)
+        for (var sourceIndex = 0; sourceIndex < imported.IngredientLines.Count; sourceIndex++)
         {
+            var line = ImportedRecipeLineCleaner.Clean(imported.IngredientLines[sourceIndex]);
+            if (line.Length == 0) continue;
+
             var parsed = IngredientLineParser.Parse(line);
             if (imported.MetricIngredients.Count == imported.IngredientLines.Count
-                && imported.MetricIngredients[sortOrder] is { Quantity: > 0 and <= 100000 } metric
+                && imported.MetricIngredients[sourceIndex] is { Quantity: > 0 and <= 100000 } metric
                 && metric.Unit is "g" or "kg" or "ml" or "l"
                 && !string.IsNullOrWhiteSpace(metric.Name) && metric.Name.Length <= 200)
                 parsed = parsed with { Quantity = metric.Quantity, Unit = metric.Unit, Name = metric.Name };
@@ -273,10 +276,13 @@ public class RecipeImportService : IRecipeImportService
         var stepNumber = 1;
         foreach (var step in imported.Steps)
         {
+            var instruction = ImportedRecipeLineCleaner.Clean(step);
+            if (instruction.Length == 0) continue;
+
             recipe.Steps.Add(new RecipeStep
             {
                 StepNumber = stepNumber++,
-                Instruction = step
+                Instruction = instruction
             });
         }
     }

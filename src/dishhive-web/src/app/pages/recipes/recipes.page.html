@@ -176,14 +176,14 @@
               · {{ recipe.category }}
             }
           </mat-card-subtitle>
-          @if (recipe.tags.length > 0) {
-            <div class="card-badges">
-              @for (tag of recipe.tags.slice(0, 3); track tag) {
-                <span class="card-badge card-badge--tag">{{ tag }}</span>
-              }
-            </div>
-          }
         </mat-card-header>
+        @if (recipe.tags.length > 0) {
+          <mat-card-content class="card-tags" [attr.aria-label]="'recipeForm.recipeTags' | translate">
+            @for (tag of recipe.tags.slice(0, 3); track tag) {
+              <span class="card-tag"><mat-icon>sell</mat-icon>{{ tag }}</span>
+            }
+          </mat-card-content>
+        }
       </mat-card>
     }
   </div>

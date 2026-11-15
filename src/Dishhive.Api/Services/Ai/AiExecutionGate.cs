@@ -167,7 +167,7 @@ public sealed class AiExecutionGate(
     {
         if (!options.IsConfigured) throw new InvalidOperationException("AI is not configured");
         var profile = Profile(request.Task, request.UseExtendedTimeout);
-        if (request.CapabilityProbe && request.Task is not (AiTaskKind.CapabilityPlanning or AiTaskKind.PlanningIntent))
+        if (request.CapabilityProbe && request.Task is not (AiTaskKind.CapabilityPlanning or AiTaskKind.PlanningIntent or AiTaskKind.CapabilityVision))
             throw new InvalidOperationException("Only capability tasks may bypass planning eligibility");
         if (profile.RequiresPlanningCapability && !request.CapabilityProbe && Volatile.Read(ref _planningEligibility) != 1)
             throw new InvalidOperationException($"{profile.Name} requires passing planning quality evidence");
@@ -194,8 +194,7 @@ public sealed class AiExecutionGate(
             ResponseFormat = applySchema ? request.ResponseFormat : null
         };
         var promptCharacters = request.Messages.Sum(message => (long)(message.Text?.Length ?? 0));
-        var promptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            string.Join("\0", request.Messages.Select(message => message.Text ?? string.Empty)))));
+        var promptHash = PromptHash(request.Messages);
         var deadline = new[] { operation.DeadlineUtc, request.DeadlineUtc ?? DateTime.MaxValue,
             DateTime.UtcNow.AddSeconds(profile.TimeoutSeconds) }.Min();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, operation.Token);
@@ -307,6 +306,14 @@ public sealed class AiExecutionGate(
         HttpRequestException http => (int?)http.StatusCode,
         _ => null
     };
+
+    internal static string PromptHash(IReadOnlyList<ChatMessage> messages)
+    {
+        var text = string.Join("\0", messages.Select(message => message.Text ?? string.Empty));
+        foreach (var data in messages.SelectMany(message => message.Contents).OfType<DataContent>())
+            text += "\0" + data.MediaType + ":" + Convert.ToHexString(SHA256.HashData(data.Data.Span));
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+    }
 
     private static bool IsTransient(Exception error) => error is HttpRequestException { StatusCode: null }
         || Status(error) is 0 or 408 or 429 or 500 or 502 or 503 or 504;

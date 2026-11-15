@@ -69,7 +69,7 @@ public class Recipe
     public string? VideoUrl { get; set; }
 
     /// <summary>
-    /// Canonical URL of the source page; null for manually entered recipes
+    /// Canonical URL of the source page; null for manual, text and photo recipes
     /// </summary>
     [MaxLength(1000)]
     public string? SourceUrl { get; set; }

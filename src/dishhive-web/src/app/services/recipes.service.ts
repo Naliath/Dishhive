@@ -1,4 +1,4 @@
-import { RecipesClient, RecipeTagsClient } from '../api/generated/dishhive-api.client';
+import { RecipesClient, RecipeTagsClient, RecipeImportCapabilitiesDto } from '../api/generated/dishhive-api.client';
 import { apiResponse } from '../api/api-response';
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
@@ -85,6 +85,13 @@ export class RecipesService {
   /** Import a recipe from a supported external source URL (see docs/features/recipe-import.md) */
   importRecipe(url: string): Observable<Recipe> {
     return apiResponse(this.api.importRecipe({ url }));
+  }
+
+  getImportCapabilities(): Observable<RecipeImportCapabilitiesDto> { return apiResponse(this.api.getImportCapabilities()); }
+  checkImportImageCapability(): Observable<RecipeImportCapabilitiesDto> { return apiResponse(this.api.checkImportImageCapability()); }
+  importRecipeText(text: string): Observable<Recipe> { return apiResponse(this.api.importRecipeText({ text })); }
+  importRecipeImage(file: File): Observable<Recipe> {
+    return apiResponse(this.api.importRecipeImage({ data: file, fileName: file.name || 'recipe-photo' }));
   }
 
   /** Sets a recipe's dietary facts explicitly; they become user-confirmed */

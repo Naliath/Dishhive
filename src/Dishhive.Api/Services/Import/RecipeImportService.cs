@@ -3,6 +3,8 @@ using Dishhive.Api.Models;
 using Dishhive.Api.Services.Facts;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 
 namespace Dishhive.Api.Services.Import;
 
@@ -17,6 +19,13 @@ public interface IRecipeImportService
     /// <exception cref="UnsupportedRecipeSourceException">No provider handles the URL</exception>
     /// <exception cref="RecipeExtractionFailedException">Page contains no recipe data</exception>
     Task<Recipe> ImportAsync(string url, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Completes a validated text/photo extraction using normal import mapping and
+    /// enrichment. Always creates a new recipe without a source URL.
+    /// </summary>
+    Task<Recipe> ImportExtractedAsync(ImportedRecipe imported, RecipeImportSource source,
+        string? operationId = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Fetches and extracts a recipe from a URL WITHOUT persisting it, for the AI
@@ -120,8 +129,50 @@ public class RecipeImportService : IRecipeImportService
         }
 
         var sourceUrl = imported.SourceUrl ?? uri.AbsoluteUri;
+        return await CompleteImportAsync(imported, sourceUrl, providerKey, operationId, cancellationToken);
+    }
 
-        var recipe = await _context.Recipes
+    public Task<Recipe> ImportExtractedAsync(ImportedRecipe imported, RecipeImportSource source,
+        string? operationId = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(imported);
+        var providerKey = RecipeImportProvenance.ProviderKey(source);
+        if (imported.IngredientLines is null || imported.Steps is null)
+            throw new RecipeExtractionFailedException("The extracted recipe contains incomplete recipe data.");
+        // Validate a detached mapped entity, including cleaned lines and parsed measures,
+        // before the context can be changed. Source URLs from model output are not identity.
+        var candidate = new Recipe();
+        ApplyImportedRecipe(candidate, imported, null, providerKey);
+        ValidateExtractedRecipe(candidate);
+        return CompleteImportAsync(imported, null, providerKey,
+            operationId ?? $"import-{Guid.NewGuid():N}", cancellationToken);
+    }
+
+    internal static void ValidateExtractedRecipe(Recipe recipe)
+    {
+        var entities = new List<object> { recipe };
+        entities.AddRange(recipe.Ingredients);
+        entities.AddRange(recipe.Steps);
+        if (recipe.Ingredients.Count == 0 || recipe.Steps.Count == 0
+            || recipe.PrepTimeMinutes is < 0 || recipe.CookTimeMinutes is < 0 || recipe.TotalTimeMinutes is < 0
+            || entities.Any(entity => !Validator.TryValidateObject(entity, new ValidationContext(entity), null, true)))
+            throw new RecipeExtractionFailedException("The extracted recipe contains incomplete or invalid recipe data.");
+
+        if (recipe.SourceRawData is not null)
+        {
+            try { using var document = JsonDocument.Parse(recipe.SourceRawData); }
+            catch (JsonException)
+            {
+                throw new RecipeExtractionFailedException("The extracted recipe source payload must be valid JSON.");
+            }
+        }
+    }
+
+    private async Task<Recipe> CompleteImportAsync(ImportedRecipe imported, string? sourceUrl,
+        string providerKey, string operationId, CancellationToken cancellationToken)
+    {
+        var recipe = sourceUrl is null ? null : await _context.Recipes
             .Include(r => r.Ingredients)
             .Include(r => r.Steps)
             .Include(r => r.DietaryFacts)

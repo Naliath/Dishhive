@@ -1,0 +1,67 @@
+@if (visible()) {
+  <mat-card class="import-card" appearance="raised">
+    <mat-card-content>
+      <form class="import-form" (ngSubmit)="import()" [attr.aria-busy]="importing()">
+        <mat-form-field appearance="outline" class="source-field" subscriptSizing="dynamic">
+          <mat-label>{{ 'recipeImport.source' | translate }}</mat-label>
+          <mat-select [value]="preference.source()" (selectionChange)="selectSource($event.value)" [disabled]="importing()">
+            <mat-option value="url">{{ 'recipeImport.url' | translate }}</mat-option>
+            <mat-option value="text">{{ 'recipeImport.text' | translate }}</mat-option>
+            <mat-option value="photo">{{ 'recipeImport.photo' | translate }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        @switch (preference.source()) {
+          @case ('url') {
+            <mat-form-field appearance="outline" class="content-field">
+              <mat-label>{{ 'ui.recipeURL' | translate }}</mat-label>
+              <input matInput name="importUrl" [(ngModel)]="url" placeholder="https://..." [disabled]="importing()" maxlength="1000">
+            </mat-form-field>
+          }
+          @case ('text') {
+            <mat-form-field appearance="outline" class="content-field">
+              <mat-label>{{ 'recipeImport.recipeText' | translate }}</mat-label>
+              <textarea matInput name="importText" [(ngModel)]="text" rows="8" [disabled]="importing()"
+                [maxlength]="capabilities()?.maxTextCharacters ?? 30000"></textarea>
+              <mat-hint align="end">{{ text.length }} / {{ capabilities()?.maxTextCharacters ?? 30000 }}</mat-hint>
+            </mat-form-field>
+          }
+          @case ('photo') {
+            <div class="photo-input">
+              <div class="photo-actions">
+                <button mat-stroked-button type="button" (click)="file.click()" [disabled]="importing()"><mat-icon>photo_library</mat-icon>{{ 'recipeForm.chooseImage' | translate }}</button>
+                @if (cameraAvailable) {
+                  <button mat-stroked-button type="button" (click)="camera.click()" [disabled]="importing()"><mat-icon>photo_camera</mat-icon>{{ 'recipeForm.takePicture' | translate }}</button>
+                }
+                @if (photo()) { <button mat-button type="button" (click)="clearPhoto()" [disabled]="importing()">{{ 'recipeImport.removePhoto' | translate }}</button> }
+              </div>
+              <input #file type="file" accept="image/*" hidden (change)="selectPhoto($event)">
+              <input #camera type="file" accept="image/*" capture="environment" hidden (change)="selectPhoto($event)">
+              @if (preview()) {
+                <img class="photo-preview" [src]="preview()" [alt]="'recipeImport.photoPreview' | translate">
+                <span class="file-name">{{ photo()?.name }}</span>
+              }
+              <p class="mat-body-medium">{{ 'recipeImport.photoHint' | translate }}</p>
+              @if (checking()) {
+                <p role="status">{{ 'recipeImport.checkingPhoto' | translate }}</p>
+              } @else if (capabilities()?.textAvailable && capabilities()?.photoState !== 'available') {
+                <p role="status">{{ (capabilities()?.photoState === 'unsupported' ? 'recipeImport.photoUnsupported' : 'recipeImport.photoUnavailable') | translate }}</p>
+                <button mat-button type="button" (click)="checkPhoto()">{{ 'recipeImport.checkAgain' | translate }}</button>
+              }
+            </div>
+          }
+        }
+        @if (preference.source() !== 'url' && capabilities() && !capabilities()?.textAvailable) {
+          <p role="status" class="message">{{ 'recipeImport.aiUnavailable' | translate }}</p>
+        }
+        @if (error()) { <p role="alert" class="message">{{ error() }}</p> }
+        <div class="import-actions">
+          <button mat-flat-button type="submit" [disabled]="!canImport()">{{ (importing() ? 'settings.importing' : 'ui.import') | translate }}</button>
+          @if (importing()) {
+            <app-cooking-loader diameter="32" />
+            <button mat-button type="button" (click)="cancel()">{{ 'recipeImport.cancel' | translate }}</button>
+          }
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+}

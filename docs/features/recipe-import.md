@@ -48,6 +48,8 @@ most stable and respectful extraction surface. No crawling, no bulk scraping.
 
 **In scope**
 - Paste-a-URL import flow (single recipe, on demand)
+- AI import from pasted recipe text or one selected/captured recipe photo
+- Remembered URL/text/photo source selection (URL on first use)
 - Pluggable provider architecture (`IRecipeSourceProvider`)
 - Generic schema.org JSON-LD extractor as the shared engine
 - Dagelijkse Kost provider built on the generic extractor
@@ -59,7 +61,8 @@ most stable and respectful extraction surface. No crawling, no bulk scraping.
 **Out of scope**
 - Bulk import / crawling
 - Browser-extension or share-target import
-- Image downloading/re-hosting
+- Authenticated site access and forum-specific URL extraction improvements
+- Multi-page photo scans and PDFs
 
 ## Architecture: pluggable source providers
 
@@ -94,6 +97,71 @@ source symbols to its `LeadingListMarkers` collection. Symbols inside a line rem
 untouched, empty cleaned lines are skipped,
 and the raw source payload remains unchanged. Stored ingredient original text retains
 the source measurements with list decorations removed.
+
+### Shared completion for text and photo sources
+
+`IRecipeImportService.ImportExtractedAsync` accepts an already extracted `ImportedRecipe`
+and a typed `RecipeImportSource.Text` or `.Photo`. It is a service boundary for the new
+input features described in [the flexible import plan](../plans/FLEXIBLE_RECIPE_IMPORT_PLAN.md).
+
+Completion validates a detached mapped recipe, including cleaned ingredient/step content,
+domain field lengths, servings and times, and valid JSON source metadata, before tracking
+or saving it. Text/photo imports always create a new recipe with no source URL, even when
+model output supplies one or a recipe with the same title already exists. Provider keys
+`llm-text` and `llm-image` record provenance using the existing schema.
+
+URL and extracted-source imports share persistence, ingredient mapping, image handling,
+and durable enrichment staging. URL extraction, fallback, errors and reimport behaviour
+remain unchanged. Translation eligibility includes the two new provider keys as well as
+existing recipes with source URLs; manual and URL-less library-file imports retain their
+previous eligibility. Translation preferences, target-language checks and revision-bound
+enrichment safeguards continue to apply. Original text belongs in JSON source metadata;
+source photo bytes are not a completion argument or automatically stored as a dish image.
+
+### Text and photo import
+
+- `POST /api/recipes/import/text { text }` extracts one recipe from plain text. The
+  default limit is 30,000 characters (`Ai:ImportMaxTextCharacters` /
+  `AI_IMPORT_MAX_TEXT_CHARACTERS`); smaller configured model budgets can reject an
+  input earlier. Input is never silently truncated or treated as HTML.
+- `POST /api/recipes/import/image` accepts one multipart `file` up to 15 MiB. The
+  existing bounded decoder validates the actual bytes and pixel count, applies
+  orientation and removes metadata. The extraction copy uses at most 2048px per
+  side and WebP quality 90. JPEG, PNG and WebP are supported; unsupported formats
+  get a localized error. Original photo bytes are transient; source metadata retains
+  only a normalized-image hash and dimensions. The dish display image remains separate.
+- `GET /api/recipes/import/capabilities` returns text availability, cached photo
+  state and input limits without making a model call. The photo form checks an
+  untested model with `POST /api/recipes/import/image-capability`, which also supports
+  explicit retry. Photo import enforces the verdict again on the server.
+- Image support uses an independent randomized four-tile image check through the
+  AI gate. Results are cached in-process by the execution fingerprint, using shared
+  capability success/failure lifetimes. A failed image check does not disable text
+  import or depend on planning-quality checks.
+- New zero-temperature tasks `recipe.import_text`, `recipe.import_image` and
+  `capability.vision` use the central gate, bounded retries, versioned strict JSON
+  contracts and terminal semantic outcome reporting. Images contribute conservative
+  admission estimates and content hashes; provider-reported token usage is retained.
+- Extraction preserves source language, quantities, units and order. A descriptive
+  title can be derived from an untitled recipe, but missing ingredients, amounts,
+  instructions or unreadable content are not invented. Optional translation remains
+  a separate durable enrichment stage.
+- Stable localized problem codes distinguish unavailable AI/image support, invalid
+  input, excessive input, no recipe, unreadable photos, incomplete output, malformed
+  responses, service errors and timeouts. The form retains drafts after errors and
+  cancellation; cancellation advises checking the library before retrying if a save
+  may already have completed.
+- The source selector is in the existing inline import card. The main action reflects
+  the selected source. Only the source preference is stored in local storage, not
+  recipe text or photos. URL is the initial/corrupt-storage default; unavailable AI
+  does not silently change a remembered source. Photo mode provides file selection,
+  preview/removal and native rear-camera capture on supporting touch browsers.
+
+Verification includes unit/HTTP tests, browser fixtures at 360px and 1280px, and an
+opt-in live check (`DISHHIVE_LIVE_IMPORT=1` with `AI_*` settings). The configured model
+successfully extracted synthetic text and a legible recipe image during implementation.
+Camera-button wiring is tested with an emulated supported platform; physical phone
+capture, handwriting and real cookbook photo quality remain device/model checks.
 
 All remote page and image reads go through `ISafeHttpFetcher`: only public HTTP(S)
 addresses are allowed, redirects are validated one hop at a time, production connections
@@ -213,6 +281,14 @@ Plus `IngredientLineParser` unit tests. Tests are offline — no network depende
 - Dialog + review flow
 
 ## Implementation Checklist
+
+- [x] Shared completion boundary for typed text/photo extraction results, validating before
+      persistence and creating distinct URL-less recipes with stable provenance
+- [x] Translation eligibility for text/photo imports without a URL, retaining settings and
+      revision safeguards
+- [x] AI text extraction and text-import endpoint
+- [x] AI photo extraction and photo-import endpoint
+- [x] Remembered URL/text/photo selector with file selection and camera capture
 
 - [x] HTML fixture of a real Dagelijkse Kost recipe page stored in test project
 - [x] `IRecipeSourceProvider` + `ImportedRecipe` contracts

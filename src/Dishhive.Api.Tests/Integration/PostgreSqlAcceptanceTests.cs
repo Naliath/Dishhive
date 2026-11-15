@@ -19,6 +19,51 @@ namespace Dishhive.Api.Tests.Integration;
 public sealed class PostgreSqlAcceptanceTests : IAsyncLifetime
 {
     [PostgresFact]
+    public async Task ExtractedImports_CommitDistinctNullUrlRecipesWithJsonMetadataAndEnrichment()
+    {
+        await using var scope = _provider!.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<DishhiveDbContext>();
+        var facts = Substitute.For<Dishhive.Api.Services.Facts.IRecipeFactsExtractor>();
+        facts.IsAvailable.Returns(true);
+        var localizer = Substitute.For<Dishhive.Api.Services.Facts.IRecipeLocalizationService>();
+        localizer.IsAvailable.Returns(true);
+        using var worker = new Dishhive.Api.Services.Facts.RecipeFactsAssessmentService(
+            _provider!.GetRequiredService<IServiceScopeFactory>(), facts, localizer,
+            new SupportedLanguageCatalog(),
+            NullLogger<Dishhive.Api.Services.Facts.RecipeFactsAssessmentService>.Instance);
+        context.UserSettings.Add(new() { Key = UserSettingKeys.TranslateImportedRecipes, Value = "true" });
+        await context.SaveChangesAsync();
+        var importer = new RecipeImportService(Substitute.For<ISafeHttpFetcher>(), [], context,
+            new NoOpLlmRecipeExtractor(), worker, NullLogger<RecipeImportService>.Instance);
+        var extracted = new ImportedRecipe
+        {
+            Title = "Repeated title", IngredientLines = ["200 g flour"], Steps = ["Mix."],
+            RawData = "{\"originalText\":\"200 g flour; mix\"}"
+        };
+        await importer.ImportExtractedAsync(extracted, RecipeImportSource.Text, "text-operation");
+        await importer.ImportExtractedAsync(extracted, RecipeImportSource.Photo, "photo-operation");
+        context.ChangeTracker.Clear();
+        var recipes = await context.Recipes.ToListAsync();
+        Assert.Equal(2, recipes.Count);
+        Assert.All(recipes, recipe =>
+        {
+            Assert.Null(recipe.SourceUrl);
+            using var metadata = System.Text.Json.JsonDocument.Parse(recipe.SourceRawData!);
+            Assert.Equal("200 g flour; mix", metadata.RootElement.GetProperty("originalText").GetString());
+        });
+        var jobs = await context.RecipeEnrichmentJobs.ToListAsync();
+        Assert.Equal(4, jobs.Count);
+        Assert.All(recipes, recipe =>
+        {
+            var recipeJobs = jobs.Where(job => job.RecipeId == recipe.Id).ToList();
+            Assert.Equal(2, recipeJobs.Count);
+            Assert.All(recipeJobs, job => Assert.Equal(recipe.Revision, job.RecipeRevision));
+            Assert.Contains(recipeJobs, job => job.Task == RecipeEnrichmentTask.Translation);
+            Assert.Contains(recipeJobs, job => job.Task == RecipeEnrichmentTask.Facts);
+        });
+    }
+
+    [PostgresFact]
     public async Task NewRecipeAndEnrichmentJobs_CommitTogetherWithGeneratedRecipeIds()
     {
         await using var scope = _provider!.CreateAsyncScope();

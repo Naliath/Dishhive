@@ -187,5 +187,33 @@
     "Gelatin": "Gelatine",
     "Alcohol": "Alcohol",
     "Honey": "Honing"
+  },
+  "recipeImport": {
+    "errors": {
+      "aiUnavailable": "AI-import is niet beschikbaar",
+      "aiUnavailableDetail": "Stel de AI-service in om recepttekst of foto's te importeren.",
+      "invalidText": "Voer geldige recepttekst in",
+      "invalidTextDetail": "Voeg ingrediënten en bereidingsstappen toe binnen de getoonde tekstlimiet.",
+      "inputTooLarge": "De receptinvoer is te groot",
+      "inputTooLargeDetail": "Gebruik kortere recepttekst of een kleinere foto. Er is niets geïmporteerd.",
+      "noRecipe": "Geen volledig recept gevonden",
+      "noRecipeDetail": "Geef een recept met ingrediënten en bereidingsstappen. Ontbrekende gegevens worden niet verzonnen.",
+      "unreadablePhoto": "De foto kon niet als recept worden gelezen",
+      "unreadablePhotoDetail": "Maak een duidelijke foto van het volledige recept of plak de recepttekst.",
+      "incompleteRecipe": "Het uitgelezen recept is onvolledig",
+      "incompleteRecipeDetail": "Controleer of de bron leesbare ingrediënten en bereidingsstappen bevat en probeer opnieuw.",
+      "invalidResponse": "AI gaf een ongeldig receptantwoord",
+      "invalidResponseDetail": "De bron is niet geïmporteerd. Probeer opnieuw.",
+      "serviceFailed": "AI-extractie is mislukt",
+      "serviceFailedDetail": "Controleer de AI-service en probeer opnieuw. Je bron is niet geïmporteerd.",
+      "timeout": "AI-extractie duurde te lang",
+      "timeoutDetail": "Het recept is niet geïmporteerd. Probeer opnieuw.",
+      "invalidImage": "Kies een leesbare receptafbeelding",
+      "invalidImageDetail": "Het bestand is leeg, beschadigd, te groot of gebruikt een niet-ondersteund formaat. Probeer JPEG, PNG of WebP.",
+      "visionUnsupported": "Het model kon de afbeeldingstest niet lezen",
+      "visionUnsupportedDetail": "Gebruik een model dat afbeeldingen begrijpt of importeer het recept als tekst.",
+      "visionUnavailable": "Afbeeldingen begrijpen is niet beschikbaar",
+      "visionUnavailableDetail": "Controleer de AI-service of importeer het recept als tekst."
+    }
   }
 }

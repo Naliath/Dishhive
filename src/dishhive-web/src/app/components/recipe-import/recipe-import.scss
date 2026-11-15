@@ -1,0 +1,12 @@
+.import-card { margin-block: 16px; }
+.import-form { display: flex; flex-wrap: wrap; align-items: start; gap: 16px; }
+.source-field { flex: 0 1 160px; }
+.content-field { flex: 1; min-width: min(400px, 100%); }
+.photo-input { flex: 1; min-width: min(400px, 100%); }
+.photo-actions, .import-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.photo-preview { display: block; max-width: 100%; max-height: 320px; margin-block: 16px; object-fit: contain; }
+.message { flex-basis: 100%; margin: 0; overflow-wrap: anywhere; }
+.file-name { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .source-field, .content-field, .photo-input { flex-basis: 100%; min-width: 0; width: 100%; }
+}

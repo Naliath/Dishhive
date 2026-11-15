@@ -330,7 +330,10 @@
       "recipeTranslation": "Receptvertaling",
       "recipeImportExtraction": "Extractie bij receptimport",
       "recipeEdit": "Receptbewerking",
-      "planningResearch": "Bronzoekopdracht verfijnen"
+      "planningResearch": "Bronzoekopdracht verfijnen",
+      "recipeTextExtraction": "Receptimport uit tekst",
+      "recipeImageExtraction": "Receptimport uit foto",
+      "visionCapability": "Afbeeldingstest"
     },
     "outcomes": {
       "success": "geslaagd",
@@ -825,5 +828,27 @@
     "lastPage": "Laatste pagina",
     "emptyRange": "0 van {total}",
     "range": "{start} – {end} van {total}"
+  },
+  "recipeImport": {
+    "cancel": "Annuleren",
+    "openText": "Importeren uit tekst",
+    "openPhoto": "Importeren uit foto",
+    "source": "Importbron",
+    "url": "URL",
+    "text": "Tekst",
+    "photo": "Foto",
+    "recipeText": "Recepttekst",
+    "removePhoto": "Foto verwijderen",
+    "photoPreview": "Voorbeeld van receptfoto",
+    "photoHint": "Fotografeer een volledig recept duidelijk, inclusief ingrediënten en bereidingsstappen. Gebruik JPEG, PNG of WebP.",
+    "checkingPhoto": "Controleren of het AI-model afbeeldingen kan lezen...",
+    "photoUnsupported": "Het model is niet geslaagd voor de afbeeldingstest. Plak het recept eventueel als tekst.",
+    "photoUnavailable": "Afbeeldingen lezen is niet beschikbaar. Controleer de AI-service of probeer opnieuw.",
+    "checkAgain": "Opnieuw controleren",
+    "aiUnavailable": "Tekst- en foto-import vereisen een ingestelde AI-service. Importeren via URL blijft beschikbaar.",
+    "capabilitiesFailed": "De importmogelijkheden konden niet worden gecontroleerd. Sluit en heropen het formulier om opnieuw te proberen.",
+    "photoTooLarge": "De foto is te groot. Kies een afbeelding kleiner dan 15 MB.",
+    "failed": "Het recept kon niet worden ge?mporteerd. Probeer opnieuw.",
+    "cancelled": "Import geannuleerd. Je invoer is bewaard. Controleer de bibliotheek voordat je opnieuw probeert: het recept kan al opgeslagen zijn."
   }
 }

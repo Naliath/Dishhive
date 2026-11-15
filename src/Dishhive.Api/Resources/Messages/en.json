@@ -187,5 +187,33 @@
     "Gelatin": "Gelatin",
     "Alcohol": "Alcohol",
     "Honey": "Honey"
+  },
+  "recipeImport": {
+    "errors": {
+      "aiUnavailable": "AI import is unavailable",
+      "aiUnavailableDetail": "Configure the AI service to import recipe text or photos.",
+      "invalidText": "Enter valid recipe text",
+      "invalidTextDetail": "Include the ingredients and preparation instructions within the displayed text limit.",
+      "inputTooLarge": "Recipe input is too large",
+      "inputTooLargeDetail": "Use a shorter recipe text or a smaller photo. No content was imported.",
+      "noRecipe": "No complete recipe found",
+      "noRecipeDetail": "Provide one recipe with ingredients and preparation steps. Missing facts will not be invented.",
+      "unreadablePhoto": "The photo could not be read as a recipe",
+      "unreadablePhotoDetail": "Retake a clear photo of the complete recipe or paste the recipe text.",
+      "incompleteRecipe": "The extracted recipe is incomplete",
+      "incompleteRecipeDetail": "Check that the source contains readable ingredients and preparation steps, then retry.",
+      "invalidResponse": "AI returned an invalid recipe response",
+      "invalidResponseDetail": "The source was not imported. Please retry.",
+      "serviceFailed": "AI extraction failed",
+      "serviceFailedDetail": "Check the AI service and try again. Your source was not imported.",
+      "timeout": "AI extraction timed out",
+      "timeoutDetail": "The recipe was not imported. Please try again.",
+      "invalidImage": "Choose a readable recipe image",
+      "invalidImageDetail": "The file is empty, damaged, oversized, or uses an unsupported image format. Try JPEG, PNG or WebP.",
+      "visionUnsupported": "The model could not read the image check",
+      "visionUnsupportedDetail": "Use a model with image understanding or import the recipe as text.",
+      "visionUnavailable": "Image understanding is unavailable",
+      "visionUnavailableDetail": "Check the AI service or import the recipe as text."
+    }
   }
 }

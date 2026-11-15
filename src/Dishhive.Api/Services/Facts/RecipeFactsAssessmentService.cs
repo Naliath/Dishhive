@@ -2,6 +2,7 @@ using Dishhive.Api.Data;
 using Dishhive.Api.Models;
 using Dishhive.Api.Services.Localization;
 using Dishhive.Api.Services.Ai;
+using Dishhive.Api.Services.Import;
 using Microsoft.EntityFrameworkCore;
 using System.Threading.Channels;
 
@@ -113,7 +114,7 @@ public class RecipeFactsAssessmentService : BackgroundService
             recipe.DietaryFactsStatus = DietaryFactsStatus.Pending;
         }
 
-        if (_localizer.IsAvailable && recipe.SourceUrl is not null)
+        if (_localizer.IsAvailable && RecipeImportProvenance.CanTranslate(recipe))
         {
             var preferred = await context.UserSettings.AsNoTracking().FirstOrDefaultAsync(
                 s => s.Key == UserSettingKeys.PreferredLanguage, cancellationToken);

@@ -62,6 +62,9 @@ describe('AiPlanningStatsPage', () => {
     const page = new AiPlanningStatsPage({} as IntegrationsService);
 
     expect(page.taskLabel('recipe.import_extract')).toBe('aiStats.tasks.recipeImportExtraction');
+    expect(page.taskLabel('recipe.import_text')).toBe('aiStats.tasks.recipeTextExtraction');
+    expect(page.taskLabel('recipe.import_image')).toBe('aiStats.tasks.recipeImageExtraction');
+    expect(page.taskLabel('capability.vision')).toBe('aiStats.tasks.visionCapability');
     expect(page.taskLabel('planning.research')).toBe('aiStats.tasks.planningResearch');
     expect(page.taskLabel('recipe.dish_match')).toBe('aiStats.tasks.recipeDishMatch');
     expect(page.outcomeLabel('parseFailure')).toBe('aiStats.outcomes.parseFailure');

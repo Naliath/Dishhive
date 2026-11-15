@@ -225,6 +225,15 @@ public class ImportRecipeRequestDto
     public string Url { get; set; } = string.Empty;
 }
 
+public sealed record RecipeImportCapabilitiesDto(bool TextAvailable, string PhotoState, int MaxTextCharacters, int MaxImageBytes);
+
+public sealed class ImportRecipeTextRequestDto
+{
+    [Required]
+    [MaxLength(100000)]
+    public string Text { get; set; } = "";
+}
+
 /// <summary>Outcome of importing a recipe file (schema.org Recipe JSON)</summary>
 public class RecipeFileImportResultDto
 {

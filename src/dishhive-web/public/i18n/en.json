@@ -330,7 +330,10 @@
       "recipeTranslation": "Recipe translation",
       "recipeImportExtraction": "Recipe import extraction",
       "recipeEdit": "Recipe edit",
-      "planningResearch": "Source search refinement"
+      "planningResearch": "Source search refinement",
+      "recipeTextExtraction": "Recipe text import",
+      "recipeImageExtraction": "Recipe photo import",
+      "visionCapability": "Image capability check"
     },
     "outcomes": {
       "success": "successful",
@@ -825,5 +828,27 @@
     "lastPage": "Last page",
     "emptyRange": "0 of {total}",
     "range": "{start} – {end} of {total}"
+  },
+  "recipeImport": {
+    "cancel": "Cancel",
+    "openText": "Import from text",
+    "openPhoto": "Import from photo",
+    "source": "Import source",
+    "url": "URL",
+    "text": "Text",
+    "photo": "Photo",
+    "recipeText": "Recipe text",
+    "removePhoto": "Remove photo",
+    "photoPreview": "Recipe photo preview",
+    "photoHint": "Photograph one complete recipe clearly, including ingredients and instructions. Use JPEG, PNG or WebP.",
+    "checkingPhoto": "Checking whether the AI model can read images...",
+    "photoUnsupported": "The model did not pass the image check. You can paste the recipe as text instead.",
+    "photoUnavailable": "Image reading is unavailable. Check the AI service or try again.",
+    "checkAgain": "Check again",
+    "aiUnavailable": "Text and photo import require a configured AI service. You can still import from a URL.",
+    "capabilitiesFailed": "Could not check import availability. Close and reopen the form to retry.",
+    "photoTooLarge": "The photo is too large. Choose an image smaller than 15 MB.",
+    "failed": "Could not import the recipe. Please try again.",
+    "cancelled": "Import cancelled. Your input is retained. Check the library before retrying in case the recipe was already saved."
   }
 }

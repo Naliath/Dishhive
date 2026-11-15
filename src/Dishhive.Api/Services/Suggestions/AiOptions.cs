@@ -1,3 +1,5 @@
+using Dishhive.Api.Services.Ai;
+
 namespace Dishhive.Api.Services.Suggestions;
 
 /// <summary>
@@ -110,6 +112,7 @@ public class AiOptions
     /// before it reaches the shared execution gate.
     /// </summary>
     public int ImportExtractionMaxPromptTokens { get; set; } = 24000;
+    public int ImportMaxTextCharacters { get; set; } = 30000;
 
     /// <summary>
     /// Fingerprint of every setting that affects the model capability test's outcome —
@@ -154,7 +157,8 @@ public class AiOptions
         TranslationMaxOutputTokens,
         TranslationMaxPromptTokens,
         ImportExtractionMaxOutputTokens,
-        ImportExtractionMaxPromptTokens);
+        ImportExtractionMaxPromptTokens,
+        ImportMaxTextCharacters, "image-input-v1", AiTokenBudget.ImageInputTokens);
 
     /// <summary>Providers that run locally and need no API key</summary>
     private static readonly string[] LocalProviders = ["ollama", "lmstudio", "openai-compatible"];
@@ -208,6 +212,8 @@ public class AiOptions
 
     public void Validate()
     {
+        if (ImportMaxTextCharacters is < 100 or > 100000)
+            throw new InvalidOperationException("Ai:ImportMaxTextCharacters must be between 100 and 100000.");
         if (FactsEnableReasoning && Math.Min(FactsMaxOutputTokens, MaxOutputTokens) < 1024)
             throw new InvalidOperationException("AI facts reasoning requires at least 1024 output tokens.");
         if (MaxInputTokens < 1024) throw new InvalidOperationException("Ai:MaxInputTokens must be at least 1024.");

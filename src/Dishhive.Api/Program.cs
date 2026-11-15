@@ -158,6 +158,8 @@ if (!builder.Environment.IsEnvironment("Testing") && aiOptions.IsConfigured)
     builder.Services.AddScoped<IMealSuggestionService, LlmMealSuggestionService>();
     // LLM recipe extraction fallback for import (used when structured scrapers fail).
     builder.Services.AddSingleton<ILlmRecipeExtractor, LlmRecipeExtractor>();
+    builder.Services.AddSingleton<IRecipeContentExtractor, RecipeContentExtractor>();
+    builder.Services.AddSingleton<IRecipeImageCapability, RecipeImageCapability>();
     // Dietary-facts classification of recipes (contains milk/gluten/…), same posture
     builder.Services.AddSingleton<IRecipeFactsExtractor, LlmRecipeFactsExtractor>();
     builder.Services.AddSingleton<IRecipeResearchQueryRefiner, RecipeResearchQueryRefiner>();
@@ -175,6 +177,8 @@ else
     builder.Services.AddSingleton<IAiTaskMetricsStore, NoOpAiTaskMetricsStore>();
     builder.Services.AddSingleton<IMealSuggestionService, NoOpMealSuggestionService>();
     builder.Services.AddSingleton<ILlmRecipeExtractor, NoOpLlmRecipeExtractor>();
+    builder.Services.AddSingleton<IRecipeContentExtractor, NoOpRecipeContentExtractor>();
+    builder.Services.AddSingleton<IRecipeImageCapability, NoOpRecipeImageCapability>();
     builder.Services.AddSingleton<IRecipeFactsExtractor, NoOpRecipeFactsExtractor>();
     builder.Services.AddSingleton<IRecipeResearchQueryRefiner, NoOpRecipeResearchQueryRefiner>();
     builder.Services.AddSingleton<IRecipeDishMatcher, NoOpRecipeDishMatcher>();

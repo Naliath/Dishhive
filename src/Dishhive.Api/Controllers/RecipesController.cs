@@ -19,7 +19,7 @@ namespace Dishhive.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-public class RecipesController : ControllerBase
+public partial class RecipesController : ControllerBase
 {
     private readonly DishhiveDbContext _context;
     private readonly IRecipeImportService _importService;

@@ -2865,6 +2865,23 @@ export class PlannedMealsClient implements IPlannedMealsClient {
 
 export interface IRecipesClient {
     /**
+     * @return OK
+     */
+    getImportCapabilities(): Observable<RecipeImportCapabilitiesDto>;
+    /**
+     * @return OK
+     */
+    checkImportImageCapability(): Observable<RecipeImportCapabilitiesDto>;
+    /**
+     * @return Created
+     */
+    importRecipeText(body: ImportRecipeTextRequestDto): Observable<RecipeDto>;
+    /**
+     * @param file (optional)
+     * @return Created
+     */
+    importRecipeImage(file?: FileParameter | undefined): Observable<RecipeDto>;
+    /**
      * @param search (optional)
      * @param category (optional)
      * @param tags (optional)
@@ -2968,6 +2985,218 @@ export class RecipesClient implements IRecipesClient {
     constructor(@Inject(HttpClient) http: HttpClient, @Optional() @Inject(API_BASE_URL) baseUrl?: string) {
         this.http = http;
         this.baseUrl = baseUrl ?? "/";
+    }
+
+    /**
+     * @return OK
+     */
+    getImportCapabilities(): Observable<RecipeImportCapabilitiesDto> {
+        let url_ = this.baseUrl + "/api/recipes/import/capabilities";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("get", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processGetImportCapabilities(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processGetImportCapabilities(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeImportCapabilitiesDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeImportCapabilitiesDto>;
+        }));
+    }
+
+    protected processGetImportCapabilities(response: HttpResponseBase): Observable<RecipeImportCapabilitiesDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeImportCapabilitiesDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return OK
+     */
+    checkImportImageCapability(): Observable<RecipeImportCapabilitiesDto> {
+        let url_ = this.baseUrl + "/api/recipes/import/image-capability";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_ : any = {
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processCheckImportImageCapability(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processCheckImportImageCapability(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeImportCapabilitiesDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeImportCapabilitiesDto>;
+        }));
+    }
+
+    protected processCheckImportImageCapability(response: HttpResponseBase): Observable<RecipeImportCapabilitiesDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 200) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeImportCapabilitiesDto;
+            return _observableOf(result200);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @return Created
+     */
+    importRecipeText(body: ImportRecipeTextRequestDto): Observable<RecipeDto> {
+        let url_ = this.baseUrl + "/api/recipes/import/text";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processImportRecipeText(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processImportRecipeText(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeDto>;
+        }));
+    }
+
+    protected processImportRecipeText(response: HttpResponseBase): Observable<RecipeDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 201) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeDto;
+            return _observableOf(result201);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
+    }
+
+    /**
+     * @param file (optional)
+     * @return Created
+     */
+    importRecipeImage(file?: FileParameter | undefined): Observable<RecipeDto> {
+        let url_ = this.baseUrl + "/api/recipes/import/image";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = new FormData();
+        if (file === null || file === undefined)
+            throw new globalThis.Error("The parameter 'file' cannot be null.");
+        else
+            content_.append("file", file.data, file.fileName ? file.fileName : "file");
+
+        let options_ : any = {
+            body: content_,
+            observe: "response",
+            responseType: "blob",
+            headers: new HttpHeaders({
+                "Accept": "application/json"
+            })
+        };
+
+        return this.http.request("post", url_, options_).pipe(_observableMergeMap((response_ : any) => {
+            return this.processImportRecipeImage(response_);
+        })).pipe(_observableCatch((response_: any) => {
+            if (response_ instanceof HttpResponseBase) {
+                try {
+                    return this.processImportRecipeImage(response_ as any);
+                } catch (e) {
+                    return _observableThrow(e) as any as Observable<RecipeDto>;
+                }
+            } else
+                return _observableThrow(response_) as any as Observable<RecipeDto>;
+        }));
+    }
+
+    protected processImportRecipeImage(response: HttpResponseBase): Observable<RecipeDto> {
+        const status = response.status;
+        const responseBlob =
+            response instanceof HttpResponse ? response.body :
+            (response as any).error instanceof Blob ? (response as any).error : undefined;
+
+        let _headers: any = {}; if (response.headers) { for (let key of response.headers.keys()) { _headers[key] = response.headers.get(key); }}
+        if (status === 201) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecipeDto;
+            return _observableOf(result201);
+            }));
+        } else if (status !== 200 && status !== 204) {
+            return blobToText(responseBlob).pipe(_observableMergeMap((_responseText: string) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            }));
+        }
+        return _observableOf(null as any);
     }
 
     /**
@@ -5575,6 +5804,10 @@ export interface ImportRecipeRequestDto {
     url: string;
 }
 
+export interface ImportRecipeTextRequestDto {
+    text: string;
+}
+
 export interface IntegrationStatusResponseDto {
     ai: AiIntegrationStatusDto;
     freezy: FreezyIntegrationStatusDto;
@@ -5751,6 +5984,13 @@ export interface RecipeFileImportResultDto {
 export interface RecipeFileImportSkippedDto {
     title: string;
     reason: string;
+}
+
+export interface RecipeImportCapabilitiesDto {
+    textAvailable: boolean;
+    photoState: string;
+    maxTextCharacters: number;
+    maxImageBytes: number;
 }
 
 export interface RecipeIngredientDto {

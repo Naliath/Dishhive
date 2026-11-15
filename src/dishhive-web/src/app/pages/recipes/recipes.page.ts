@@ -4,6 +4,9 @@ import { inject, ChangeDetectionStrategy, Component, OnInit, computed, signal } 
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
+import { RecipeImportComponent } from '../../components/recipe-import/recipe-import';
+import { RecipeImportPreference } from '../../services/recipe-import-preference.service';
+import { Recipe } from '../../models/recipe.model';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
@@ -31,7 +34,7 @@ import { AutoCollectionNamePipe } from '../../services/language.service';
 @Component({
   selector: 'app-recipes-page',
   standalone: true,
-  imports: [TranslatePipe,
+  imports: [TranslatePipe, RecipeImportComponent,
     CookingLoaderComponent,
     DecimalPipe,
     RouterLink,
@@ -57,14 +60,13 @@ export class RecipesPage implements OnInit {
   readonly uiLanguage = inject(UiLanguageService);
   readonly recipes = signal<RecipeListItem[]>([]);
   readonly loading = signal(true);
-  readonly importing = signal(false);
+  readonly importPreference = inject(RecipeImportPreference);
   readonly importVisible = signal(false);
   readonly totalRecipes = signal(0);
   readonly pageIndex = signal(0);
   readonly pageSize = signal(24);
 
   searchTerm = '';
-  importUrl = '';
 
   // Library filter (category + tags), combinable with an active collection
   readonly categories = signal<string[]>([]);
@@ -260,27 +262,10 @@ export class RecipesPage implements OnInit {
     this.importVisible.update(visible => !visible);
   }
 
-  import(): void {
-    const url = this.importUrl.trim();
-    if (!url) {
-      return;
-    }
-
-    this.importing.set(true);
-    this.recipesService.importRecipe(url).subscribe({
-      next: recipe => {
-        this.importing.set(false);
-        this.importUrl = '';
-        this.importVisible.set(false);
-        this.snackBar.open(this.uiLanguage.t('ui.importedValueCheckTheValues', { p0: (recipe.title) }), this.uiLanguage.t('common.dismiss'), { duration: 5000 });
-        this.router.navigate(['/recipes', recipe.id]);
-      },
-      error: (error: HttpErrorResponse) => {
-        this.importing.set(false);
-        const detail = error.error?.title ?? this.uiLanguage.t('aiStats.reviewOutcomes.importFailed');
-        this.snackBar.open(detail, this.uiLanguage.t('common.dismiss'), { duration: 5000 });
-      }
-    });
+  onImported(recipe: Recipe): void {
+    this.importVisible.set(false);
+    this.snackBar.open(this.uiLanguage.t('ui.importedValueCheckTheValues', { p0: recipe.title }), this.uiLanguage.t('common.dismiss'), { duration: 5000 });
+    this.router.navigate(['/recipes', recipe.id]);
   }
 
   private loadFilterSources(): void {

@@ -5,34 +5,14 @@
       <mat-icon>add</mat-icon>
       {{ 'recipeForm.newRecipe' | translate }}
     </a>
-    <button mat-stroked-button (click)="toggleImport()">
+    <button mat-stroked-button (click)="toggleImport()" [disabled]="recipeImporter.importing()">
       <mat-icon>download</mat-icon>
-      {{ 'ui.importFromURL' | translate }}
+      {{ importPreference.actionLabel() | translate }}
     </button>
   </div>
 </div>
 
-@if (importVisible()) {
-  <mat-card class="import-card" appearance="raised">
-    <mat-card-content>
-      <form class="import-form" (ngSubmit)="import()">
-        <mat-form-field appearance="outline" class="import-field">
-          <mat-label>{{ 'ui.recipeURL' | translate }}</mat-label>
-          <input matInput name="importUrl" [(ngModel)]="importUrl"
-                 placeholder="https://...">
-
-        </mat-form-field>
-        <button mat-flat-button type="submit" [disabled]="importing() || !importUrl.trim()">
-          @if (importing()) {
-            {{ 'settings.importing' | translate }}
-          } @else {
-            {{ 'ui.import' | translate }}
-          }
-        </button>
-      </form>
-    </mat-card-content>
-  </mat-card>
-}
+<app-recipe-import #recipeImporter [visible]="importVisible()" (completed)="onImported($event)" />
 
 <div class="filter-bar">
   <mat-form-field appearance="outline" class="search-field" subscriptSizing="dynamic">

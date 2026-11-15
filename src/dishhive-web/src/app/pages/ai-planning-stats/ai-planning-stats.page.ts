@@ -77,7 +77,10 @@ export class AiPlanningStatsPage implements OnInit, OnDestroy {
       'recipe.dish_match': 'aiStats.tasks.recipeDishMatch',
       'recipe.edit': 'aiStats.tasks.recipeEdit',
       'recipe.translate': 'aiStats.tasks.recipeTranslation',
-      'recipe.import_extract': 'aiStats.tasks.recipeImportExtraction'
+      'recipe.import_extract': 'aiStats.tasks.recipeImportExtraction',
+      'recipe.import_text': 'aiStats.tasks.recipeTextExtraction',
+      'recipe.import_image': 'aiStats.tasks.recipeImageExtraction',
+      'capability.vision': 'aiStats.tasks.visionCapability'
     } as Record<string, string>)[task] ?? task;
   }
 
